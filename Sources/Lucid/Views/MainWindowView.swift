@@ -21,10 +21,6 @@ public struct MainWindowView: View {
     @State private var navigationHistory: [String] = []
     @State private var historyIndex: Int = -1
 
-    private var documentName: String {
-        fileURL?.deletingPathExtension().lastPathComponent ?? "Untitled Document"
-    }
-
     private var wordCount: Int {
         let words = document.text.components(separatedBy: .whitespacesAndNewlines)
         return words.filter { !$0.isEmpty }.count
@@ -52,73 +48,70 @@ public struct MainWindowView: View {
                 .frame(minWidth: 180, idealWidth: 220, maxWidth: 300)
             }
 
-            // Main Content Area with Breadcrumbs and Find Bar
-            VStack(spacing: 0) {
-                // Breadcrumb Bar
-                BreadcrumbBarView(
-                    documentName: documentName,
-                    activeHeading: activeHeading
-                ) { id in
-                    navigateToHeading(id)
-                }
+            // Main Content Area (Clean, no top bar!)
+            ZStack(alignment: .topTrailing) {
+                Group {
+                    switch preferences.viewMode {
+                    case .reader:
+                        PreviewWebView(
+                            preferences: preferences,
+                            markdown: document.text,
+                            headings: $headings,
+                            activeHeading: $activeHeading,
+                            onScrollFractionChanged: nil,
+                            onFindMatchesChanged: { count, index in
+                                findMatchCount = count
+                                findCurrentIndex = index
+                            },
+                            onContentEdited: { newMarkdown in
+                                document.text = newMarkdown
+                            },
+                            scrollToHeadingId: scrollToHeadingId,
+                            webViewInstance: $webViewInstance
+                        )
+                    case .split:
+                        HSplitView {
+                            EditorView(
+                                text: $document.text,
+                                onScrollFractionChanged: { fraction in
+                                    previewTargetFraction = fraction
+                                }
+                            )
+                            .frame(minWidth: 260)
 
-                // Viewport with optional overlay Find Bar
-                ZStack(alignment: .topTrailing) {
-                    Group {
-                        switch preferences.viewMode {
-                        case .reader:
                             PreviewWebView(
                                 preferences: preferences,
                                 markdown: document.text,
                                 headings: $headings,
                                 activeHeading: $activeHeading,
+                                onScrollFractionChanged: nil,
                                 onFindMatchesChanged: { count, index in
                                     findMatchCount = count
                                     findCurrentIndex = index
                                 },
+                                onContentEdited: { newMarkdown in
+                                    document.text = newMarkdown
+                                },
                                 scrollToHeadingId: scrollToHeadingId,
+                                targetScrollFraction: previewTargetFraction,
                                 webViewInstance: $webViewInstance
                             )
-                        case .split:
-                            HSplitView {
-                                EditorView(
-                                    text: $document.text,
-                                    onScrollFractionChanged: { fraction in
-                                        previewTargetFraction = fraction
-                                    }
-                                )
-                                .frame(minWidth: 260)
-
-                                PreviewWebView(
-                                    preferences: preferences,
-                                    markdown: document.text,
-                                    headings: $headings,
-                                    activeHeading: $activeHeading,
-                                    onFindMatchesChanged: { count, index in
-                                        findMatchCount = count
-                                        findCurrentIndex = index
-                                    },
-                                    scrollToHeadingId: scrollToHeadingId,
-                                    targetScrollFraction: previewTargetFraction,
-                                    webViewInstance: $webViewInstance
-                                )
-                                .frame(minWidth: 260)
-                            }
-                        case .editor:
-                            EditorView(text: $document.text)
+                            .frame(minWidth: 260)
                         }
+                    case .editor:
+                        EditorView(text: $document.text)
                     }
-                    .frame(minWidth: 400, maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .frame(minWidth: 400, maxWidth: .infinity, maxHeight: .infinity)
 
-                    // Floating Find Bar
-                    if isFindBarPresented {
-                        FindBarView(
-                            isPresented: $isFindBarPresented,
-                            webView: webViewInstance
-                        )
-                        .padding([.top, .trailing], 16)
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                    }
+                // Floating Find Bar
+                if isFindBarPresented {
+                    FindBarView(
+                        isPresented: $isFindBarPresented,
+                        webView: webViewInstance
+                    )
+                    .padding([.top, .trailing], 16)
+                    .transition(.move(edge: .top).combined(with: .opacity))
                 }
             }
 
@@ -171,6 +164,17 @@ public struct MainWindowView: View {
                 Text("\(wordCount) words · \(readingTimeMinutes) min read")
                     .font(.caption)
                     .foregroundColor(.secondary)
+            }
+
+            // Click-to-Edit Mode Indicator & Toggle
+            ToolbarItem(placement: .primaryAction) {
+                Button(action: {
+                    preferences.clickToEdit.toggle()
+                }) {
+                    Image(systemName: preferences.clickToEdit ? "pencil.circle.fill" : "pencil.circle")
+                        .foregroundColor(preferences.clickToEdit ? .accentColor : .secondary)
+                }
+                .help(preferences.clickToEdit ? "In-Place Live Editing Enabled (Click any text to edit)" : "Click to Enable In-Place Editing")
             }
 
             // Find in Document
@@ -226,14 +230,15 @@ public struct MainWindowView: View {
                 .help("Export Document")
             }
 
-            // Inspector Toggle
+            // Settings Button
             ToolbarItem(placement: .primaryAction) {
                 Button(action: {
-                    withAnimation { preferences.showInspector.toggle() }
+                    NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
                 }) {
-                    Image(systemName: "slider.horizontal.3")
+                    Image(systemName: "gearshape")
                 }
-                .help("Toggle Inspector (⌘I)")
+                .help("Settings (⌘,)")
+                .keyboardShortcut(",", modifiers: .command)
             }
         }
         .onAppear {
@@ -243,7 +248,6 @@ public struct MainWindowView: View {
 
     private func navigateToHeading(_ id: String) {
         scrollToHeadingId = id
-        // Record in history
         if historyIndex < navigationHistory.count - 1 {
             navigationHistory = Array(navigationHistory.prefix(historyIndex + 1))
         }
