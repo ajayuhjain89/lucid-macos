@@ -16,6 +16,52 @@
     failure: '<svg viewBox="0 0 16 16"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path></svg>'
   };
 
+  // Initialize Turndown Service for In-Place WYSIWYG Editing
+  let turndownService = null;
+  if (typeof TurndownService !== 'undefined') {
+    turndownService = new TurndownService({
+      headingStyle: 'atx',
+      codeBlockStyle: 'fenced',
+      bulletListMarker: '-'
+    });
+
+    // Rule: KaTeX display math
+    turndownService.addRule('katexDisplay', {
+      filter: function(node) {
+        return node.classList && node.classList.contains('lucid-math-block');
+      },
+      replacement: function(content, node) {
+        const raw = node.getAttribute('data-raw-latex');
+        return raw ? '\n\n$$\n' + decodeURIComponent(raw) + '\n$$\n\n' : content;
+      }
+    });
+
+    // Rule: Mermaid diagrams
+    turndownService.addRule('mermaidBlock', {
+      filter: function(node) {
+        return node.classList && node.classList.contains('mermaid-wrapper');
+      },
+      replacement: function(content, node) {
+        const raw = node.getAttribute('data-raw-mermaid');
+        return raw ? '\n\n```mermaid\n' + decodeURIComponent(raw) + '\n```\n\n' : content;
+      }
+    });
+
+    // Rule: Code blocks
+    turndownService.addRule('codeBlock', {
+      filter: function(node) {
+        return node.classList && node.classList.contains('lucid-code-block');
+      },
+      replacement: function(content, node) {
+        const langEl = node.querySelector('.lucid-code-lang');
+        const lang = langEl ? langEl.textContent.trim().toLowerCase() : '';
+        const codeEl = node.querySelector('pre code');
+        const code = codeEl ? codeEl.innerText : '';
+        return '\n\n```' + lang + '\n' + code + '\n```\n\n';
+      }
+    });
+  }
+
   // Initialize Markdown-it with highlight.js integration
   const md = window.markdownit({
     html: true,
@@ -23,7 +69,8 @@
     typographer: true,
     highlight: function(str, lang) {
       if (lang === 'mermaid') {
-        return '<div class="mermaid-wrapper">' +
+        const escapedRaw = encodeURIComponent(str);
+        return '<div class="mermaid-wrapper" data-raw-mermaid="' + escapedRaw + '">' +
                '<div class="mermaid-toolbar">' +
                '<button class="lucid-btn-copy-svg" onclick="window.lucid.copySvg(this)">Copy SVG</button>' +
                '<button class="lucid-btn-save-svg" onclick="window.lucid.saveSvg(this)">Download SVG</button>' +
@@ -84,7 +131,7 @@
     }
   });
 
-  // GitHub Alert parsing (supports 12 types and collapsible [!NOTE]- / [!NOTE]+)
+  // GitHub Alert parsing (matches extension circular icon badge and uppercase title)
   function parseAlerts(html) {
     const alertRegex = /<blockquote>\s*<p>\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION|EXAMPLE|QUESTION|QUOTE|ABSTRACT|BUG|INFO|SUCCESS|FAILURE)\]([+-]?)(?:\s*([^\n<]*))?(?:\s*<br\s*\/?>)?([\s\S]*?)<\/p>\s*([\s\S]*?)<\/blockquote>/gi;
     return html.replace(alertRegex, function(match, type, collapseFlag, customTitle, firstLine, rest) {
@@ -93,16 +140,18 @@
       const titleText = customTitle && customTitle.trim() ? customTitle.trim() : alertType;
       const content = (firstLine && firstLine.trim() ? '<p>' + firstLine.trim() + '</p>' : '') + rest;
 
+      const titleHtml = '<div class="lucid-alert-title"><span class="lucid-alert-icon">' + icon + '</span>' + titleText + '</div>';
+
       if (collapseFlag === '-' || collapseFlag === '+') {
         const isOpen = collapseFlag === '+' ? ' open' : '';
         return '<details class="lucid-alert lucid-alert-' + alertType + '"' + isOpen + '>' +
-               '<summary class="lucid-alert-title">' + icon + titleText + '</summary>' +
+               '<summary>' + titleHtml + '</summary>' +
                '<div class="lucid-alert-content">' + content + '</div>' +
                '</details>';
       }
 
       return '<div class="lucid-alert lucid-alert-' + alertType + '">' +
-             '<div class="lucid-alert-title">' + icon + titleText + '</div>' +
+             titleHtml +
              '<div class="lucid-alert-content">' + content + '</div>' +
              '</div>';
     });
@@ -181,20 +230,47 @@
     });
   }
 
-  // Scroll Spy & Active Heading Tracker
+  // Live in-place editing listener
+  let isEditingByUser = false;
+  let editDebounceTimer = null;
+
+  function setupInPlaceEditing() {
+    const container = document.getElementById('lucid-content');
+    if (!container) return;
+
+    container.setAttribute('contenteditable', 'true');
+    container.setAttribute('spellcheck', 'false');
+
+    container.addEventListener('input', function() {
+      if (!turndownService) return;
+      isEditingByUser = true;
+      clearTimeout(editDebounceTimer);
+      editDebounceTimer = setTimeout(function() {
+        try {
+          const newMarkdown = turndownService.turndown(container.innerHTML);
+          if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.lucidContentEdited) {
+            window.webkit.messageHandlers.lucidContentEdited.postMessage(newMarkdown);
+          }
+        } catch (e) {
+          console.warn('Turndown error:', e);
+        }
+        setTimeout(function() { isEditingByUser = false; }, 200);
+      }, 350);
+    });
+  }
+
+  // Scroll Spy
   let isProgrammaticScroll = false;
   let activeHeadingTimer = null;
   window.addEventListener('scroll', function() {
     if (isProgrammaticScroll) return;
 
-    // Send scroll fraction
     const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
     const fraction = maxScroll > 0 ? window.scrollY / maxScroll : 0;
     if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.lucidScroll) {
       window.webkit.messageHandlers.lucidScroll.postMessage({ fraction: fraction });
     }
 
-    // Debounced active heading tracker
     clearTimeout(activeHeadingTimer);
     activeHeadingTimer = setTimeout(function() {
       const headings = document.querySelectorAll('h1, h2, h3, h4, h5, h6');
@@ -224,6 +300,8 @@
   // Public API
   window.lucid = {
     updateContent: function(rawMarkdown) {
+      if (isEditingByUser) return; // Avoid clobbering user cursor while typing
+
       const container = document.getElementById('lucid-content');
       if (!container) return;
 
@@ -245,10 +323,18 @@
       }
 
       setupFootnotes();
+      setupInPlaceEditing();
 
       const headings = extractHeadings();
       if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.lucidHeadings) {
         window.webkit.messageHandlers.lucidHeadings.postMessage(headings);
+      }
+    },
+
+    setEditable: function(enabled) {
+      const container = document.getElementById('lucid-content');
+      if (container) {
+        container.setAttribute('contenteditable', enabled ? 'true' : 'false');
       }
     },
 
@@ -265,6 +351,9 @@
       if (typeof prefs.breakout !== 'undefined') {
         if (prefs.breakout) body.classList.remove('no-breakout');
         else body.classList.add('no-breakout');
+      }
+      if (typeof prefs.clickToEdit !== 'undefined') {
+        window.lucid.setEditable(prefs.clickToEdit);
       }
     },
 
@@ -286,7 +375,6 @@
       }
     },
 
-    // In-Page Find API
     find: function(query) {
       window.lucid.clearFind();
       if (!query || query.trim().length === 0) {
@@ -377,7 +465,6 @@
       });
     },
 
-    // Copy and Export Helpers
     copyCode: function(btn) {
       const pre = btn.closest('.lucid-code-block').querySelector('pre code');
       if (pre) {
@@ -434,7 +521,6 @@
     }
   };
 
-  // Configure Mermaid initially
   if (typeof mermaid !== 'undefined') {
     mermaid.initialize({
       startOnLoad: false,

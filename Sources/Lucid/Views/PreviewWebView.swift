@@ -8,6 +8,7 @@ public struct PreviewWebView: NSViewRepresentable {
     @Binding var activeHeading: HeadingItem?
     var onScrollFractionChanged: ((Double) -> Void)?
     var onFindMatchesChanged: ((Int, Int) -> Void)?
+    var onContentEdited: ((String) -> Void)?
     var scrollToHeadingId: String?
     var targetScrollFraction: Double?
     @Binding var webViewInstance: WKWebView?
@@ -25,6 +26,7 @@ public struct PreviewWebView: NSViewRepresentable {
         userContent.add(context.coordinator, name: "lucidHeadings")
         userContent.add(context.coordinator, name: "lucidActiveHeading")
         userContent.add(context.coordinator, name: "lucidFindMatches")
+        userContent.add(context.coordinator, name: "lucidContentEdited")
         config.userContentController = userContent
 
         let webView = WKWebView(frame: .zero, configuration: config)
@@ -66,7 +68,7 @@ public struct PreviewWebView: NSViewRepresentable {
         let prefsJSON = preferences.jsonPayload(systemColorScheme: colorScheme)
         webView.evaluateJavaScript("if (window.lucid) { window.lucid.updatePreferences(\(prefsJSON)); }")
 
-        // Update content if changed
+        // Update content if changed externally
         if context.coordinator.lastRenderedMarkdown != markdown {
             context.coordinator.lastRenderedMarkdown = markdown
             if let data = try? JSONEncoder().encode(markdown),
@@ -102,7 +104,7 @@ public struct PreviewWebView: NSViewRepresentable {
         public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             isPageLoaded = true
 
-            let prefsJSON = parent.preferences.jsonPayload(systemColorScheme: .light)
+            let prefsJSON = parent.preferences.jsonPayload(systemColorScheme: .dark)
             webView.evaluateJavaScript("if (window.lucid) { window.lucid.updatePreferences(\(prefsJSON)); }")
 
             if let data = try? JSONEncoder().encode(parent.markdown),
@@ -139,6 +141,9 @@ public struct PreviewWebView: NSViewRepresentable {
                    let index = body["index"] as? Int {
                     parent.onFindMatchesChanged?(count, index)
                 }
+            } else if message.name == "lucidContentEdited", let newMarkdown = message.body as? String {
+                lastRenderedMarkdown = newMarkdown
+                parent.onContentEdited?(newMarkdown)
             }
         }
     }
