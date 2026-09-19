@@ -104,12 +104,13 @@ struct AppearanceSettingsTab: View {
                                 }
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 8)
-                                .background(preferences.theme == mode ? Color.accentColor.opacity(0.12) : Color(NSColor.controlBackgroundColor))
+                                .background(preferences.theme == mode ? Color.accentColor.opacity(0.14) : Color(NSColor.controlBackgroundColor))
                                 .cornerRadius(8)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 8)
                                         .stroke(preferences.theme == mode ? Color.accentColor : Color.white.opacity(0.08), lineWidth: 1)
                                 )
+                                .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                         }
@@ -243,15 +244,22 @@ struct TypographySettingsTab: View {
 
                     HStack(spacing: 8) {
                         ForEach([14, 16, 18, 20, 22], id: \.self) { size in
+                            let isSelected = Int(preferences.fontSize) == size
                             Button("\(size)px\(size == 18 ? " (Default)" : "")") {
                                 preferences.fontSize = Double(size)
                             }
-                            .font(.system(size: 10))
+                            .font(.system(size: 10, weight: isSelected ? .bold : .regular))
+                            .foregroundColor(isSelected ? .accentColor : .primary)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(isSelected ? Color.accentColor.opacity(0.18) : Color(NSColor.controlBackgroundColor))
+                            .cornerRadius(5)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 5)
+                                    .stroke(isSelected ? Color.accentColor.opacity(0.4) : Color.white.opacity(0.06), lineWidth: 0.5)
+                            )
+                            .contentShape(Rectangle())
                             .buttonStyle(.plain)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Int(preferences.fontSize) == size ? Color.accentColor.opacity(0.15) : Color(NSColor.controlBackgroundColor))
-                            .cornerRadius(4)
                         }
                     }
                 }
@@ -277,15 +285,22 @@ struct TypographySettingsTab: View {
 
                     HStack(spacing: 8) {
                         ForEach([(1.50, "1.50 (Compact)"), (1.65, "1.65"), (1.75, "1.75 (Default)"), (2.00, "2.00 (Relaxed)")], id: \.0) { val, label in
+                            let isSelected = abs(preferences.lineHeight - val) < 0.02
                             Button(label) {
                                 preferences.lineHeight = val
                             }
-                            .font(.system(size: 10))
+                            .font(.system(size: 10, weight: isSelected ? .bold : .regular))
+                            .foregroundColor(isSelected ? .accentColor : .primary)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(isSelected ? Color.accentColor.opacity(0.18) : Color(NSColor.controlBackgroundColor))
+                            .cornerRadius(5)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 5)
+                                    .stroke(isSelected ? Color.accentColor.opacity(0.4) : Color.white.opacity(0.06), lineWidth: 0.5)
+                            )
+                            .contentShape(Rectangle())
                             .buttonStyle(.plain)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(abs(preferences.lineHeight - val) < 0.02 ? Color.accentColor.opacity(0.15) : Color(NSColor.controlBackgroundColor))
-                            .cornerRadius(4)
                         }
                     }
                 }

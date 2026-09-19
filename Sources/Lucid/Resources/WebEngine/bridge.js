@@ -46,12 +46,12 @@
 
     turndownService.addRule('codeBlock', {
       filter: function(node) {
-        return node.classList && node.classList.contains('lucid-code-block');
+        return node.nodeName === 'PRE' && node.classList && node.classList.contains('lucid-enhanced');
       },
       replacement: function(content, node) {
-        const langEl = node.querySelector('.lucid-code-lang');
+        const langEl = node.querySelector('.lucid-lang');
         const lang = langEl ? langEl.textContent.trim().toLowerCase() : '';
-        const codeEl = node.querySelector('pre code');
+        const codeEl = node.querySelector('code');
         const code = codeEl ? codeEl.innerText : '';
         return '\n\n```' + lang + '\n' + code + '\n```\n\n';
       }
@@ -87,13 +87,13 @@
       }
 
       const langLabel = (lang || 'TEXT').toUpperCase();
-      return '<div class="lucid-code-block">' +
-             '<div class="lucid-code-header">' +
-             '<span class="lucid-code-lang">' + langLabel + '</span>' +
-             '<button class="lucid-btn-copy-code" onclick="window.lucid.copyCode(this)">Copy</button>' +
+      return '<pre class="lucid-enhanced">' +
+             '<div class="lucid-codebar">' +
+             '<span class="lucid-lang">' + langLabel + '</span>' +
+             '<button class="lucid-copy" type="button" onclick="window.lucid.copyCode(this)">Copy</button>' +
              '</div>' +
-             '<pre><code class="hljs language-' + md.utils.escapeHtml(lang || '') + '">' + highlighted + '</code></pre>' +
-             '</div>';
+             '<code class="hljs language-' + md.utils.escapeHtml(lang || '') + '">' + highlighted + '</code>' +
+             '</pre>';
     }
   });
 
@@ -131,20 +131,20 @@
       const icon = ALERT_ICONS[alertType] || ALERT_ICONS.note;
       const titleText = customTitle && customTitle.trim() ? customTitle.trim() : alertType;
       const content = (firstLine && firstLine.trim() ? '<p>' + firstLine.trim() + '</p>' : '') + rest;
-      const titleHtml = '<div class="lucid-alert-title"><span class="lucid-alert-icon">' + icon + '</span>' + titleText + '</div>';
+      const titleHtml = '<div class="markdown-alert-title"><span class="markdown-alert-icon">' + icon + '</span>' + titleText + '</div>';
 
       if (collapseFlag === '-' || collapseFlag === '+') {
         const isOpen = collapseFlag === '+' ? ' open' : '';
-        return '<details class="lucid-alert lucid-alert-' + alertType + '"' + isOpen + '>' +
+        return '<details class="markdown-alert markdown-alert-' + alertType + '"' + isOpen + '>' +
                '<summary>' + titleHtml + '</summary>' +
-               '<div class="lucid-alert-content">' + content + '</div>' +
+               '<div class="markdown-alert-content">' + content + '</div>' +
                '</details>';
       }
 
-      return '<div class="lucid-alert lucid-alert-' + alertType + '">' +
+      return '<blockquote class="markdown-alert markdown-alert-' + alertType + '">' +
              titleHtml +
-             '<div class="lucid-alert-content">' + content + '</div>' +
-             '</div>';
+             '<div class="markdown-alert-content">' + content + '</div>' +
+             '</blockquote>';
     });
   }
 
@@ -420,6 +420,19 @@
 
       setupInPlaceEditing();
 
+      // Heading Anchors (Matching Extension)
+      const hs = container.querySelectorAll('h1, h2, h3, h4, h5, h6');
+      hs.forEach(function(h) {
+        if (!h.querySelector('.lucid-anchor') && h.id) {
+          const a = document.createElement('a');
+          a.className = 'lucid-anchor';
+          a.href = '#' + h.id;
+          a.textContent = '#';
+          a.title = 'Link to this section';
+          h.appendChild(a);
+        }
+      });
+
       const headings = extractHeadings();
       if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.lucidHeadings) {
         window.webkit.messageHandlers.lucidHeadings.postMessage(headings);
@@ -437,7 +450,10 @@
       const root = document.documentElement;
       const body = document.body;
 
-      if (prefs.theme) body.setAttribute('data-theme', prefs.theme);
+      if (prefs.theme) {
+        body.setAttribute('data-theme', prefs.theme);
+        body.className = 'vscode-body ' + (prefs.theme === 'dark' ? 'vscode-dark' : '');
+      }
       if (prefs.fontFamily) root.style.setProperty('--lucid-font-family', prefs.fontFamily);
       if (prefs.fontSize) root.style.setProperty('--lucid-font-size', prefs.fontSize + 'px');
       if (prefs.lineHeight) root.style.setProperty('--lucid-line-height', prefs.lineHeight);
@@ -497,7 +513,6 @@
 
     // Insert templates
     insertTemplate: function(type) {
-      const selection = window.getSelection();
       let template = '';
       switch (type) {
         case 'table':
@@ -521,12 +536,17 @@
     },
 
     copyCode: function(btn) {
-      const pre = btn.closest('.lucid-code-block').querySelector('pre code');
-      if (pre) {
-        navigator.clipboard.writeText(pre.innerText).then(function() {
+      const pre = btn.closest('pre.lucid-enhanced');
+      const code = pre ? pre.querySelector('code') : null;
+      if (code) {
+        navigator.clipboard.writeText(code.innerText).then(function() {
           const original = btn.innerText;
           btn.innerText = 'Copied!';
-          setTimeout(function() { btn.innerText = original; }, 1800);
+          btn.classList.add('lucid-copied');
+          setTimeout(function() {
+            btn.innerText = original;
+            btn.classList.remove('lucid-copied');
+          }, 1800);
         });
       }
     },
@@ -569,6 +589,111 @@
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
       }
+    },
+
+    // In-Page Find Implementation
+    findMatches: [],
+    findCurrentIndex: 0,
+
+    find: function(query) {
+      window.lucid.clearFind();
+      if (!query || !query.trim()) return;
+
+      const container = document.getElementById('lucid-content');
+      if (!container) return;
+
+      const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null, false);
+      const textNodes = [];
+      let node;
+      while (node = walker.nextNode()) {
+        if (node.parentElement && !['SCRIPT', 'STYLE', 'BUTTON'].includes(node.parentElement.tagName)) {
+          textNodes.push(node);
+        }
+      }
+
+      const regex = new RegExp('(' + query.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&') + ')', 'gi');
+      window.lucid.findMatches = [];
+
+      textNodes.forEach(function(textNode) {
+        const val = textNode.nodeValue;
+        if (regex.test(val)) {
+          const frag = document.createDocumentFragment();
+          let lastIdx = 0;
+          val.replace(regex, function(match, p1, offset) {
+            if (offset > lastIdx) {
+              frag.appendChild(document.createTextNode(val.substring(lastIdx, offset)));
+            }
+            const mark = document.createElement('mark');
+            mark.className = 'lucid-find-match';
+            mark.textContent = match;
+            frag.appendChild(mark);
+            window.lucid.findMatches.push(mark);
+            lastIdx = offset + match.length;
+          });
+          if (lastIdx < val.length) {
+            frag.appendChild(document.createTextNode(val.substring(lastIdx)));
+          }
+          textNode.parentNode.replaceChild(frag, textNode);
+        }
+      });
+
+      window.lucid.findCurrentIndex = 0;
+      if (window.lucid.findMatches.length > 0) {
+        window.lucid.highlightActiveFindMatch();
+      }
+
+      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.lucidFindMatches) {
+        window.webkit.messageHandlers.lucidFindMatches.postMessage({
+          count: window.lucid.findMatches.length,
+          index: window.lucid.findMatches.length > 0 ? 1 : 0
+        });
+      }
+    },
+
+    highlightActiveFindMatch: function() {
+      window.lucid.findMatches.forEach(function(m) { m.classList.remove('lucid-find-active'); });
+      if (window.lucid.findMatches.length === 0) return;
+      const idx = window.lucid.findCurrentIndex;
+      const active = window.lucid.findMatches[idx];
+      if (active) {
+        active.classList.add('lucid-find-active');
+        active.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    },
+
+    findNext: function() {
+      if (window.lucid.findMatches.length === 0) return;
+      window.lucid.findCurrentIndex = (window.lucid.findCurrentIndex + 1) % window.lucid.findMatches.length;
+      window.lucid.highlightActiveFindMatch();
+      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.lucidFindMatches) {
+        window.webkit.messageHandlers.lucidFindMatches.postMessage({
+          count: window.lucid.findMatches.length,
+          index: window.lucid.findCurrentIndex + 1
+        });
+      }
+    },
+
+    findPrev: function() {
+      if (window.lucid.findMatches.length === 0) return;
+      window.lucid.findCurrentIndex = (window.lucid.findCurrentIndex - 1 + window.lucid.findMatches.length) % window.lucid.findMatches.length;
+      window.lucid.highlightActiveFindMatch();
+      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.lucidFindMatches) {
+        window.webkit.messageHandlers.lucidFindMatches.postMessage({
+          count: window.lucid.findMatches.length,
+          index: window.lucid.findCurrentIndex + 1
+        });
+      }
+    },
+
+    clearFind: function() {
+      const marks = document.querySelectorAll('mark.lucid-find-match');
+      marks.forEach(function(mark) {
+        const parent = mark.parentNode;
+        parent.replaceChild(document.createTextNode(mark.textContent), mark);
+        parent.normalize();
+      });
+      window.lucid.findMatches = [];
+      window.lucid.findCurrentIndex = 0;
     },
 
     getStandaloneHTML: function() {
