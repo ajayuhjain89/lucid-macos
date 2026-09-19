@@ -37,7 +37,7 @@ public struct MainWindowView: View {
     }
 
     public var body: some View {
-        ZStack {
+        ZStack(alignment: .top) {
             VStack(spacing: 0) {
                 // Main Document Work Area
                 HSplitView {
@@ -347,6 +347,12 @@ public struct MainWindowView: View {
                 )
                 .transition(.scale(scale: 0.96).combined(with: .opacity))
             }
+
+            // Native Window Drag Area (Offset for traffic lights)
+            WindowDragView()
+                .frame(height: 28)
+                .padding(.leading, 78)
+                .edgesIgnoringSafeArea(.top)
         }
         // Keyboard Shortcuts
         .background(
@@ -403,6 +409,24 @@ public struct MainWindowView: View {
                     self.document.text = updatedText
                 }
             }
+        }
+    }
+}
+
+// MARK: - Native Window Dragging Component
+struct WindowDragView: NSViewRepresentable {
+    func makeNSView(context: Context) -> DragNSView {
+        DragNSView()
+    }
+    func updateNSView(_ nsView: DragNSView, context: Context) {}
+}
+
+final class DragNSView: NSView {
+    override func mouseDown(with event: NSEvent) {
+        if event.clickCount == 2 {
+            window?.zoom(nil)
+        } else {
+            window?.performDrag(with: event)
         }
     }
 }
