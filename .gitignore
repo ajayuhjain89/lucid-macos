@@ -4,6 +4,8 @@
 .build/
 *.o
 *.dSYM
+*.dmg
+.dmg_staging
 
 # OS & Temp
 .DS_Store
