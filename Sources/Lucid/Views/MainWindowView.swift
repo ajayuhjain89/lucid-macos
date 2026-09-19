@@ -7,13 +7,24 @@ public struct MainWindowView: View {
 
     @StateObject private var preferences = LucidPreferences.shared
     @State private var headings: [HeadingItem] = []
+    @State private var activeHeading: HeadingItem?
     @State private var scrollToHeadingId: String?
     @State private var editorScrollFraction: Double = 0
     @State private var previewTargetFraction: Double?
     @State private var webViewInstance: WKWebView?
     @State private var fileWatcher: FileWatcher?
 
-    // Stats
+    // Find & Navigation
+    @State private var isFindBarPresented: Bool = false
+    @State private var findMatchCount: Int = 0
+    @State private var findCurrentIndex: Int = 0
+    @State private var navigationHistory: [String] = []
+    @State private var historyIndex: Int = -1
+
+    private var documentName: String {
+        fileURL?.deletingPathExtension().lastPathComponent ?? "Untitled Document"
+    }
+
     private var wordCount: Int {
         let words = document.text.components(separatedBy: .whitespacesAndNewlines)
         return words.filter { !$0.isEmpty }.count
@@ -32,48 +43,84 @@ public struct MainWindowView: View {
         HSplitView {
             // Outline Sidebar
             if preferences.showOutline {
-                OutlineSidebarView(headings: headings) { id in
-                    scrollToHeadingId = id
+                OutlineSidebarView(
+                    headings: headings,
+                    activeHeadingId: activeHeading?.id
+                ) { id in
+                    navigateToHeading(id)
                 }
                 .frame(minWidth: 180, idealWidth: 220, maxWidth: 300)
             }
 
-            // Main Content Area
-            Group {
-                switch preferences.viewMode {
-                case .reader:
-                    PreviewWebView(
-                        preferences: preferences,
-                        markdown: document.text,
-                        headings: $headings,
-                        scrollToHeadingId: scrollToHeadingId,
-                        webViewInstance: $webViewInstance
-                    )
-                case .split:
-                    HSplitView {
-                        EditorView(
-                            text: $document.text,
-                            onScrollFractionChanged: { fraction in
-                                previewTargetFraction = fraction
-                            }
-                        )
-                        .frame(minWidth: 260)
+            // Main Content Area with Breadcrumbs and Find Bar
+            VStack(spacing: 0) {
+                // Breadcrumb Bar
+                BreadcrumbBarView(
+                    documentName: documentName,
+                    activeHeading: activeHeading
+                ) { id in
+                    navigateToHeading(id)
+                }
 
-                        PreviewWebView(
-                            preferences: preferences,
-                            markdown: document.text,
-                            headings: $headings,
-                            scrollToHeadingId: scrollToHeadingId,
-                            targetScrollFraction: previewTargetFraction,
-                            webViewInstance: $webViewInstance
-                        )
-                        .frame(minWidth: 260)
+                // Viewport with optional overlay Find Bar
+                ZStack(alignment: .topTrailing) {
+                    Group {
+                        switch preferences.viewMode {
+                        case .reader:
+                            PreviewWebView(
+                                preferences: preferences,
+                                markdown: document.text,
+                                headings: $headings,
+                                activeHeading: $activeHeading,
+                                onFindMatchesChanged: { count, index in
+                                    findMatchCount = count
+                                    findCurrentIndex = index
+                                },
+                                scrollToHeadingId: scrollToHeadingId,
+                                webViewInstance: $webViewInstance
+                            )
+                        case .split:
+                            HSplitView {
+                                EditorView(
+                                    text: $document.text,
+                                    onScrollFractionChanged: { fraction in
+                                        previewTargetFraction = fraction
+                                    }
+                                )
+                                .frame(minWidth: 260)
+
+                                PreviewWebView(
+                                    preferences: preferences,
+                                    markdown: document.text,
+                                    headings: $headings,
+                                    activeHeading: $activeHeading,
+                                    onFindMatchesChanged: { count, index in
+                                        findMatchCount = count
+                                        findCurrentIndex = index
+                                    },
+                                    scrollToHeadingId: scrollToHeadingId,
+                                    targetScrollFraction: previewTargetFraction,
+                                    webViewInstance: $webViewInstance
+                                )
+                                .frame(minWidth: 260)
+                            }
+                        case .editor:
+                            EditorView(text: $document.text)
+                        }
                     }
-                case .editor:
-                    EditorView(text: $document.text)
+                    .frame(minWidth: 400, maxWidth: .infinity, maxHeight: .infinity)
+
+                    // Floating Find Bar
+                    if isFindBarPresented {
+                        FindBarView(
+                            isPresented: $isFindBarPresented,
+                            webView: webViewInstance
+                        )
+                        .padding([.top, .trailing], 16)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                    }
                 }
             }
-            .frame(minWidth: 400, maxWidth: .infinity, maxHeight: .infinity)
 
             // Inspector Sidebar
             if preferences.showInspector {
@@ -89,7 +136,24 @@ public struct MainWindowView: View {
                 }) {
                     Image(systemName: "sidebar.left")
                 }
-                .help("Toggle Outline (Table of Contents)")
+                .help("Toggle Outline (⌘⌥T)")
+            }
+
+            // History Navigation
+            ToolbarItemGroup(placement: .navigation) {
+                Button(action: goBack) {
+                    Image(systemName: "chevron.left")
+                }
+                .disabled(historyIndex <= 0)
+                .help("Back (⌘[)")
+                .keyboardShortcut("[", modifiers: .command)
+
+                Button(action: goForward) {
+                    Image(systemName: "chevron.right")
+                }
+                .disabled(historyIndex >= navigationHistory.count - 1)
+                .help("Forward (⌘])")
+                .keyboardShortcut("]", modifiers: .command)
             }
 
             // View Mode Selector
@@ -107,6 +171,19 @@ public struct MainWindowView: View {
                 Text("\(wordCount) words · \(readingTimeMinutes) min read")
                     .font(.caption)
                     .foregroundColor(.secondary)
+            }
+
+            // Find in Document
+            ToolbarItem(placement: .primaryAction) {
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isFindBarPresented.toggle()
+                    }
+                }) {
+                    Image(systemName: "magnifyingglass")
+                }
+                .help("Find in Document (⌘F)")
+                .keyboardShortcut("f", modifiers: .command)
             }
 
             // Export Menu
@@ -156,12 +233,34 @@ public struct MainWindowView: View {
                 }) {
                     Image(systemName: "slider.horizontal.3")
                 }
-                .help("Toggle Inspector")
+                .help("Toggle Inspector (⌘I)")
             }
         }
         .onAppear {
             setupFileWatcher()
         }
+    }
+
+    private func navigateToHeading(_ id: String) {
+        scrollToHeadingId = id
+        // Record in history
+        if historyIndex < navigationHistory.count - 1 {
+            navigationHistory = Array(navigationHistory.prefix(historyIndex + 1))
+        }
+        navigationHistory.append(id)
+        historyIndex = navigationHistory.count - 1
+    }
+
+    private func goBack() {
+        guard historyIndex > 0 else { return }
+        historyIndex -= 1
+        scrollToHeadingId = navigationHistory[historyIndex]
+    }
+
+    private func goForward() {
+        guard historyIndex < navigationHistory.count - 1 else { return }
+        historyIndex += 1
+        scrollToHeadingId = navigationHistory[historyIndex]
     }
 
     private func setupFileWatcher() {

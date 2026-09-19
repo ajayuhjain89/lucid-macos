@@ -5,7 +5,9 @@ public struct PreviewWebView: NSViewRepresentable {
     @ObservedObject var preferences: LucidPreferences
     let markdown: String
     @Binding var headings: [HeadingItem]
+    @Binding var activeHeading: HeadingItem?
     var onScrollFractionChanged: ((Double) -> Void)?
+    var onFindMatchesChanged: ((Int, Int) -> Void)?
     var scrollToHeadingId: String?
     var targetScrollFraction: Double?
     @Binding var webViewInstance: WKWebView?
@@ -21,17 +23,18 @@ public struct PreviewWebView: NSViewRepresentable {
 
         userContent.add(context.coordinator, name: "lucidScroll")
         userContent.add(context.coordinator, name: "lucidHeadings")
+        userContent.add(context.coordinator, name: "lucidActiveHeading")
+        userContent.add(context.coordinator, name: "lucidFindMatches")
         config.userContentController = userContent
 
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = context.coordinator
-        webView.setValue(false, forKey: "drawsBackground") // Transparent background until theme loads
+        webView.setValue(false, forKey: "drawsBackground")
 
         DispatchQueue.main.async {
             self.webViewInstance = webView
         }
 
-        // Load local WebEngine index.html
         let engineURL: URL? = {
             if let url = Bundle.main.url(forResource: "index", withExtension: "html", subdirectory: "WebEngine") {
                 return url
@@ -40,7 +43,6 @@ public struct PreviewWebView: NSViewRepresentable {
                FileManager.default.fileExists(atPath: resURL.path) {
                 return resURL
             }
-            // Fallback for development/direct execution
             let devURL = URL(fileURLWithPath: "/Users/ayushjain/lucid-macos/Sources/Lucid/Resources/WebEngine/index.html")
             if FileManager.default.fileExists(atPath: devURL.path) {
                 return devURL
@@ -100,11 +102,9 @@ public struct PreviewWebView: NSViewRepresentable {
         public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             isPageLoaded = true
 
-            // Send initial preferences
             let prefsJSON = parent.preferences.jsonPayload(systemColorScheme: .light)
             webView.evaluateJavaScript("if (window.lucid) { window.lucid.updatePreferences(\(prefsJSON)); }")
 
-            // Send initial markdown
             if let data = try? JSONEncoder().encode(parent.markdown),
                let jsonString = String(data: data, encoding: .utf8) {
                 webView.evaluateJavaScript("if (window.lucid) { window.lucid.updateContent(\(jsonString)); }")
@@ -125,6 +125,19 @@ public struct PreviewWebView: NSViewRepresentable {
                 }
                 DispatchQueue.main.async {
                     self.parent.headings = parsed
+                }
+            } else if message.name == "lucidActiveHeading", let body = message.body as? [String: Any] {
+                if let id = body["id"] as? String,
+                   let text = body["text"] as? String,
+                   let level = body["level"] as? Int {
+                    DispatchQueue.main.async {
+                        self.parent.activeHeading = HeadingItem(id: id, level: level, text: text)
+                    }
+                }
+            } else if message.name == "lucidFindMatches", let body = message.body as? [String: Any] {
+                if let count = body["count"] as? Int,
+                   let index = body["index"] as? Int {
+                    parent.onFindMatchesChanged?(count, index)
                 }
             }
         }
