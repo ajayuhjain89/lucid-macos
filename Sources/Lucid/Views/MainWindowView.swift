@@ -14,8 +14,9 @@ public struct MainWindowView: View {
     @State private var webViewInstance: WKWebView?
     @State private var fileWatcher: FileWatcher?
 
-    // Find & Navigation
+    // Find & Command Palette
     @State private var isFindBarPresented: Bool = false
+    @State private var isCommandPalettePresented: Bool = false
     @State private var findMatchCount: Int = 0
     @State private var findCurrentIndex: Int = 0
     @State private var navigationHistory: [String] = []
@@ -36,49 +37,24 @@ public struct MainWindowView: View {
     }
 
     public var body: some View {
-        HSplitView {
-            // Outline Sidebar
-            if preferences.showOutline {
-                OutlineSidebarView(
-                    headings: headings,
-                    activeHeadingId: activeHeading?.id
-                ) { id in
-                    navigateToHeading(id)
+        ZStack {
+            HSplitView {
+                // Outline Sidebar
+                if preferences.showOutline {
+                    OutlineSidebarView(
+                        headings: headings,
+                        activeHeadingId: activeHeading?.id
+                    ) { id in
+                        navigateToHeading(id)
+                    }
+                    .frame(minWidth: 180, idealWidth: 220, maxWidth: 300)
                 }
-                .frame(minWidth: 180, idealWidth: 220, maxWidth: 300)
-            }
 
-            // Main Content Area (Clean, no top bar!)
-            ZStack(alignment: .topTrailing) {
-                Group {
-                    switch preferences.viewMode {
-                    case .reader:
-                        PreviewWebView(
-                            preferences: preferences,
-                            markdown: document.text,
-                            headings: $headings,
-                            activeHeading: $activeHeading,
-                            onScrollFractionChanged: nil,
-                            onFindMatchesChanged: { count, index in
-                                findMatchCount = count
-                                findCurrentIndex = index
-                            },
-                            onContentEdited: { newMarkdown in
-                                document.text = newMarkdown
-                            },
-                            scrollToHeadingId: scrollToHeadingId,
-                            webViewInstance: $webViewInstance
-                        )
-                    case .split:
-                        HSplitView {
-                            EditorView(
-                                text: $document.text,
-                                onScrollFractionChanged: { fraction in
-                                    previewTargetFraction = fraction
-                                }
-                            )
-                            .frame(minWidth: 260)
-
+                // Main Content Area (Clean edge-to-edge)
+                ZStack(alignment: .topTrailing) {
+                    Group {
+                        switch preferences.viewMode {
+                        case .reader:
                             PreviewWebView(
                                 preferences: preferences,
                                 markdown: document.text,
@@ -93,32 +69,96 @@ public struct MainWindowView: View {
                                     document.text = newMarkdown
                                 },
                                 scrollToHeadingId: scrollToHeadingId,
-                                targetScrollFraction: previewTargetFraction,
                                 webViewInstance: $webViewInstance
                             )
-                            .frame(minWidth: 260)
+                        case .split:
+                            HSplitView {
+                                EditorView(
+                                    text: $document.text,
+                                    onScrollFractionChanged: { fraction in
+                                        previewTargetFraction = fraction
+                                    }
+                                )
+                                .frame(minWidth: 260)
+
+                                PreviewWebView(
+                                    preferences: preferences,
+                                    markdown: document.text,
+                                    headings: $headings,
+                                    activeHeading: $activeHeading,
+                                    onScrollFractionChanged: nil,
+                                    onFindMatchesChanged: { count, index in
+                                        findMatchCount = count
+                                        findCurrentIndex = index
+                                    },
+                                    onContentEdited: { newMarkdown in
+                                        document.text = newMarkdown
+                                    },
+                                    scrollToHeadingId: scrollToHeadingId,
+                                    targetScrollFraction: previewTargetFraction,
+                                    webViewInstance: $webViewInstance
+                                )
+                                .frame(minWidth: 260)
+                            }
+                        case .editor:
+                            EditorView(text: $document.text)
                         }
-                    case .editor:
-                        EditorView(text: $document.text)
+                    }
+                    .frame(minWidth: 400, maxWidth: .infinity, maxHeight: .infinity)
+
+                    // Floating Find Bar
+                    if isFindBarPresented {
+                        FindBarView(
+                            isPresented: $isFindBarPresented,
+                            webView: webViewInstance
+                        )
+                        .padding([.top, .trailing], 16)
+                        .transition(.move(edge: .top).combined(with: .opacity))
                     }
                 }
-                .frame(minWidth: 400, maxWidth: .infinity, maxHeight: .infinity)
 
-                // Floating Find Bar
-                if isFindBarPresented {
-                    FindBarView(
-                        isPresented: $isFindBarPresented,
-                        webView: webViewInstance
-                    )
-                    .padding([.top, .trailing], 16)
-                    .transition(.move(edge: .top).combined(with: .opacity))
+                // Inspector Sidebar
+                if preferences.showInspector {
+                    InspectorView(preferences: preferences)
+                        .frame(minWidth: 220, idealWidth: 260, maxWidth: 320)
                 }
             }
 
-            // Inspector Sidebar
-            if preferences.showInspector {
-                InspectorView(preferences: preferences)
-                    .frame(minWidth: 220, idealWidth: 260, maxWidth: 320)
+            // Command Palette Modal Overlay
+            if isCommandPalettePresented {
+                Color.black.opacity(0.35)
+                    .edgesIgnoringSafeArea(.all)
+                    .onTapGesture {
+                        isCommandPalettePresented = false
+                    }
+
+                CommandPaletteView(
+                    isPresented: $isCommandPalettePresented,
+                    preferences: preferences,
+                    webView: webViewInstance,
+                    onExportPDF: {
+                        if let webView = webViewInstance {
+                            ExportService.shared.exportPDF(
+                                webView: webView,
+                                defaultFilename: fileURL?.deletingPathExtension().lastPathComponent ?? "Document"
+                            )
+                        }
+                    },
+                    onExportHTML: {
+                        if let webView = webViewInstance {
+                            ExportService.shared.exportHTML(
+                                webView: webView,
+                                defaultFilename: fileURL?.deletingPathExtension().lastPathComponent ?? "Document"
+                            )
+                        }
+                    },
+                    onCopyRichText: {
+                        if let webView = webViewInstance {
+                            ExportService.shared.copyRichText(webView: webView)
+                        }
+                    }
+                )
+                .transition(.scale(scale: 0.95).combined(with: .opacity))
             }
         }
         .toolbar {
@@ -166,8 +206,40 @@ public struct MainWindowView: View {
                     .foregroundColor(.secondary)
             }
 
-            // Click-to-Edit Mode Indicator & Toggle
-            ToolbarItem(placement: .primaryAction) {
+            // Primary Actions Group
+            ToolbarItemGroup(placement: .primaryAction) {
+                // Command Palette Button (⌘K)
+                Button(action: {
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                        isCommandPalettePresented.toggle()
+                    }
+                }) {
+                    Image(systemName: "command")
+                }
+                .help("Command Palette (⌘K)")
+                .keyboardShortcut("k", modifiers: .command)
+
+                // Focus Mode Toggle (⌘⇧D)
+                Button(action: {
+                    preferences.focusMode.toggle()
+                }) {
+                    Image(systemName: preferences.focusMode ? "scope" : "circle.dashed")
+                        .foregroundColor(preferences.focusMode ? .accentColor : .secondary)
+                }
+                .help("Toggle Focus Mode (⌘⇧D)")
+                .keyboardShortcut("d", modifiers: [.command, .shift])
+
+                // Typewriter Mode Toggle (⌘⇧T)
+                Button(action: {
+                    preferences.typewriterMode.toggle()
+                }) {
+                    Image(systemName: preferences.typewriterMode ? "text.aligncenter" : "text.alignleft")
+                        .foregroundColor(preferences.typewriterMode ? .accentColor : .secondary)
+                }
+                .help("Toggle Typewriter Mode (⌘⇧T)")
+                .keyboardShortcut("t", modifiers: [.command, .shift])
+
+                // Click-to-Edit Mode Indicator & Toggle
                 Button(action: {
                     preferences.clickToEdit.toggle()
                 }) {
@@ -175,10 +247,8 @@ public struct MainWindowView: View {
                         .foregroundColor(preferences.clickToEdit ? .accentColor : .secondary)
                 }
                 .help(preferences.clickToEdit ? "In-Place Live Editing Enabled (Click any text to edit)" : "Click to Enable In-Place Editing")
-            }
 
-            // Find in Document
-            ToolbarItem(placement: .primaryAction) {
+                // Find in Document (⌘F)
                 Button(action: {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         isFindBarPresented.toggle()
@@ -188,10 +258,8 @@ public struct MainWindowView: View {
                 }
                 .help("Find in Document (⌘F)")
                 .keyboardShortcut("f", modifiers: .command)
-            }
 
-            // Export Menu
-            ToolbarItem(placement: .primaryAction) {
+                // Export Menu
                 Menu {
                     Button(action: {
                         if let webView = webViewInstance {
@@ -228,10 +296,8 @@ public struct MainWindowView: View {
                     Image(systemName: "square.and.arrow.up")
                 }
                 .help("Export Document")
-            }
 
-            // Settings Button
-            ToolbarItem(placement: .primaryAction) {
+                // Settings Button (⌘,)
                 Button(action: {
                     NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
                 }) {

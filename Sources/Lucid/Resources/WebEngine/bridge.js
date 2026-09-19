@@ -1,5 +1,4 @@
 (function() {
-  // Alert Icons SVG definitions (12 types)
   const ALERT_ICONS = {
     note: '<svg viewBox="0 0 16 16"><path d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8-6.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM6.5 7.75A.75.75 0 0 1 7.25 7h1a.75.75 0 0 1 .75.75v2.75h.25a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1 0-1.5h.25v-2h-.25a.75.75 0 0 1-.75-.75ZM8 6a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z"></path></svg>',
     tip: '<svg viewBox="0 0 16 16"><path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.09-.106-.188-.22-.294-.346C3.12 7.677 2.5 6.75 2.5 5.25 2.5 2.31 4.97 0 8 0s5.5 2.31 5.5 5.25c0 1.5-.62 2.427-1.306 3.238-.106.126-.204.24-.294.346-.176.208-.356.42-.542.68-.207.3-.33.565-.37.847a.75.75 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5Zm1 3h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1 0-1.5Z"></path></svg>',
@@ -16,7 +15,7 @@
     failure: '<svg viewBox="0 0 16 16"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path></svg>'
   };
 
-  // Initialize Turndown Service for In-Place WYSIWYG Editing
+  // Initialize Turndown Service
   let turndownService = null;
   if (typeof TurndownService !== 'undefined') {
     turndownService = new TurndownService({
@@ -25,7 +24,6 @@
       bulletListMarker: '-'
     });
 
-    // Rule: KaTeX display math
     turndownService.addRule('katexDisplay', {
       filter: function(node) {
         return node.classList && node.classList.contains('lucid-math-block');
@@ -36,7 +34,6 @@
       }
     });
 
-    // Rule: Mermaid diagrams
     turndownService.addRule('mermaidBlock', {
       filter: function(node) {
         return node.classList && node.classList.contains('mermaid-wrapper');
@@ -47,7 +44,6 @@
       }
     });
 
-    // Rule: Code blocks
     turndownService.addRule('codeBlock', {
       filter: function(node) {
         return node.classList && node.classList.contains('lucid-code-block');
@@ -62,7 +58,7 @@
     });
   }
 
-  // Initialize Markdown-it with highlight.js integration
+  // Initialize Markdown-it
   const md = window.markdownit({
     html: true,
     linkify: true,
@@ -101,7 +97,6 @@
     }
   });
 
-  // Attach plugins if available
   if (window.markdownitSub) md.use(window.markdownitSub);
   if (window.markdownitSup) md.use(window.markdownitSup);
   if (window.markdownitIns) md.use(window.markdownitIns);
@@ -110,7 +105,6 @@
   if (window.markdownitAbbr) md.use(window.markdownitAbbr);
   if (window.markdownitTaskList) md.use(window.markdownitTaskList, { enabled: true });
 
-  // Custom slugify for heading IDs
   function slugify(text) {
     return text.toLowerCase().trim()
       .replace(/[^\w\s-]/g, '')
@@ -118,7 +112,6 @@
       .replace(/^-+|-+$/g, '');
   }
 
-  // Heading ID injection rule
   md.core.ruler.push('lucid-heading-ids', function(state) {
     for (let i = 0; i < state.tokens.length; i++) {
       if (state.tokens[i].type === 'heading_open') {
@@ -131,7 +124,6 @@
     }
   });
 
-  // GitHub Alert parsing (matches extension circular icon badge and uppercase title)
   function parseAlerts(html) {
     const alertRegex = /<blockquote>\s*<p>\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION|EXAMPLE|QUESTION|QUOTE|ABSTRACT|BUG|INFO|SUCCESS|FAILURE)\]([+-]?)(?:\s*([^\n<]*))?(?:\s*<br\s*\/?>)?([\s\S]*?)<\/p>\s*([\s\S]*?)<\/blockquote>/gi;
     return html.replace(alertRegex, function(match, type, collapseFlag, customTitle, firstLine, rest) {
@@ -139,7 +131,6 @@
       const icon = ALERT_ICONS[alertType] || ALERT_ICONS.note;
       const titleText = customTitle && customTitle.trim() ? customTitle.trim() : alertType;
       const content = (firstLine && firstLine.trim() ? '<p>' + firstLine.trim() + '</p>' : '') + rest;
-
       const titleHtml = '<div class="lucid-alert-title"><span class="lucid-alert-icon">' + icon + '</span>' + titleText + '</div>';
 
       if (collapseFlag === '-' || collapseFlag === '+') {
@@ -157,10 +148,8 @@
     });
   }
 
-  // KaTeX Math & Chemistry parsing
   function parseKaTeX(text) {
     if (typeof katex === 'undefined') return text;
-    // Block math: $$ ... $$
     text = text.replace(/\$\$([\s\S]+?)\$\$/g, function(match, math) {
       try {
         const rendered = katex.renderToString(math.trim(), { displayMode: true, throwOnError: false });
@@ -173,7 +162,6 @@
         return match;
       }
     });
-    // Inline math: $ ... $
     text = text.replace(/(^|[^\\])\$([^\$\n]+?)\$/g, function(match, prefix, math) {
       try {
         return prefix + katex.renderToString(math.trim(), { displayMode: false, throwOnError: false });
@@ -184,49 +172,157 @@
     return text;
   }
 
-  // Extract headings
   function extractHeadings() {
     const headings = [];
     const elements = document.querySelectorAll('h1, h2, h3, h4, h5, h6');
     elements.forEach(function(el) {
-      const level = parseInt(el.tagName.substring(1), 10);
       headings.push({
         id: el.id,
-        level: level,
+        level: parseInt(el.tagName.substring(1), 10),
         text: el.textContent.trim()
       });
     });
     return headings;
   }
 
-  // Footnote Tooltip Setup
-  function setupFootnotes() {
-    const footnotes = document.querySelectorAll('a.footnote-ref, a[href^="#fn"]');
-    footnotes.forEach(function(fnLink) {
-      fnLink.addEventListener('mouseenter', function(e) {
-        const targetId = fnLink.getAttribute('href').replace('#', '');
-        const targetEl = document.getElementById(targetId);
-        if (!targetEl) return;
+  // Floating Selection Bubble Toolbar
+  let selectionBubble = null;
+  function createSelectionBubble() {
+    if (selectionBubble) return selectionBubble;
+    selectionBubble = document.createElement('div');
+    selectionBubble.className = 'lucid-selection-bubble';
+    selectionBubble.style.display = 'none';
 
-        let tooltip = document.getElementById('lucid-active-footnote-tooltip');
-        if (!tooltip) {
-          tooltip = document.createElement('div');
-          tooltip.id = 'lucid-active-footnote-tooltip';
-          tooltip.className = 'lucid-footnote-tooltip';
-          document.body.appendChild(tooltip);
+    const tools = [
+      { label: 'B', tag: '**', help: 'Bold' },
+      { label: 'I', tag: '*', help: 'Italic' },
+      { label: 'S', tag: '~~', help: 'Strikethrough' },
+      { label: 'Code', tag: '`', help: 'Inline Code' },
+      { label: '$', tag: '$', help: 'Inline Math' },
+      { label: '==', tag: '==', help: 'Highlight' }
+    ];
+
+    tools.forEach(function(tool) {
+      const btn = document.createElement('button');
+      btn.className = 'lucid-bubble-btn';
+      btn.textContent = tool.label;
+      btn.title = tool.help;
+      btn.onmousedown = function(e) {
+        e.preventDefault();
+        applyWrapFormatting(tool.tag, tool.tag);
+      };
+      selectionBubble.appendChild(btn);
+    });
+
+    document.body.appendChild(selectionBubble);
+    return selectionBubble;
+  }
+
+  function applyWrapFormatting(prefix, suffix) {
+    const selection = window.getSelection();
+    if (!selection.rangeCount) return;
+    const range = selection.getRangeAt(0);
+    const selectedText = range.toString();
+    if (!selectedText) return;
+
+    const span = document.createElement('span');
+    span.textContent = prefix + selectedText + suffix;
+    range.deleteContents();
+    range.insertNode(span);
+
+    hideSelectionBubble();
+    triggerInPlaceEdit();
+  }
+
+  function showSelectionBubble(rect) {
+    const bubble = createSelectionBubble();
+    bubble.style.display = 'flex';
+    const bubbleWidth = bubble.offsetWidth || 220;
+    const left = Math.max(10, Math.min(window.innerWidth - bubbleWidth - 10, rect.left + window.scrollX + (rect.width / 2) - (bubbleWidth / 2)));
+    const top = Math.max(10, rect.top + window.scrollY - 44);
+    bubble.style.left = left + 'px';
+    bubble.style.top = top + 'px';
+  }
+
+  function hideSelectionBubble() {
+    if (selectionBubble) selectionBubble.style.display = 'none';
+  }
+
+  document.addEventListener('selectionchange', function() {
+    const selection = window.getSelection();
+    if (!selection.isCollapsed && selection.toString().trim().length > 0) {
+      const range = selection.getRangeAt(0);
+      const rect = range.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        showSelectionBubble(rect);
+        return;
+      }
+    }
+    hideSelectionBubble();
+  });
+
+  // Focus Mode & Typewriter Mode Handler
+  let isFocusModeEnabled = false;
+  let isTypewriterModeEnabled = false;
+
+  function updateCaretPosition() {
+    const selection = window.getSelection();
+    if (!selection.rangeCount) return;
+    const range = selection.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+
+    // 1. Focus Mode
+    if (isFocusModeEnabled) {
+      let node = range.startContainer;
+      while (node && node.parentNode && node.parentNode.id !== 'lucid-content') {
+        node = node.parentNode;
+      }
+      if (node && node.parentNode && node.parentNode.id === 'lucid-content') {
+        const prev = document.querySelector('.lucid-active-block');
+        if (prev && prev !== node) prev.classList.remove('lucid-active-block');
+        node.classList.add('lucid-active-block');
+      }
+    }
+
+    // 2. Typewriter Mode
+    if (isTypewriterModeEnabled && rect.top > 0) {
+      const targetY = window.innerHeight * 0.45;
+      const deltaY = rect.top - targetY;
+      if (Math.abs(deltaY) > 20) {
+        window.scrollBy({ top: deltaY, behavior: 'smooth' });
+      }
+    }
+  }
+
+  document.addEventListener('keyup', updateCaretPosition);
+  document.addEventListener('mouseup', updateCaretPosition);
+
+  // Clipboard Image Paste Handler
+  function setupClipboardImagePaste(container) {
+    container.addEventListener('paste', function(e) {
+      const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf('image') !== -1) {
+          e.preventDefault();
+          const file = items[i].getAsFile();
+          const reader = new FileReader();
+          reader.onload = function(event) {
+            const base64 = event.target.result;
+            const img = document.createElement('img');
+            img.src = base64;
+            img.alt = 'Pasted Screenshot';
+            const selection = window.getSelection();
+            if (selection.rangeCount) {
+              const range = selection.getRangeAt(0);
+              range.deleteContents();
+              range.insertNode(img);
+              triggerInPlaceEdit();
+            }
+          };
+          reader.readAsDataURL(file);
+          break;
         }
-
-        tooltip.innerHTML = targetEl.innerHTML;
-        const rect = fnLink.getBoundingClientRect();
-        tooltip.style.left = Math.min(window.innerWidth - 340, Math.max(10, rect.left + window.scrollX - 20)) + 'px';
-        tooltip.style.top = (rect.bottom + window.scrollY + 8) + 'px';
-        tooltip.style.display = 'block';
-      });
-
-      fnLink.addEventListener('mouseleave', function() {
-        const tooltip = document.getElementById('lucid-active-footnote-tooltip');
-        if (tooltip) tooltip.style.display = 'none';
-      });
+      }
     });
   }
 
@@ -234,29 +330,34 @@
   let isEditingByUser = false;
   let editDebounceTimer = null;
 
+  function triggerInPlaceEdit() {
+    if (!turndownService) return;
+    const container = document.getElementById('lucid-content');
+    if (!container) return;
+
+    isEditingByUser = true;
+    clearTimeout(editDebounceTimer);
+    editDebounceTimer = setTimeout(function() {
+      try {
+        const newMarkdown = turndownService.turndown(container.innerHTML);
+        if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.lucidContentEdited) {
+          window.webkit.messageHandlers.lucidContentEdited.postMessage(newMarkdown);
+        }
+      } catch (e) {
+        console.warn('Turndown error:', e);
+      }
+      setTimeout(function() { isEditingByUser = false; }, 200);
+    }, 350);
+  }
+
   function setupInPlaceEditing() {
     const container = document.getElementById('lucid-content');
     if (!container) return;
 
     container.setAttribute('contenteditable', 'true');
     container.setAttribute('spellcheck', 'false');
-
-    container.addEventListener('input', function() {
-      if (!turndownService) return;
-      isEditingByUser = true;
-      clearTimeout(editDebounceTimer);
-      editDebounceTimer = setTimeout(function() {
-        try {
-          const newMarkdown = turndownService.turndown(container.innerHTML);
-          if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.lucidContentEdited) {
-            window.webkit.messageHandlers.lucidContentEdited.postMessage(newMarkdown);
-          }
-        } catch (e) {
-          console.warn('Turndown error:', e);
-        }
-        setTimeout(function() { isEditingByUser = false; }, 200);
-      }, 350);
-    });
+    container.addEventListener('input', triggerInPlaceEdit);
+    setupClipboardImagePaste(container);
   }
 
   // Scroll Spy
@@ -293,14 +394,10 @@
     }, 100);
   }, { passive: true });
 
-  // In-Page Find state
-  let findMatches = [];
-  let findCurrentIndex = -1;
-
   // Public API
   window.lucid = {
     updateContent: function(rawMarkdown) {
-      if (isEditingByUser) return; // Avoid clobbering user cursor while typing
+      if (isEditingByUser) return;
 
       const container = document.getElementById('lucid-content');
       if (!container) return;
@@ -310,7 +407,6 @@
       html = parseAlerts(html);
       container.innerHTML = html;
 
-      // Render Mermaid diagrams
       if (typeof mermaid !== 'undefined') {
         const mermaidNodes = container.querySelectorAll('.mermaid');
         if (mermaidNodes.length > 0) {
@@ -322,7 +418,6 @@
         }
       }
 
-      setupFootnotes();
       setupInPlaceEditing();
 
       const headings = extractHeadings();
@@ -355,6 +450,31 @@
       if (typeof prefs.clickToEdit !== 'undefined') {
         window.lucid.setEditable(prefs.clickToEdit);
       }
+
+      // Focus Mode
+      if (typeof prefs.focusMode !== 'undefined') {
+        isFocusModeEnabled = prefs.focusMode;
+        if (prefs.focusMode) body.classList.add('lucid-focus-mode');
+        else body.classList.remove('lucid-focus-mode');
+      }
+
+      // Typewriter Mode
+      if (typeof prefs.typewriterMode !== 'undefined') {
+        isTypewriterModeEnabled = prefs.typewriterMode;
+        if (prefs.typewriterMode) body.classList.add('lucid-typewriter-mode');
+        else body.classList.remove('lucid-typewriter-mode');
+      }
+
+      // Custom User CSS Injection
+      if (typeof prefs.customCSS !== 'undefined') {
+        let styleTag = document.getElementById('lucid-user-custom-css');
+        if (!styleTag) {
+          styleTag = document.createElement('style');
+          styleTag.id = 'lucid-user-custom-css';
+          document.head.appendChild(styleTag);
+        }
+        styleTag.textContent = prefs.customCSS;
+      }
     },
 
     scrollToHeading: function(id) {
@@ -375,94 +495,29 @@
       }
     },
 
-    find: function(query) {
-      window.lucid.clearFind();
-      if (!query || query.trim().length === 0) {
-        if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.lucidFindMatches) {
-          window.webkit.messageHandlers.lucidFindMatches.postMessage({ count: 0, index: 0 });
-        }
-        return;
+    // Insert templates
+    insertTemplate: function(type) {
+      const selection = window.getSelection();
+      let template = '';
+      switch (type) {
+        case 'table':
+          template = '\n\n| Column 1 | Column 2 | Column 3 |\n| :--- | :---: | ---: |\n| Item 1 | Value 1 | $10.00 |\n| Item 2 | Value 2 | $20.00 |\n\n';
+          break;
+        case 'math':
+          template = '\n\n$$\n\\int_{0}^{\\infty} e^{-x^2} dx = \\frac{\\sqrt{\\pi}}{2}\n$$\n\n';
+          break;
+        case 'chemistry':
+          template = '\n\n$$\n\\ce{2H2 + O2 -> 2H2O}\n$$\n\n';
+          break;
+        case 'mermaid':
+          template = '\n\n```mermaid\nflowchart TD\n    A["Input"] --> B["Processing"]\n    B --> C["Output"]\n```\n\n';
+          break;
       }
 
-      const container = document.getElementById('lucid-content');
-      if (!container) return;
-
-      const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null, false);
-      const nodesToReplace = [];
-      const regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
-
-      let node;
-      while ((node = walker.nextNode())) {
-        if (node.parentNode && (node.parentNode.tagName === 'SCRIPT' || node.parentNode.tagName === 'STYLE')) continue;
-        if (regex.test(node.nodeValue)) {
-          nodesToReplace.push(node);
-        }
+      if (template) {
+        document.execCommand('insertText', false, template);
+        triggerInPlaceEdit();
       }
-
-      findMatches = [];
-      nodesToReplace.forEach(function(textNode) {
-        const span = document.createElement('span');
-        span.innerHTML = textNode.nodeValue.replace(regex, function(match) {
-          return '<mark class="lucid-find-match">' + match + '</mark>';
-        });
-        textNode.parentNode.replaceChild(span, textNode);
-      });
-
-      findMatches = Array.from(document.querySelectorAll('mark.lucid-find-match'));
-      findCurrentIndex = findMatches.length > 0 ? 0 : -1;
-
-      if (findCurrentIndex >= 0) {
-        findMatches[findCurrentIndex].classList.add('lucid-find-active');
-        findMatches[findCurrentIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-
-      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.lucidFindMatches) {
-        window.webkit.messageHandlers.lucidFindMatches.postMessage({
-          count: findMatches.length,
-          index: findCurrentIndex + 1
-        });
-      }
-    },
-
-    findNext: function() {
-      if (findMatches.length === 0) return;
-      findMatches[findCurrentIndex].classList.remove('lucid-find-active');
-      findCurrentIndex = (findCurrentIndex + 1) % findMatches.length;
-      findMatches[findCurrentIndex].classList.add('lucid-find-active');
-      findMatches[findCurrentIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.lucidFindMatches) {
-        window.webkit.messageHandlers.lucidFindMatches.postMessage({
-          count: findMatches.length,
-          index: findCurrentIndex + 1
-        });
-      }
-    },
-
-    findPrev: function() {
-      if (findMatches.length === 0) return;
-      findMatches[findCurrentIndex].classList.remove('lucid-find-active');
-      findCurrentIndex = (findCurrentIndex - 1 + findMatches.length) % findMatches.length;
-      findMatches[findCurrentIndex].classList.add('lucid-find-active');
-      findMatches[findCurrentIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.lucidFindMatches) {
-        window.webkit.messageHandlers.lucidFindMatches.postMessage({
-          count: findMatches.length,
-          index: findCurrentIndex + 1
-        });
-      }
-    },
-
-    clearFind: function() {
-      findMatches = [];
-      findCurrentIndex = -1;
-      const marks = document.querySelectorAll('mark.lucid-find-match');
-      marks.forEach(function(m) {
-        const parent = m.parentNode;
-        parent.replaceChild(document.createTextNode(m.textContent), m);
-        parent.normalize();
-      });
     },
 
     copyCode: function(btn) {

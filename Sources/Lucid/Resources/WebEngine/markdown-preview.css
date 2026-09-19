@@ -175,6 +175,59 @@ body {
   border-radius: 4px;
 }
 
+/* Focus Mode */
+body.lucid-focus-mode #lucid-content > * {
+  opacity: 0.25;
+  transition: opacity 0.25s ease;
+}
+body.lucid-focus-mode #lucid-content > *:focus-within,
+body.lucid-focus-mode #lucid-content > *.lucid-active-block {
+  opacity: 1;
+}
+
+/* Typewriter Mode */
+body.lucid-typewriter-mode {
+  padding-bottom: 60vh !important;
+}
+
+/* Floating Selection Bubble Toolbar */
+.lucid-selection-bubble {
+  position: absolute;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px 6px;
+  background: rgba(26, 26, 26, 0.94);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  pointer-events: auto;
+  user-select: none;
+  animation: lucidBubbleFade 0.15s ease forwards;
+}
+@keyframes lucidBubbleFade {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.lucid-bubble-btn {
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #e6e6e6;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.1s ease, color 0.1s ease;
+}
+.lucid-bubble-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+}
+
 h1, h2, h3, h4, h5, h6 {
   color: var(--lucid-fg-heading);
   font-family: var(--lucid-font-family);

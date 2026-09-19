@@ -35,6 +35,18 @@ struct LucidApp: App {
 
                 Divider()
 
+                Button(preferences.focusMode ? "Disable Focus Mode" : "Enable Focus Mode") {
+                    preferences.focusMode.toggle()
+                }
+                .keyboardShortcut("d", modifiers: [.command, .shift])
+
+                Button(preferences.typewriterMode ? "Disable Typewriter Mode" : "Enable Typewriter Mode") {
+                    preferences.typewriterMode.toggle()
+                }
+                .keyboardShortcut("t", modifiers: [.command, .shift])
+
+                Divider()
+
                 Button(preferences.showOutline ? "Hide Table of Contents" : "Show Table of Contents") {
                     preferences.showOutline.toggle()
                 }

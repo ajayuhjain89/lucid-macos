@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 public struct SettingsView: View {
     @ObservedObject var preferences: LucidPreferences
@@ -21,7 +22,12 @@ public struct SettingsView: View {
 
             InteractionSettingsView(preferences: preferences)
                 .tabItem {
-                    Label("Editor & Reading", systemImage: "pencil.and.outline")
+                    Label("Writing & Modes", systemImage: "pencil.and.outline")
+                }
+
+            CustomCSSSettingsView(preferences: preferences)
+                .tabItem {
+                    Label("Custom CSS", systemImage: "chevron.left.forwardslash.chevron.right")
                 }
 
             STEMSettingsView()
@@ -29,7 +35,7 @@ public struct SettingsView: View {
                     Label("STEM & Science", systemImage: "atom")
                 }
         }
-        .frame(width: 520, height: 420)
+        .frame(width: 560, height: 460)
         .padding(20)
     }
 }
@@ -86,17 +92,21 @@ struct GeneralSettingsView: View {
                 }
                 .pickerStyle(.menu)
 
-                Toggle("Enable Breakout Layout", isOn: $preferences.breakoutEnabled)
-                    .help("Allows wide code blocks, tables, and diagrams to expand gracefully beyond the reading column.")
+                Toggle("Signature Breakout Layout", isOn: $preferences.breakoutEnabled)
+                    .help("Allows tables, code blocks, and diagrams to expand gracefully 32px beyond the reading column.")
             }
         }
         .padding(20)
     }
 }
 
-// MARK: - Typography Settings
+// MARK: - Typography Settings with All System Fonts
 struct TypographySettingsView: View {
     @ObservedObject var preferences: LucidPreferences
+
+    private var availableSystemFonts: [String] {
+        NSFontManager.shared.availableFontFamilies.sorted()
+    }
 
     var body: some View {
         Form {
@@ -108,6 +118,15 @@ struct TypographySettingsView: View {
                 }
                 .pickerStyle(.segmented)
 
+                if preferences.fontFamily == .custom {
+                    Picker("Select System Font:", selection: $preferences.customFontName) {
+                        ForEach(availableSystemFonts, id: \.self) { fontName in
+                            Text(fontName).tag(fontName)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
+
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
                         Text("Font Size:")
@@ -116,7 +135,7 @@ struct TypographySettingsView: View {
                             .font(.caption.monospacedDigit())
                             .foregroundColor(.secondary)
                     }
-                    Slider(value: $preferences.fontSize, in: 13...26, step: 1)
+                    Slider(value: $preferences.fontSize, in: 13...28, step: 1)
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
@@ -127,12 +146,12 @@ struct TypographySettingsView: View {
                             .font(.caption.monospacedDigit())
                             .foregroundColor(.secondary)
                     }
-                    Slider(value: $preferences.lineHeight, in: 1.3...2.2, step: 0.05)
+                    Slider(value: $preferences.lineHeight, in: 1.3...2.4, step: 0.05)
                 }
             }
 
             Section("Preview Sample") {
-                Text("Lucid is designed for pure focus. The quick brown fox jumps over the lazy dog. 1234567890.")
+                Text("Lucid Studio Typography: The quick brown fox jumps over the lazy dog. 1234567890.")
                     .font(previewFont)
                     .lineSpacing(CGFloat((preferences.lineHeight - 1.0) * preferences.fontSize))
                     .padding(12)
@@ -149,31 +168,88 @@ struct TypographySettingsView: View {
         case .sans: return .system(size: CGFloat(preferences.fontSize))
         case .serif: return .custom("New York", size: CGFloat(preferences.fontSize))
         case .mono: return .system(size: CGFloat(preferences.fontSize), design: .monospaced)
+        case .custom: return .custom(preferences.customFontName, size: CGFloat(preferences.fontSize))
         }
     }
 }
 
-// MARK: - Interaction Settings
+// MARK: - Interaction Settings (Focus & Typewriter)
 struct InteractionSettingsView: View {
     @ObservedObject var preferences: LucidPreferences
 
     var body: some View {
         Form {
-            Section {
+            Section("Editing Modes") {
                 Toggle("Click-to-Edit in Reading View", isOn: $preferences.clickToEdit)
                     .help("Allows clicking directly on text, headings, paragraphs, and tables while reading to edit them on the go.")
 
-                Text("When enabled, you can click on any paragraph, heading, bullet point, or table cell while reading to make instant edits without opening the split editor.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                Toggle("Focus Mode (⌘⇧D)", isOn: $preferences.focusMode)
+                    .help("Dims non-active paragraphs to 25% opacity so you can concentrate exclusively on the current paragraph.")
 
-                Divider()
+                Toggle("Typewriter Mode (⌘⇧T)", isOn: $preferences.typewriterMode)
+                    .help("Keeps the line you are currently typing on vertically centered on the screen.")
+            }
 
+            Section("File & Clipboard") {
                 Toggle("Live External File Watching", isOn: .constant(true))
                     .disabled(true)
-                Text("Automatically refreshes your view when the document is saved by external editors (VS Code, Neovim, Obsidian).")
+                Text("Automatically refreshes when modified by external editors (VS Code, Neovim, Obsidian).")
                     .font(.caption)
                     .foregroundColor(.secondary)
+
+                Toggle("Direct Clipboard Image Pasting (⌘V)", isOn: .constant(true))
+                    .disabled(true)
+                Text("Paste screenshots directly from clipboard as inline images.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(20)
+    }
+}
+
+// MARK: - Custom CSS Settings
+struct CustomCSSSettingsView: View {
+    @ObservedObject var preferences: LucidPreferences
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Inject Custom CSS")
+                .font(.headline)
+
+            Text("Write custom CSS rules to fine-tune every aspect of the typography, layout, or colors. Applied live instantly.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            TextEditor(text: $preferences.customCSS)
+                .font(.system(.body, design: .monospaced))
+                .padding(8)
+                .background(Color(NSColor.textBackgroundColor))
+                .cornerRadius(8)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color(NSColor.separatorColor), lineWidth: 0.5)
+                )
+
+            HStack {
+                Button("Insert Sample: Gradient Headings") {
+                    preferences.customCSS += "\nh1 { background: linear-gradient(90deg, #2f81f7, #a371f7); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }\n"
+                }
+                .font(.caption)
+
+                Button("Insert Sample: Rounded Images") {
+                    preferences.customCSS += "\nimg { border-radius: 16px; border: 2px solid rgba(255,255,255,0.1); }\n"
+                }
+                .font(.caption)
+
+                Spacer()
+
+                if !preferences.customCSS.isEmpty {
+                    Button("Clear") {
+                        preferences.customCSS = ""
+                    }
+                    .font(.caption)
+                }
             }
         }
         .padding(20)
