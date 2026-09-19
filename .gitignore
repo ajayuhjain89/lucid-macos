@@ -1,0 +1,11 @@
+# Build artifacts
+/Lucid
+/Lucid.app
+.build/
+*.o
+*.dSYM
+
+# OS & Temp
+.DS_Store
+*.bak*
+*.swp
