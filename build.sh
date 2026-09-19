@@ -32,3 +32,15 @@ echo "==> Signing application bundle..."
 codesign --force --deep -s - "$APP_BUNDLE"
 
 echo "==> Done! $APP_BUNDLE is ready."
+
+echo "==> Creating DMG installer..."
+DMG_PATH="$DIR/$APP_NAME-1.0.0.dmg"
+DMG_STAGING="$DIR/.dmg_staging"
+rm -rf "$DMG_STAGING" "$DMG_PATH"
+mkdir -p "$DMG_STAGING"
+cp -R "$APP_BUNDLE" "$DMG_STAGING/"
+ln -s /Applications "$DMG_STAGING/Applications"
+hdiutil create -volname "$APP_NAME" -srcfolder "$DMG_STAGING" -ov -format UDZO "$DMG_PATH"
+rm -rf "$DMG_STAGING"
+
+echo "==> DMG Installer created at $DMG_PATH"
