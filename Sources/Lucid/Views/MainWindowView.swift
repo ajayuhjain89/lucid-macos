@@ -38,49 +38,26 @@ public struct MainWindowView: View {
 
     public var body: some View {
         ZStack {
-            HSplitView {
-                // Outline Sidebar
-                if preferences.showOutline {
-                    OutlineSidebarView(
-                        headings: headings,
-                        activeHeadingId: activeHeading?.id
-                    ) { id in
-                        navigateToHeading(id)
+            VStack(spacing: 0) {
+                // Main Document Work Area
+                HSplitView {
+                    // Outline Sidebar
+                    if preferences.showOutline {
+                        OutlineSidebarView(
+                            headings: headings,
+                            activeHeadingId: activeHeading?.id
+                        ) { id in
+                            navigateToHeading(id)
+                        }
+                        .frame(minWidth: 200, idealWidth: 240, maxWidth: 320)
+                        .padding(.top, 28)
                     }
-                    .frame(minWidth: 180, idealWidth: 220, maxWidth: 300)
-                }
 
-                // Main Content Area (Clean edge-to-edge)
-                ZStack(alignment: .topTrailing) {
-                    Group {
-                        switch preferences.viewMode {
-                        case .reader:
-                            PreviewWebView(
-                                preferences: preferences,
-                                markdown: document.text,
-                                headings: $headings,
-                                activeHeading: $activeHeading,
-                                onScrollFractionChanged: nil,
-                                onFindMatchesChanged: { count, index in
-                                    findMatchCount = count
-                                    findCurrentIndex = index
-                                },
-                                onContentEdited: { newMarkdown in
-                                    document.text = newMarkdown
-                                },
-                                scrollToHeadingId: scrollToHeadingId,
-                                webViewInstance: $webViewInstance
-                            )
-                        case .split:
-                            HSplitView {
-                                EditorView(
-                                    text: $document.text,
-                                    onScrollFractionChanged: { fraction in
-                                        previewTargetFraction = fraction
-                                    }
-                                )
-                                .frame(minWidth: 260)
-
+                    // Main Content Area (Clean edge-to-edge canvas)
+                    ZStack(alignment: .topTrailing) {
+                        Group {
+                            switch preferences.viewMode {
+                            case .reader:
                                 PreviewWebView(
                                     preferences: preferences,
                                     markdown: document.text,
@@ -95,38 +72,248 @@ public struct MainWindowView: View {
                                         document.text = newMarkdown
                                     },
                                     scrollToHeadingId: scrollToHeadingId,
-                                    targetScrollFraction: previewTargetFraction,
                                     webViewInstance: $webViewInstance
                                 )
-                                .frame(minWidth: 260)
+                            case .split:
+                                HSplitView {
+                                    EditorView(
+                                        text: $document.text,
+                                        onScrollFractionChanged: { fraction in
+                                            previewTargetFraction = fraction
+                                        }
+                                    )
+                                    .frame(minWidth: 260)
+
+                                    PreviewWebView(
+                                        preferences: preferences,
+                                        markdown: document.text,
+                                        headings: $headings,
+                                        activeHeading: $activeHeading,
+                                        onScrollFractionChanged: nil,
+                                        onFindMatchesChanged: { count, index in
+                                            findMatchCount = count
+                                            findCurrentIndex = index
+                                        },
+                                        onContentEdited: { newMarkdown in
+                                            document.text = newMarkdown
+                                        },
+                                        scrollToHeadingId: scrollToHeadingId,
+                                        targetScrollFraction: previewTargetFraction,
+                                        webViewInstance: $webViewInstance
+                                    )
+                                    .frame(minWidth: 260)
+                                }
+                            case .editor:
+                                EditorView(text: $document.text)
                             }
-                        case .editor:
-                            EditorView(text: $document.text)
+                        }
+                        .frame(minWidth: 400, maxWidth: .infinity, maxHeight: .infinity)
+                        .padding(.top, 28)
+
+                        // Floating Find Bar
+                        if isFindBarPresented {
+                            FindBarView(
+                                isPresented: $isFindBarPresented,
+                                webView: webViewInstance
+                            )
+                            .padding([.top, .trailing], 36)
+                            .transition(.move(edge: .top).combined(with: .opacity))
                         }
                     }
-                    .frame(minWidth: 400, maxWidth: .infinity, maxHeight: .infinity)
 
-                    // Floating Find Bar
-                    if isFindBarPresented {
-                        FindBarView(
-                            isPresented: $isFindBarPresented,
-                            webView: webViewInstance
-                        )
-                        .padding([.top, .trailing], 16)
-                        .transition(.move(edge: .top).combined(with: .opacity))
+                    // Inspector Sidebar
+                    if preferences.showInspector {
+                        InspectorView(preferences: preferences)
+                            .frame(minWidth: 220, idealWidth: 260, maxWidth: 320)
+                            .padding(.top, 28)
                     }
                 }
 
-                // Inspector Sidebar
-                if preferences.showInspector {
-                    InspectorView(preferences: preferences)
-                        .frame(minWidth: 220, idealWidth: 260, maxWidth: 320)
+                // Sleek Typora-Style Bottom Status Bar (No Top Bar!)
+                HStack(spacing: 12) {
+                    // Left Controls: Outline & View Modes
+                    HStack(spacing: 6) {
+                        Button(action: {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                preferences.showOutline.toggle()
+                            }
+                        }) {
+                            Image(systemName: "sidebar.left")
+                                .font(.system(size: 12))
+                                .foregroundColor(preferences.showOutline ? .accentColor : .secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Toggle Outline (⌘⌥T)")
+
+                        Divider()
+                            .frame(height: 12)
+
+                        // View Mode Switcher
+                        HStack(spacing: 2) {
+                            Button(action: { preferences.viewMode = .reader }) {
+                                Image(systemName: "book.fill")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(preferences.viewMode == .reader ? .accentColor : .secondary)
+                                    .padding(4)
+                                    .background(preferences.viewMode == .reader ? Color.accentColor.opacity(0.15) : Color.clear)
+                                    .cornerRadius(4)
+                            }
+                            .buttonStyle(.plain)
+                            .help("Reader Mode (⌘1)")
+
+                            Button(action: { preferences.viewMode = .split }) {
+                                Image(systemName: "rectangle.split.2x1")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(preferences.viewMode == .split ? .accentColor : .secondary)
+                                    .padding(4)
+                                    .background(preferences.viewMode == .split ? Color.accentColor.opacity(0.15) : Color.clear)
+                                    .cornerRadius(4)
+                            }
+                            .buttonStyle(.plain)
+                            .help("Split Mode (⌘2)")
+
+                            Button(action: { preferences.viewMode = .editor }) {
+                                Image(systemName: "pencil")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(preferences.viewMode == .editor ? .accentColor : .secondary)
+                                    .padding(4)
+                                    .background(preferences.viewMode == .editor ? Color.accentColor.opacity(0.15) : Color.clear)
+                                    .cornerRadius(4)
+                            }
+                            .buttonStyle(.plain)
+                            .help("Source Editor (⌘3)")
+                        }
+
+                        Divider()
+                            .frame(height: 12)
+
+                        // In-Place Edit Indicator & Toggle
+                        Button(action: {
+                            preferences.clickToEdit.toggle()
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: preferences.clickToEdit ? "pencil.circle.fill" : "pencil.circle")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(preferences.clickToEdit ? .accentColor : .secondary)
+                                Text(preferences.clickToEdit ? "Live Edit" : "Read Only")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(preferences.clickToEdit ? .accentColor : .secondary)
+                            }
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(preferences.clickToEdit ? Color.accentColor.opacity(0.12) : Color.clear)
+                            .cornerRadius(4)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Toggle In-Place Editing (Click any text to edit)")
+
+                        // Focus Mode
+                        Button(action: { preferences.focusMode.toggle() }) {
+                            Image(systemName: preferences.focusMode ? "scope" : "circle.dashed")
+                                .font(.system(size: 11))
+                                .foregroundColor(preferences.focusMode ? .accentColor : .secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Focus Mode (⌘⇧D)")
+
+                        // Typewriter Mode
+                        Button(action: { preferences.typewriterMode.toggle() }) {
+                            Image(systemName: preferences.typewriterMode ? "text.aligncenter" : "text.alignleft")
+                                .font(.system(size: 11))
+                                .foregroundColor(preferences.typewriterMode ? .accentColor : .secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Typewriter Mode (⌘⇧T)")
+                    }
+
+                    Spacer()
+
+                    // Right Controls: Document Stats & Quick Actions
+                    HStack(spacing: 10) {
+                        // Word Count & Reading Time Pill (Spacious, NEVER overflows)
+                        HStack(spacing: 6) {
+                            Text("\(wordCount.formatted()) words")
+                                .font(.system(size: 11, weight: .medium, design: .rounded))
+                            Text("·")
+                                .font(.system(size: 11, weight: .bold))
+                            Text("\(readingTimeMinutes) min read")
+                                .font(.system(size: 11, weight: .medium, design: .rounded))
+                        }
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 3)
+                        .background(Color(NSColor.controlBackgroundColor).opacity(0.6))
+                        .cornerRadius(12)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
+                        )
+                        .fixedSize(horizontal: true, vertical: false)
+
+                        // Command Palette (⌘K)
+                        Button(action: {
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                                isCommandPalettePresented.toggle()
+                            }
+                        }) {
+                            HStack(spacing: 2) {
+                                Image(systemName: "command")
+                                    .font(.system(size: 10, weight: .semibold))
+                                Text("K")
+                                    .font(.system(size: 10, weight: .semibold))
+                            }
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+                            .cornerRadius(5)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 5)
+                                    .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .help("Command Palette (⌘K)")
+
+                        // Find (⌘F)
+                        Button(action: {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                isFindBarPresented.toggle()
+                            }
+                        }) {
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Find in Document (⌘F)")
+
+                        // Settings (⌘,)
+                        Button(action: {
+                            SettingsWindowManager.shared.showSettings(preferences: preferences)
+                        }) {
+                            Image(systemName: "gearshape")
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Settings (⌘,)")
+                    }
                 }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 6)
+                .background(Color(NSColor.windowBackgroundColor).opacity(0.92))
+                .overlay(
+                    Rectangle()
+                        .frame(height: 0.5)
+                        .foregroundColor(Color.white.opacity(0.08)),
+                    alignment: .top
+                )
             }
 
             // Command Palette Modal Overlay
             if isCommandPalettePresented {
-                Color.black.opacity(0.35)
+                Color.black.opacity(0.4)
                     .edgesIgnoringSafeArea(.all)
                     .onTapGesture {
                         isCommandPalettePresented = false
@@ -158,155 +345,29 @@ public struct MainWindowView: View {
                         }
                     }
                 )
-                .transition(.scale(scale: 0.95).combined(with: .opacity))
+                .transition(.scale(scale: 0.96).combined(with: .opacity))
             }
         }
-        .toolbar {
-            // Outline Toggle
-            ToolbarItem(placement: .navigation) {
-                Button(action: {
-                    withAnimation { preferences.showOutline.toggle() }
-                }) {
-                    Image(systemName: "sidebar.left")
-                }
-                .help("Toggle Outline (⌘⌥T)")
-            }
-
-            // History Navigation
-            ToolbarItemGroup(placement: .navigation) {
-                Button(action: goBack) {
-                    Image(systemName: "chevron.left")
-                }
-                .disabled(historyIndex <= 0)
-                .help("Back (⌘[)")
-                .keyboardShortcut("[", modifiers: .command)
-
-                Button(action: goForward) {
-                    Image(systemName: "chevron.right")
-                }
-                .disabled(historyIndex >= navigationHistory.count - 1)
-                .help("Forward (⌘])")
-                .keyboardShortcut("]", modifiers: .command)
-            }
-
-            // View Mode Selector
-            ToolbarItem(placement: .principal) {
-                Picker("View Mode", selection: $preferences.viewMode) {
-                    ForEach(ViewMode.allCases) { mode in
-                        Label(mode.displayName, systemImage: mode.systemImage).tag(mode)
-                    }
-                }
-                .pickerStyle(.segmented)
-            }
-
-            // Document Stats
-            ToolbarItem(placement: .status) {
-                Text("\(wordCount) words · \(readingTimeMinutes) min read")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-
-            // Primary Actions Group
-            ToolbarItemGroup(placement: .primaryAction) {
-                // Command Palette Button (⌘K)
-                Button(action: {
+        // Keyboard Shortcuts
+        .background(
+            Group {
+                Button("") {
                     withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
                         isCommandPalettePresented.toggle()
                     }
-                }) {
-                    Image(systemName: "command")
                 }
-                .help("Command Palette (⌘K)")
                 .keyboardShortcut("k", modifiers: .command)
+                .opacity(0)
 
-                // Focus Mode Toggle (⌘⇧D)
-                Button(action: {
-                    preferences.focusMode.toggle()
-                }) {
-                    Image(systemName: preferences.focusMode ? "scope" : "circle.dashed")
-                        .foregroundColor(preferences.focusMode ? .accentColor : .secondary)
-                }
-                .help("Toggle Focus Mode (⌘⇧D)")
-                .keyboardShortcut("d", modifiers: [.command, .shift])
-
-                // Typewriter Mode Toggle (⌘⇧T)
-                Button(action: {
-                    preferences.typewriterMode.toggle()
-                }) {
-                    Image(systemName: preferences.typewriterMode ? "text.aligncenter" : "text.alignleft")
-                        .foregroundColor(preferences.typewriterMode ? .accentColor : .secondary)
-                }
-                .help("Toggle Typewriter Mode (⌘⇧T)")
-                .keyboardShortcut("t", modifiers: [.command, .shift])
-
-                // Click-to-Edit Mode Indicator & Toggle
-                Button(action: {
-                    preferences.clickToEdit.toggle()
-                }) {
-                    Image(systemName: preferences.clickToEdit ? "pencil.circle.fill" : "pencil.circle")
-                        .foregroundColor(preferences.clickToEdit ? .accentColor : .secondary)
-                }
-                .help(preferences.clickToEdit ? "In-Place Live Editing Enabled (Click any text to edit)" : "Click to Enable In-Place Editing")
-
-                // Find in Document (⌘F)
-                Button(action: {
+                Button("") {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         isFindBarPresented.toggle()
                     }
-                }) {
-                    Image(systemName: "magnifyingglass")
                 }
-                .help("Find in Document (⌘F)")
                 .keyboardShortcut("f", modifiers: .command)
-
-                // Export Menu
-                Menu {
-                    Button(action: {
-                        if let webView = webViewInstance {
-                            ExportService.shared.exportPDF(
-                                webView: webView,
-                                defaultFilename: fileURL?.deletingPathExtension().lastPathComponent ?? "Document"
-                            )
-                        }
-                    }) {
-                        Label("Export as PDF…", systemImage: "arrow.down.doc")
-                    }
-
-                    Button(action: {
-                        if let webView = webViewInstance {
-                            ExportService.shared.exportHTML(
-                                webView: webView,
-                                defaultFilename: fileURL?.deletingPathExtension().lastPathComponent ?? "Document"
-                            )
-                        }
-                    }) {
-                        Label("Export Standalone HTML…", systemImage: "chevron.left.forwardslash.chevron.right")
-                    }
-
-                    Divider()
-
-                    Button(action: {
-                        if let webView = webViewInstance {
-                            ExportService.shared.copyRichText(webView: webView)
-                        }
-                    }) {
-                        Label("Copy Formatted Rich Text", systemImage: "doc.on.doc")
-                    }
-                } label: {
-                    Image(systemName: "square.and.arrow.up")
-                }
-                .help("Export Document")
-
-                // Settings Button (⌘,)
-                Button(action: {
-                    NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-                }) {
-                    Image(systemName: "gearshape")
-                }
-                .help("Settings (⌘,)")
-                .keyboardShortcut(",", modifiers: .command)
+                .opacity(0)
             }
-        }
+        )
         .onAppear {
             setupFileWatcher()
         }
