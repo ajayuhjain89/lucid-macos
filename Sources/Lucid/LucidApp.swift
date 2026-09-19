@@ -9,10 +9,11 @@ struct LucidApp: App {
             MainWindowView(document: file.$document, fileURL: file.fileURL)
                 .frame(minWidth: 750, minHeight: 550)
         }
+        .windowStyle(.hiddenTitleBar)
         .commands {
             CommandGroup(replacing: .appSettings) {
                 Button("Settings…") {
-                    NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                    SettingsWindowManager.shared.showSettings(preferences: preferences)
                 }
                 .keyboardShortcut(",", modifiers: .command)
             }
@@ -82,10 +83,6 @@ struct LucidApp: App {
                     }
                 }
             }
-        }
-
-        Settings {
-            SettingsView(preferences: preferences)
         }
     }
 }
