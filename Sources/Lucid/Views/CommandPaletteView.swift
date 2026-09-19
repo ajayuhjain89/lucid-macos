@@ -102,7 +102,7 @@ public struct CommandPaletteView: View {
 
             // Settings
             CommandAction(title: "Preferences / Settings…", subtitle: "Open Lucid Settings window", icon: "gearshape", shortcut: "⌘,") {
-                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                SettingsWindowManager.shared.showSettings(preferences: preferences)
             }
         ]
     }

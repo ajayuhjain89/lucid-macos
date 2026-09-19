@@ -23,9 +23,15 @@ public struct EditorView: NSViewRepresentable {
         textView.isAutomaticTextReplacementEnabled = false
         textView.isAutomaticSpellingCorrectionEnabled = false
         textView.font = NSFont.monospacedSystemFont(ofSize: 14, weight: .regular)
+        textView.textColor = NSColor.labelColor
+        textView.insertionPointColor = NSColor.controlAccentColor
         textView.backgroundColor = .clear
         textView.drawsBackground = false
-        textView.textContainerInset = NSSize(width: 20, height: 20)
+        textView.textContainerInset = NSSize(width: 24, height: 20)
+
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.lineSpacing = 5
+        textView.defaultParagraphStyle = paragraphStyle
         textView.delegate = context.coordinator
 
         scrollView.documentView = textView
