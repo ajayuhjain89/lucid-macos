@@ -141,22 +141,27 @@ public struct MainWindowView: View {
                             Image(systemName: "sidebar.left")
                                 .font(.system(size: 12))
                                 .foregroundColor(preferences.showOutline ? .accentColor : .secondary)
+                                .padding(5)
+                                .background(preferences.showOutline ? Color.accentColor.opacity(0.18) : Color.clear)
+                                .cornerRadius(5)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .help("Toggle Outline (⌘⌥T)")
 
                         Divider()
-                            .frame(height: 12)
+                            .frame(height: 14)
 
                         // View Mode Switcher
-                        HStack(spacing: 2) {
+                        HStack(spacing: 3) {
                             Button(action: { preferences.viewMode = .reader }) {
                                 Image(systemName: "book.fill")
                                     .font(.system(size: 11))
                                     .foregroundColor(preferences.viewMode == .reader ? .accentColor : .secondary)
-                                    .padding(4)
-                                    .background(preferences.viewMode == .reader ? Color.accentColor.opacity(0.15) : Color.clear)
-                                    .cornerRadius(4)
+                                    .padding(5)
+                                    .background(preferences.viewMode == .reader ? Color.accentColor.opacity(0.18) : Color.clear)
+                                    .cornerRadius(5)
+                                    .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                             .help("Reader Mode (⌘1)")
@@ -165,9 +170,10 @@ public struct MainWindowView: View {
                                 Image(systemName: "rectangle.split.2x1")
                                     .font(.system(size: 11))
                                     .foregroundColor(preferences.viewMode == .split ? .accentColor : .secondary)
-                                    .padding(4)
-                                    .background(preferences.viewMode == .split ? Color.accentColor.opacity(0.15) : Color.clear)
-                                    .cornerRadius(4)
+                                    .padding(5)
+                                    .background(preferences.viewMode == .split ? Color.accentColor.opacity(0.18) : Color.clear)
+                                    .cornerRadius(5)
+                                    .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                             .help("Split Mode (⌘2)")
@@ -176,16 +182,17 @@ public struct MainWindowView: View {
                                 Image(systemName: "pencil")
                                     .font(.system(size: 11))
                                     .foregroundColor(preferences.viewMode == .editor ? .accentColor : .secondary)
-                                    .padding(4)
-                                    .background(preferences.viewMode == .editor ? Color.accentColor.opacity(0.15) : Color.clear)
-                                    .cornerRadius(4)
+                                    .padding(5)
+                                    .background(preferences.viewMode == .editor ? Color.accentColor.opacity(0.18) : Color.clear)
+                                    .cornerRadius(5)
+                                    .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                             .help("Source Editor (⌘3)")
                         }
 
                         Divider()
-                            .frame(height: 12)
+                            .frame(height: 14)
 
                         // In-Place Edit Indicator & Toggle
                         Button(action: {
@@ -199,10 +206,11 @@ public struct MainWindowView: View {
                                     .font(.system(size: 10, weight: .medium))
                                     .foregroundColor(preferences.clickToEdit ? .accentColor : .secondary)
                             }
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(preferences.clickToEdit ? Color.accentColor.opacity(0.12) : Color.clear)
-                            .cornerRadius(4)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(preferences.clickToEdit ? Color.accentColor.opacity(0.15) : Color(NSColor.controlBackgroundColor).opacity(0.5))
+                            .cornerRadius(5)
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .help("Toggle In-Place Editing (Click any text to edit)")
@@ -212,6 +220,10 @@ public struct MainWindowView: View {
                             Image(systemName: preferences.focusMode ? "scope" : "circle.dashed")
                                 .font(.system(size: 11))
                                 .foregroundColor(preferences.focusMode ? .accentColor : .secondary)
+                                .padding(5)
+                                .background(preferences.focusMode ? Color.accentColor.opacity(0.18) : Color.clear)
+                                .cornerRadius(5)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .help("Focus Mode (⌘⇧D)")
@@ -221,6 +233,10 @@ public struct MainWindowView: View {
                             Image(systemName: preferences.typewriterMode ? "text.aligncenter" : "text.alignleft")
                                 .font(.system(size: 11))
                                 .foregroundColor(preferences.typewriterMode ? .accentColor : .secondary)
+                                .padding(5)
+                                .background(preferences.typewriterMode ? Color.accentColor.opacity(0.18) : Color.clear)
+                                .cornerRadius(5)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .help("Typewriter Mode (⌘⇧T)")
@@ -256,21 +272,22 @@ public struct MainWindowView: View {
                                 isCommandPalettePresented.toggle()
                             }
                         }) {
-                            HStack(spacing: 2) {
+                            HStack(spacing: 3) {
                                 Image(systemName: "command")
                                     .font(.system(size: 10, weight: .semibold))
                                 Text("K")
                                     .font(.system(size: 10, weight: .semibold))
                             }
                             .foregroundColor(.secondary)
-                            .padding(.horizontal, 6)
+                            .padding(.horizontal, 7)
                             .padding(.vertical, 3)
-                            .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+                            .background(Color(NSColor.controlBackgroundColor).opacity(0.6))
                             .cornerRadius(5)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 5)
                                     .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
                             )
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .help("Command Palette (⌘K)")
@@ -284,6 +301,10 @@ public struct MainWindowView: View {
                             Image(systemName: "magnifyingglass")
                                 .font(.system(size: 11))
                                 .foregroundColor(.secondary)
+                                .padding(5)
+                                .background(isFindBarPresented ? Color.accentColor.opacity(0.18) : Color.clear)
+                                .cornerRadius(5)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .help("Find in Document (⌘F)")
@@ -295,6 +316,8 @@ public struct MainWindowView: View {
                             Image(systemName: "gearshape")
                                 .font(.system(size: 11))
                                 .foregroundColor(.secondary)
+                                .padding(5)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .help("Settings (⌘,)")

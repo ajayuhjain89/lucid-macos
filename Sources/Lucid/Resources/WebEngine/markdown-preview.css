@@ -24,155 +24,660 @@
   --lucid-shadow: 0 8px 24px rgba(20, 24, 30, 0.12);
 }
 
-body[data-theme="light"] {
-  --lucid-bg: #ffffff;
-  --lucid-fg: #242424;
-  --lucid-fg-heading: #171717;
-  --lucid-fg-muted: #57606a;
-  --lucid-border: #dddddd;
-  --lucid-card-bg: #f8f9fa;
-  --lucid-code-bg: #f2f2f2;
-  --lucid-code-fg: #9b1c1c;
-  --lucid-pre-bg: #1f2329;
-  --lucid-pre-fg: #f4f7fb;
-  --lucid-pre-border: #343a43;
-  --lucid-table-header: #f5f5f5;
-  --lucid-quote-border: #c9c9c9;
-  --lucid-quote-fg: #555555;
-  --lucid-accent: #1769aa;
-  --lucid-shadow: 0 8px 24px rgba(20, 24, 30, 0.12);
-}
-
-body[data-theme="dark"] {
-  --lucid-bg: #171717;
-  --lucid-fg: #e6e6e6;
-  --lucid-fg-heading: #ffffff;
-  --lucid-fg-muted: #8b949e;
-  --lucid-border: #454545;
-  --lucid-card-bg: #1f2329;
-  --lucid-code-bg: #2a2a2a;
-  --lucid-code-fg: #ffb4b4;
-  --lucid-pre-bg: #1f2329;
-  --lucid-pre-fg: #f4f7fb;
-  --lucid-pre-border: #343a43;
-  --lucid-table-header: #252525;
-  --lucid-quote-border: #666666;
-  --lucid-quote-fg: #b8b8b8;
-  --lucid-accent: #2f81f7;
-  --lucid-shadow: 0 8px 24px rgba(20, 24, 30, 0.4);
-}
-
-body[data-theme="sepia"] {
-  --lucid-bg: #fbf0d9;
-  --lucid-fg: #433422;
-  --lucid-fg-heading: #2d2216;
-  --lucid-fg-muted: #796855;
-  --lucid-border: #e2d5c1;
-  --lucid-card-bg: #f3e7cf;
-  --lucid-code-bg: #eee1cc;
-  --lucid-code-fg: #9e4324;
-  --lucid-pre-bg: #2d261e;
-  --lucid-pre-fg: #f4ecdf;
-  --lucid-pre-border: #4a3e31;
-  --lucid-table-header: #ede2cd;
-  --lucid-quote-border: #d4c4ad;
-  --lucid-quote-fg: #63523f;
-  --lucid-accent: #a05a2c;
-  --lucid-shadow: 0 4px 16px rgba(67, 52, 34, 0.08);
-}
-
-body[data-theme="oled"] {
-  --lucid-bg: #000000;
-  --lucid-fg: #eaeaea;
-  --lucid-fg-heading: #ffffff;
-  --lucid-fg-muted: #888888;
-  --lucid-border: #222222;
-  --lucid-card-bg: #0d0d0d;
-  --lucid-code-bg: #141414;
-  --lucid-code-fg: #ff857f;
-  --lucid-pre-bg: #0a0a0a;
-  --lucid-pre-fg: #ededed;
-  --lucid-pre-border: #222222;
-  --lucid-table-header: #111111;
-  --lucid-quote-border: #262626;
-  --lucid-quote-fg: #888888;
-  --lucid-accent: #388bfd;
-  --lucid-shadow: 0 8px 24px rgba(0, 0, 0, 0.7);
-}
-
-body[data-theme="nord"] {
-  --lucid-bg: #2e3440;
-  --lucid-fg: #eceff4;
-  --lucid-fg-heading: #eceff4;
-  --lucid-fg-muted: #d8dee9;
-  --lucid-border: #434c5e;
-  --lucid-card-bg: #3b4252;
-  --lucid-code-bg: #3b4252;
-  --lucid-code-fg: #ebcb8b;
-  --lucid-pre-bg: #242933;
-  --lucid-pre-fg: #eceff4;
-  --lucid-pre-border: #4c566a;
-  --lucid-table-header: #3b4252;
-  --lucid-quote-border: #4c566a;
-  --lucid-quote-fg: #e5e9f0;
-  --lucid-accent: #88c0d0;
-  --lucid-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-}
-
-body[data-theme="dracula"] {
-  --lucid-bg: #282a36;
-  --lucid-fg: #f8f8f2;
-  --lucid-fg-heading: #50fa7b;
-  --lucid-fg-muted: #6272a4;
-  --lucid-border: #44475a;
-  --lucid-card-bg: #343746;
-  --lucid-code-bg: #44475a;
-  --lucid-code-fg: #ff79c6;
-  --lucid-pre-bg: #1e1f29;
-  --lucid-pre-fg: #f8f8f2;
-  --lucid-pre-border: #44475a;
-  --lucid-table-header: #343746;
-  --lucid-quote-border: #6272a4;
-  --lucid-quote-fg: #f1fa8c;
-  --lucid-accent: #bd93f9;
-  --lucid-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-}
-
 html {
   scroll-behavior: smooth;
 }
 
-body {
+body.vscode-body {
   box-sizing: border-box;
   max-width: var(--lucid-content-width, 1040px);
   margin: 0 auto;
   padding: 48px 40px 100px;
-  color: var(--lucid-fg);
-  background: var(--lucid-bg);
-  font-family: var(--lucid-font-family);
+  color: #242424;
+  background: #ffffff;
+  font-family: var(--lucid-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
   font-size: var(--lucid-font-size, 18px);
   line-height: var(--lucid-line-height, 1.75);
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  transition: background 0.15s ease, color 0.15s ease;
+  text-rendering: optimizeLegibility;
   position: relative;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
-/* In-Place Live Editing on the Go */
+body.vscode-body h1,
+body.vscode-body h2,
+body.vscode-body h3,
+body.vscode-body h4,
+body.vscode-body h5,
+body.vscode-body h6 {
+  color: #171717;
+  font-family: var(--lucid-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+  line-height: 1.25;
+  letter-spacing: 0;
+  scroll-margin-top: 36px;
+}
+
+body.vscode-body h1 {
+  margin: 0 0 32px;
+  font-size: 2.35em;
+  letter-spacing: -0.02em;
+}
+
+body.vscode-body h2 {
+  margin-top: 2.4em;
+  margin-bottom: 16px;
+  font-size: 1.55em;
+}
+
+body.vscode-body h3 {
+  margin-top: 2em;
+  margin-bottom: 12px;
+  font-size: 1.2em;
+}
+
+body.vscode-body h4 {
+  margin-top: 1.8em;
+  margin-bottom: 8px;
+  font-size: 1.05em;
+}
+
+body.vscode-body h5 {
+  margin-top: 1.6em;
+  margin-bottom: 8px;
+  font-size: 0.95em;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #444444;
+}
+
+body.vscode-body h6 {
+  margin-top: 1.5em;
+  margin-bottom: 8px;
+  font-size: 0.88em;
+  color: #666666;
+}
+
+body.vscode-body p {
+  margin: 0 0 1.35em;
+}
+
+body.vscode-body a {
+  color: #1769aa;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  transition: opacity 0.15s ease;
+}
+body.vscode-body a:hover {
+  text-decoration-thickness: 2px;
+}
+
+body.vscode-body blockquote {
+  margin: 1.8em 0;
+  padding: 0.6em 1.25em;
+  color: #555555;
+  border-left: 3px solid #c9c9c9;
+  background: rgba(0, 0, 0, 0.02);
+  border-radius: 0 6px 6px 0;
+}
+body.vscode-body blockquote > :first-child { margin-top: 0; }
+body.vscode-body blockquote > :last-child { margin-bottom: 0; }
+
+body.vscode-body code {
+  padding: 0.12em 0.35em;
+  color: #9b1c1c;
+  background: #f2f2f2;
+  border-radius: 4px;
+  font-family: var(--lucid-font-mono);
+  font-size: 0.86em;
+}
+
+body.vscode-body pre {
+  margin: 1.7em 0;
+  padding: 20px 22px;
+  overflow-x: auto;
+  color: #f4f7fb !important;
+  background: #1f2329 !important;
+  border: 1px solid #343a43;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(20, 24, 30, 0.12);
+  line-height: 1.55;
+}
+
+body.vscode-body pre code {
+  padding: 0;
+  color: #f4f7fb !important;
+  background: transparent !important;
+  border-radius: 0;
+  font-family: var(--lucid-font-mono);
+  font-size: 0.86em;
+}
+
+body.vscode-body table {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  margin: 1.8em 0;
+  font-size: 0.92em;
+}
+
+body.vscode-body th,
+body.vscode-body td {
+  padding: 10px 14px;
+  border: 1px solid #dddddd;
+  text-align: left;
+}
+
+body.vscode-body th {
+  color: #171717;
+  background: #f5f5f5;
+  font-family: var(--lucid-font-family);
+  font-weight: 650;
+}
+
+body.vscode-body tbody tr:nth-child(even) {
+  background: #fafafa;
+}
+body.vscode-body tbody tr:hover {
+  background: #f0f4f8;
+}
+
+body.vscode-body img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 2em auto;
+  border-radius: 8px;
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.12);
+}
+
+body.vscode-body p:has(> img:only-child) {
+  text-align: center;
+}
+body.vscode-body p:has(> img:not(:only-child)) img,
+body.vscode-body a:has(> img) img {
+  display: inline-block;
+  margin: 0.2em 0.25em;
+  border-radius: 4px;
+  box-shadow: none !important;
+  vertical-align: middle;
+}
+
+body.vscode-body hr {
+  margin: 3em 0;
+  border: 0;
+  border-top: 1px solid #dddddd;
+}
+
+body.vscode-body ul,
+body.vscode-body ol {
+  margin: 0 0 1.35em;
+  padding-left: 1.8em;
+}
+
+body.vscode-body li {
+  margin: 0.3em 0;
+}
+body.vscode-body li > ul,
+body.vscode-body li > ol {
+  margin: 0.3em 0 0.6em;
+}
+body.vscode-body li::marker {
+  color: #1769aa;
+}
+
+/* Task lists */
+body.vscode-body ul.contains-task-list {
+  padding-left: 0.35em;
+  list-style: none;
+}
+body.vscode-body .task-list-item {
+  margin: 0.4em 0;
+  list-style: none;
+}
+body.vscode-body .task-list-item input[type="checkbox"] {
+  width: 1.05em;
+  height: 1.05em;
+  margin: 0 0.55em 0 0;
+  accent-color: #1769aa;
+  vertical-align: -0.08em;
+}
+
+/* Selection */
+body.vscode-body ::selection {
+  background: rgba(23, 105, 170, 0.22);
+}
+
+/* ============================================================
+   DARK THEME (Signature #171717 Studio Dark from Extension)
+   ============================================================ */
+body.vscode-dark,
+body[data-theme="dark"] {
+  color: #e6e6e6;
+  background: #171717;
+}
+
+body.vscode-dark h1,
+body.vscode-dark h2,
+body.vscode-dark h3,
+body.vscode-dark h4,
+body.vscode-dark h5,
+body.vscode-dark h6,
+body[data-theme="dark"] h1,
+body[data-theme="dark"] h2,
+body[data-theme="dark"] h3,
+body[data-theme="dark"] h4,
+body[data-theme="dark"] h5,
+body[data-theme="dark"] h6 {
+  color: #ffffff;
+}
+
+body.vscode-dark a,
+body[data-theme="dark"] a {
+  color: #58a6ff;
+}
+
+body.vscode-dark blockquote,
+body[data-theme="dark"] blockquote {
+  color: #b8b8b8;
+  border-left-color: #666666;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+body.vscode-dark code,
+body[data-theme="dark"] code {
+  color: #ffb4b4;
+  background: #2a2a2a;
+}
+
+body.vscode-dark pre,
+body[data-theme="dark"] pre {
+  background: #1f2329 !important;
+  border-color: #343a43;
+}
+
+body.vscode-dark th,
+body[data-theme="dark"] th {
+  color: #ffffff;
+  background: #252525;
+}
+
+body.vscode-dark th,
+body.vscode-dark td,
+body[data-theme="dark"] th,
+body[data-theme="dark"] td {
+  border-color: #454545;
+}
+
+body.vscode-dark tbody tr:nth-child(even),
+body[data-theme="dark"] tbody tr:nth-child(even) {
+  background: #1e1e1e;
+}
+body.vscode-dark tbody tr:hover,
+body[data-theme="dark"] tbody tr:hover {
+  background: #262b31;
+}
+
+body.vscode-dark hr,
+body[data-theme="dark"] hr {
+  border-top-color: #454545;
+}
+
+body.vscode-dark img,
+body[data-theme="dark"] img {
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.45);
+}
+
+body.vscode-dark li::marker,
+body[data-theme="dark"] li::marker {
+  color: #6cb6ff;
+}
+
+body.vscode-dark .task-list-item input[type="checkbox"],
+body[data-theme="dark"] .task-list-item input[type="checkbox"] {
+  accent-color: #6cb6ff;
+}
+
+body.vscode-dark ::selection,
+body[data-theme="dark"] ::selection {
+  background: rgba(108, 182, 255, 0.28);
+}
+
+/* ============================================================
+   OTHER THEMES (Sepia, OLED, Nord, Dracula)
+   ============================================================ */
+body[data-theme="sepia"] {
+  color: #433422;
+  background: #fbf0d9;
+}
+body[data-theme="sepia"] h1, body[data-theme="sepia"] h2, body[data-theme="sepia"] h3,
+body[data-theme="sepia"] h4, body[data-theme="sepia"] h5, body[data-theme="sepia"] h6 {
+  color: #2d2216;
+}
+body[data-theme="sepia"] a { color: #a05a2c; }
+body[data-theme="sepia"] code { color: #9e4324; background: #eee1cc; }
+body[data-theme="sepia"] pre { background: #2d261e !important; border-color: #4a3e31; }
+body[data-theme="sepia"] blockquote { color: #63523f; border-left-color: #d4c4ad; background: rgba(67, 52, 34, 0.04); }
+
+body[data-theme="oled"] {
+  color: #eaeaea;
+  background: #000000;
+}
+body[data-theme="oled"] h1, body[data-theme="oled"] h2, body[data-theme="oled"] h3,
+body[data-theme="oled"] h4, body[data-theme="oled"] h5, body[data-theme="oled"] h6 {
+  color: #ffffff;
+}
+body[data-theme="oled"] a { color: #388bfd; }
+body[data-theme="oled"] code { color: #ff857f; background: #141414; }
+body[data-theme="oled"] pre { background: #0a0a0a !important; border-color: #222222; }
+body[data-theme="oled"] th { background: #111111; color: #ffffff; }
+body[data-theme="oled"] th, body[data-theme="oled"] td { border-color: #222222; }
+
+body[data-theme="nord"] {
+  color: #eceff4;
+  background: #2e3440;
+}
+body[data-theme="nord"] h1, body[data-theme="nord"] h2, body[data-theme="nord"] h3,
+body[data-theme="nord"] h4, body[data-theme="nord"] h5, body[data-theme="nord"] h6 {
+  color: #eceff4;
+}
+body[data-theme="nord"] a { color: #88c0d0; }
+body[data-theme="nord"] code { color: #ebcb8b; background: #3b4252; }
+body[data-theme="nord"] pre { background: #242933 !important; border-color: #4c566a; }
+body[data-theme="nord"] th { background: #3b4252; color: #eceff4; }
+
+body[data-theme="dracula"] {
+  color: #f8f8f2;
+  background: #282a36;
+}
+body[data-theme="dracula"] h1, body[data-theme="dracula"] h2, body[data-theme="dracula"] h3,
+body[data-theme="dracula"] h4, body[data-theme="dracula"] h5, body[data-theme="dracula"] h6 {
+  color: #50fa7b;
+}
+body[data-theme="dracula"] a { color: #bd93f9; }
+body[data-theme="dracula"] code { color: #ff79c6; background: #44475a; }
+body[data-theme="dracula"] pre { background: #1e1f29 !important; border-color: #44475a; }
+
+/* ============================================================
+   GitHub-Style Alerts (Exact from Extension)
+   ============================================================ */
+body.vscode-body blockquote.markdown-alert {
+  --alert-color: #2f81f7;
+  --alert-bg: rgba(47, 129, 247, 0.08);
+  margin: 1.6em 0;
+  padding: 14px 18px 15px;
+  color: #343434;
+  background: var(--alert-bg);
+  border: 1px solid color-mix(in srgb, var(--alert-color) 32%, transparent);
+  border-left: 5px solid var(--alert-color);
+  border-radius: 7px;
+}
+
+body.vscode-body blockquote.markdown-alert-note { --alert-color: #2f81f7; --alert-bg: rgba(47, 129, 247, 0.08); }
+body.vscode-body blockquote.markdown-alert-tip { --alert-color: #1a7f37; --alert-bg: rgba(26, 127, 55, 0.08); }
+body.vscode-body blockquote.markdown-alert-important { --alert-color: #8250df; --alert-bg: rgba(130, 80, 223, 0.08); }
+body.vscode-body blockquote.markdown-alert-warning { --alert-color: #9a6700; --alert-bg: rgba(154, 103, 0, 0.1); }
+body.vscode-body blockquote.markdown-alert-caution { --alert-color: #cf222e; --alert-bg: rgba(207, 34, 46, 0.08); }
+
+body.vscode-dark blockquote.markdown-alert,
+body[data-theme="dark"] blockquote.markdown-alert {
+  color: #dedede;
+  background: color-mix(in srgb, var(--alert-color) 13%, #171717);
+  border-top-color: color-mix(in srgb, var(--alert-color) 45%, transparent);
+  border-right-color: color-mix(in srgb, var(--alert-color) 45%, transparent);
+  border-bottom-color: color-mix(in srgb, var(--alert-color) 45%, transparent);
+}
+
+body.vscode-body .markdown-alert-title {
+  display: flex;
+  align-items: center;
+  gap: 0.52em;
+  margin-bottom: 0.55em;
+  color: var(--alert-color);
+  font-family: var(--lucid-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+  font-size: 0.86em;
+  font-weight: 750;
+  letter-spacing: 0.045em;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
+body.vscode-body .markdown-alert-icon {
+  display: inline-grid;
+  width: 1.28em;
+  height: 1.28em;
+  place-items: center;
+  color: #ffffff;
+  background: var(--alert-color);
+  border-radius: 50%;
+  font-size: 0.82em;
+  font-weight: 800;
+  line-height: 1;
+}
+
+body.vscode-body .markdown-alert-icon svg {
+  width: 0.75em;
+  height: 0.75em;
+  fill: #ffffff;
+}
+
+body.vscode-body blockquote.markdown-alert p {
+  margin-bottom: 0;
+}
+
+/* ============================================================
+   Enhanced Code Blocks with Toolbar (Exact from Extension)
+   ============================================================ */
+body.vscode-body pre.lucid-enhanced {
+  position: relative;
+  padding-top: 46px;
+  overflow-x: auto;
+}
+
+body.vscode-body .lucid-codebar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  height: 34px;
+  padding: 0 14px;
+  background: #191d23;
+  border-bottom: 1px solid #333a43;
+  border-radius: 8px 8px 0 0;
+  user-select: none;
+}
+
+body.vscode-body .lucid-lang {
+  margin-right: auto;
+  color: #8b95a1;
+  font-family: var(--lucid-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+body.vscode-body .lucid-copy {
+  padding: 3px 11px;
+  color: #cdd6e0;
+  background: transparent;
+  border: 1px solid #3f4854;
+  border-radius: 5px;
+  font: 500 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  cursor: pointer;
+  opacity: 0.85;
+  transition: color 0.15s ease, background 0.15s ease, opacity 0.15s ease;
+}
+
+body.vscode-body .lucid-copy:hover {
+  opacity: 1;
+  background: #2a313a;
+}
+
+body.vscode-body .lucid-copy.lucid-copied {
+  color: #ffffff;
+  background: #1a7f37;
+  border-color: #1a7f37;
+  opacity: 1;
+}
+
+/* ============================================================
+   Heading Anchors (Exact from Extension)
+   ============================================================ */
+body.vscode-body .lucid-anchor {
+  margin-left: 0.35em;
+  color: #1769aa;
+  font-weight: 400;
+  text-decoration: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+body.vscode-dark .lucid-anchor,
+body[data-theme="dark"] .lucid-anchor {
+  color: #6cb6ff;
+}
+body.vscode-body h1:hover .lucid-anchor,
+body.vscode-body h2:hover .lucid-anchor,
+body.vscode-body h3:hover .lucid-anchor,
+body.vscode-body h4:hover .lucid-anchor,
+body.vscode-body h5:hover .lucid-anchor,
+body.vscode-body h6:hover .lucid-anchor {
+  opacity: 0.6;
+}
+body.vscode-body .lucid-anchor:hover {
+  opacity: 1;
+  text-decoration: underline;
+}
+
+/* ============================================================
+   Breakout Layout (Exact from Extension)
+   ============================================================ */
+body.vscode-body:not(.no-breakout) #lucid-content > p,
+body.vscode-body:not(.no-breakout) #lucid-content > h1,
+body.vscode-body:not(.no-breakout) #lucid-content > h2,
+body.vscode-body:not(.no-breakout) #lucid-content > h3,
+body.vscode-body:not(.no-breakout) #lucid-content > h4,
+body.vscode-body:not(.no-breakout) #lucid-content > h5,
+body.vscode-body:not(.no-breakout) #lucid-content > h6,
+body.vscode-body:not(.no-breakout) #lucid-content > ul,
+body.vscode-body:not(.no-breakout) #lucid-content > ol,
+body.vscode-body:not(.no-breakout) #lucid-content > dl,
+body.vscode-body:not(.no-breakout) #lucid-content > blockquote,
+body.vscode-body:not(.no-breakout) #lucid-content > hr,
+body.vscode-body:not(.no-breakout) #lucid-content > details {
+  max-width: 720px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+body.vscode-body:not(.no-breakout) #lucid-content > table,
+body.vscode-body:not(.no-breakout) #lucid-content > pre,
+body.vscode-body:not(.no-breakout) #lucid-content > figure,
+body.vscode-body:not(.no-breakout) #lucid-content > .katex-display,
+body.vscode-body:not(.no-breakout) #lucid-content > .lucid-math-block,
+body.vscode-body:not(.no-breakout) #lucid-content > .mermaid-wrapper,
+body.vscode-body:not(.no-breakout) #lucid-content > .mermaid,
+body.vscode-body:not(.no-breakout) #lucid-content > pre.mermaid,
+body.vscode-body:not(.no-breakout) #lucid-content > p:has(> img:only-child),
+body.vscode-body:not(.no-breakout) #lucid-content > p:has(.katex-display) {
+  max-width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* ============================================================
+   Mermaid Diagrams & STEM Blocks
+   ============================================================ */
+.mermaid-wrapper {
+  position: relative;
+  margin: 2.4em 0;
+  padding: 28px 24px;
+  background: #1f2329;
+  border: 1px solid #343a43;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(20, 24, 30, 0.12);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow-x: auto;
+}
+
+.mermaid-toolbar {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  display: flex;
+  gap: 6px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.mermaid-wrapper:hover .mermaid-toolbar {
+  opacity: 1;
+}
+.lucid-btn-copy-svg, .lucid-btn-save-svg {
+  padding: 3px 9px;
+  font: 500 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #cdd6e0;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid #3f4854;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.lucid-btn-copy-svg:hover, .lucid-btn-save-svg:hover {
+  background: #2a313a;
+  color: #ffffff;
+}
+
+.lucid-math-block {
+  position: relative;
+  margin: 1.8em 0;
+  padding: 12px 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow-x: auto;
+}
+.lucid-math-block:hover .lucid-btn-copy-latex {
+  opacity: 1;
+}
+.lucid-btn-copy-latex {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  opacity: 0;
+  padding: 3px 8px;
+  font: 500 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #8b95a1;
+  background: #1f2329;
+  border: 1px solid #343a43;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+/* In-Page Find Highlights */
+mark.lucid-find-match {
+  background: #ffdf5d;
+  color: #171717;
+  padding: 1px 2px;
+  border-radius: 2px;
+}
+mark.lucid-find-active {
+  background: #ff9800 !important;
+  color: #000000 !important;
+  outline: 2px solid #e65100;
+  border-radius: 2px;
+}
+
+/* In-Place Live Editing */
 #lucid-content[contenteditable="true"] {
   outline: none;
   cursor: text;
   min-height: 80vh;
-}
-#lucid-content[contenteditable="true"] h1:hover,
-#lucid-content[contenteditable="true"] h2:hover,
-#lucid-content[contenteditable="true"] h3:hover,
-#lucid-content[contenteditable="true"] p:hover,
-#lucid-content[contenteditable="true"] li:hover,
-#lucid-content[contenteditable="true"] td:hover,
-#lucid-content[contenteditable="true"] th:hover {
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 4px;
 }
 
 /* Focus Mode */
@@ -204,13 +709,7 @@ body.lucid-typewriter-mode {
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 8px;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
-  pointer-events: auto;
   user-select: none;
-  animation: lucidBubbleFade 0.15s ease forwards;
-}
-@keyframes lucidBubbleFade {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
 }
 .lucid-bubble-btn {
   padding: 4px 8px;
@@ -226,445 +725,6 @@ body.lucid-typewriter-mode {
 .lucid-bubble-btn:hover {
   background: rgba(255, 255, 255, 0.18);
   color: #ffffff;
-}
-
-h1, h2, h3, h4, h5, h6 {
-  color: var(--lucid-fg-heading);
-  font-family: var(--lucid-font-family);
-  line-height: 1.25;
-  letter-spacing: 0;
-  scroll-margin-top: 36px;
-}
-
-h1 {
-  margin: 0 0 32px;
-  font-size: 2.35em;
-  letter-spacing: -0.02em;
-}
-
-h2 {
-  margin-top: 2.4em;
-  margin-bottom: 16px;
-  font-size: 1.55em;
-}
-
-h3 {
-  margin-top: 2em;
-  margin-bottom: 12px;
-  font-size: 1.2em;
-}
-
-h4 {
-  margin-top: 1.4em;
-  margin-bottom: 8px;
-  font-size: 1.05em;
-}
-
-h5, h6 {
-  margin-top: 1.2em;
-  margin-bottom: 8px;
-  font-size: 1em;
-}
-
-p {
-  margin: 0 0 1.35em;
-}
-
-a {
-  color: var(--lucid-accent);
-  text-decoration: none;
-  border-bottom: 1px solid transparent;
-  transition: border-color 0.15s ease;
-}
-a:hover {
-  border-bottom-color: var(--lucid-accent);
-}
-
-blockquote {
-  margin: 1.8em 0;
-  padding: 0.6em 1.25em;
-  color: var(--lucid-quote-fg);
-  border-left: 3px solid var(--lucid-quote-border);
-  background: rgba(255, 255, 255, 0.02);
-  border-radius: 0 6px 6px 0;
-}
-blockquote > :first-child { margin-top: 0; }
-blockquote > :last-child { margin-bottom: 0; }
-
-/* Breakout Layout (Matching Extension Exactly)
-   Prose stays at a comfortable ~720px measure, while wide
-   technical content (tables, code, matrices, diagrams, images)
-   expands into the outer 1040px bound to use the screen. */
-body:not(.no-breakout) #lucid-content > p,
-body:not(.no-breakout) #lucid-content > h1,
-body:not(.no-breakout) #lucid-content > h2,
-body:not(.no-breakout) #lucid-content > h3,
-body:not(.no-breakout) #lucid-content > h4,
-body:not(.no-breakout) #lucid-content > h5,
-body:not(.no-breakout) #lucid-content > h6,
-body:not(.no-breakout) #lucid-content > ul,
-body:not(.no-breakout) #lucid-content > ol,
-body:not(.no-breakout) #lucid-content > dl,
-body:not(.no-breakout) #lucid-content > blockquote,
-body:not(.no-breakout) #lucid-content > hr,
-body:not(.no-breakout) #lucid-content > details {
-  max-width: 720px;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-/* Wide elements: break out and use the full 1040px canvas */
-body:not(.no-breakout) #lucid-content > table,
-body:not(.no-breakout) #lucid-content > pre,
-body:not(.no-breakout) #lucid-content > .lucid-code-block,
-body:not(.no-breakout) #lucid-content > figure,
-body:not(.no-breakout) #lucid-content > .katex-display,
-body:not(.no-breakout) #lucid-content > .lucid-math-block,
-body:not(.no-breakout) #lucid-content > .mermaid-wrapper,
-body:not(.no-breakout) #lucid-content > .mermaid,
-body:not(.no-breakout) #lucid-content > pre.mermaid,
-body:not(.no-breakout) #lucid-content > p:has(> img:only-child),
-body:not(.no-breakout) #lucid-content > p:has(.katex-display) {
-  max-width: 100%;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-code {
-  padding: 0.12em 0.35em;
-  color: var(--lucid-code-fg);
-  background: var(--lucid-code-bg);
-  border-radius: 4px;
-  font-family: var(--lucid-font-mono);
-  font-size: 0.86em;
-}
-
-/* Enhanced Code Block matching Extension */
-.lucid-code-block {
-  margin: 1.7em 0;
-  border: 1px solid var(--lucid-pre-border);
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: var(--lucid-shadow);
-  background: var(--lucid-pre-bg);
-}
-
-.lucid-code-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 6px 14px;
-  background: rgba(0, 0, 0, 0.25);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  user-select: none;
-}
-
-.lucid-code-lang {
-  font-family: var(--lucid-font-mono);
-  font-size: 0.72em;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  color: #8b949e;
-}
-
-.lucid-btn-copy-code, .lucid-btn-copy-svg, .lucid-btn-save-svg {
-  padding: 3px 8px;
-  font-size: 0.72em;
-  font-weight: 500;
-  color: #c9d1d9;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-.lucid-btn-copy-code:hover, .lucid-btn-copy-svg:hover, .lucid-btn-save-svg:hover {
-  background: rgba(255, 255, 255, 0.18);
-  color: #ffffff;
-}
-
-.lucid-code-block pre {
-  margin: 0;
-  padding: 20px 22px;
-  overflow-x: auto;
-  border: none;
-  border-radius: 0;
-  box-shadow: none;
-  background: transparent !important;
-  line-height: 1.55;
-}
-
-.lucid-code-block pre code {
-  padding: 0;
-  color: var(--lucid-pre-fg) !important;
-  background: transparent !important;
-  font-family: var(--lucid-font-mono);
-  font-size: 0.86em;
-}
-
-/* Tables matching Extension */
-table {
-  display: block;
-  width: 100%;
-  overflow-x: auto;
-  border-collapse: collapse;
-  margin: 1.8em 0;
-  font-size: 0.92em;
-}
-
-th, td {
-  padding: 10px 14px;
-  border: 1px solid var(--lucid-border);
-  text-align: left;
-}
-
-th {
-  color: var(--lucid-fg-heading);
-  background: var(--lucid-table-header);
-  font-weight: 650;
-  font-family: var(--lucid-font-family);
-}
-
-tr:nth-child(even) td {
-  background: rgba(255, 255, 255, 0.02);
-}
-
-img {
-  display: block;
-  max-width: 100%;
-  height: auto;
-  margin: 2em auto;
-  border-radius: 8px;
-  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.45);
-}
-
-p > img:only-child {
-  display: block;
-}
-p > img:not(:only-child),
-a > img {
-  display: inline-block;
-  margin: 0.2em 0.25em;
-  border-radius: 4px;
-  box-shadow: none !important;
-  vertical-align: middle;
-}
-
-hr {
-  margin: 3em 0;
-  border: 0;
-  border-top: 1px solid var(--lucid-border);
-}
-
-ul, ol {
-  padding-left: 2em;
-  margin: 0 0 1.4em;
-}
-li {
-  margin: 0.35em 0;
-}
-li > p {
-  margin: 0;
-}
-
-/* Task lists */
-ul.contains-task-list {
-  padding-left: 0.35em;
-  list-style: none;
-}
-.task-list-item {
-  margin: 0.4em 0;
-  list-style: none;
-}
-.task-list-item input[type="checkbox"],
-.task-list-item-checkbox {
-  width: 1.05em;
-  height: 1.05em;
-  margin: 0 0.55em 0 0;
-  accent-color: #6cb6ff;
-  vertical-align: -0.08em;
-  cursor: pointer;
-}
-
-/* GitHub Alerts matching Extension EXACTLY */
-blockquote.markdown-alert,
-.lucid-alert {
-  --alert-color: #2f81f7;
-  --alert-bg: rgba(47, 129, 247, 0.08);
-  margin: 1.6em 0;
-  padding: 14px 18px 15px;
-  color: #dedede;
-  background: color-mix(in srgb, var(--alert-color) 13%, #171717);
-  border: 1px solid color-mix(in srgb, var(--alert-color) 45%, transparent);
-  border-left: 5px solid var(--alert-color);
-  border-radius: 7px;
-}
-
-body[data-theme="light"] blockquote.markdown-alert,
-body[data-theme="light"] .lucid-alert {
-  color: #343434;
-  background: var(--alert-bg);
-  border: 1px solid color-mix(in srgb, var(--alert-color) 32%, transparent);
-  border-left: 5px solid var(--alert-color);
-}
-
-.lucid-alert-note { --alert-color: #2f81f7; --alert-bg: rgba(47, 129, 247, 0.08); }
-.lucid-alert-tip { --alert-color: #1a7f37; --alert-bg: rgba(26, 127, 55, 0.08); }
-.lucid-alert-important { --alert-color: #8250df; --alert-bg: rgba(130, 80, 223, 0.08); }
-.lucid-alert-warning { --alert-color: #9a6700; --alert-bg: rgba(154, 103, 0, 0.1); }
-.lucid-alert-caution { --alert-color: #cf222e; --alert-bg: rgba(207, 34, 46, 0.08); }
-
-.lucid-alert-example { --alert-color: #0891b2; --alert-bg: rgba(8, 145, 178, 0.08); }
-.lucid-alert-question { --alert-color: #d946ef; --alert-bg: rgba(217, 70, 239, 0.08); }
-.lucid-alert-quote { --alert-color: #64748b; --alert-bg: rgba(100, 116, 139, 0.08); }
-.lucid-alert-abstract { --alert-color: #0284c7; --alert-bg: rgba(2, 132, 199, 0.08); }
-.lucid-alert-bug { --alert-color: #e11d48; --alert-bg: rgba(225, 29, 72, 0.08); }
-.lucid-alert-info { --alert-color: #0284c7; --alert-bg: rgba(2, 132, 199, 0.08); }
-.lucid-alert-success { --alert-color: #16a34a; --alert-bg: rgba(22, 163, 74, 0.08); }
-.lucid-alert-failure { --alert-color: #dc2626; --alert-bg: rgba(220, 38, 38, 0.08); }
-
-.lucid-alert-title,
-.markdown-alert-title {
-  display: flex;
-  align-items: center;
-  gap: 0.52em;
-  margin-bottom: 0.55em;
-  color: var(--alert-color);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-size: 0.86em;
-  font-weight: 750;
-  letter-spacing: 0.045em;
-  line-height: 1.35;
-  text-transform: uppercase;
-}
-
-.lucid-alert-icon,
-.markdown-alert-icon {
-  display: inline-grid;
-  width: 1.28em;
-  height: 1.28em;
-  place-items: center;
-  color: #ffffff;
-  background: var(--alert-color);
-  border-radius: 50%;
-  font-size: 0.82em;
-  font-weight: 800;
-  line-height: 1;
-}
-
-.lucid-alert-icon svg {
-  width: 0.75em;
-  height: 0.75em;
-  fill: #ffffff;
-}
-
-/* Collapsible Callouts */
-details.lucid-alert {
-  padding: 12px 18px;
-}
-details.lucid-alert summary {
-  cursor: pointer;
-  outline: none;
-}
-details.lucid-alert summary::-webkit-details-marker {
-  display: none;
-}
-details.lucid-alert[open] summary {
-  margin-bottom: 10px;
-}
-
-
-/* Mermaid styling & Toolbar */
-.mermaid-wrapper {
-  position: relative;
-  margin: 2.4em 0;
-  padding: 28px 24px;
-  background: var(--lucid-card-bg);
-  border: 1px solid var(--lucid-border);
-  border-radius: 8px;
-  box-shadow: var(--lucid-shadow);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  overflow-x: auto;
-}
-.mermaid-toolbar {
-  position: absolute;
-  top: 8px;
-  right: 12px;
-  display: flex;
-  gap: 6px;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-.mermaid-wrapper:hover .mermaid-toolbar {
-  opacity: 1;
-}
-
-/* KaTeX Equations & Formula Blocks */
-.lucid-math-block {
-  position: relative;
-  margin: 1.8em 0;
-  padding: 12px 0;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  overflow-x: auto;
-  overflow-y: hidden;
-}
-.lucid-math-block:hover .lucid-btn-copy-latex {
-  opacity: 1;
-}
-.lucid-btn-copy-latex {
-  position: absolute;
-  top: 4px;
-  right: 8px;
-  opacity: 0;
-  padding: 2px 7px;
-  font-size: 0.7em;
-  color: var(--lucid-fg-muted);
-  background: var(--lucid-card-bg);
-  border: 1px solid var(--lucid-border);
-  border-radius: 4px;
-  cursor: pointer;
-  transition: opacity 0.15s ease;
-}
-.katex-display {
-  margin: 0 !important;
-}
-
-/* In-Page Search Highlights */
-mark.lucid-find-match {
-  background: #ffdf5d;
-  color: #171717;
-  padding: 1px 2px;
-  border-radius: 2px;
-}
-mark.lucid-find-active {
-  background: #ff9800 !important;
-  color: #000000 !important;
-  outline: 2px solid #e65100;
-  border-radius: 2px;
-}
-
-/* Footnote Tooltip */
-.lucid-footnote-tooltip {
-  position: absolute;
-  z-index: 1000;
-  max-width: 320px;
-  padding: 10px 14px;
-  font-size: 0.85em;
-  color: var(--lucid-fg);
-  background: var(--lucid-card-bg);
-  border: 1px solid var(--lucid-border);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-  pointer-events: none;
-  animation: lucidTooltipFade 0.15s ease forwards;
-}
-@keyframes lucidTooltipFade {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
 }
 
 /* Refined macOS-Native Scrollbars */
