@@ -1,6 +1,6 @@
 import Foundation
 
-public struct HeadingItem: Identifiable, Hashable, Codable {
+public struct HeadingItem: Identifiable, Hashable, Codable, Sendable {
     public var id: String
     public var level: Int
     public var text: String
