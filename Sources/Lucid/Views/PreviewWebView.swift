@@ -28,16 +28,45 @@ public struct PreviewWebView: NSViewRepresentable {
         let config = WKWebViewConfiguration()
         let userContent = WKUserContentController()
 
+        let effectiveTheme: String = {
+            if preferences.theme == .system {
+                let isDark = NSApp?.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+                return isDark ? "dark" : "light"
+            }
+            return preferences.theme.rawValue
+        }()
+
+        let themeScript = WKUserScript(
+            source: """
+            document.documentElement.setAttribute('data-theme', '\(effectiveTheme)');
+            document.documentElement.classList.add('\(effectiveTheme)');
+            """,
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: true
+        )
+        userContent.addUserScript(themeScript)
+
+        userContent.add(context.coordinator, name: "lucidReady")
         userContent.add(context.coordinator, name: "lucidScroll")
         userContent.add(context.coordinator, name: "lucidHeadings")
         userContent.add(context.coordinator, name: "lucidActiveHeading")
         userContent.add(context.coordinator, name: "lucidFindMatches")
         userContent.add(context.coordinator, name: "lucidLinkClicked")
+        userContent.add(context.coordinator, name: "lucidSaveSvg")
         config.userContentController = userContent
+
+        let effectiveTokens: LucidThemeTokens = {
+            if preferences.theme == .system {
+                let isDark = NSApp?.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+                return isDark ? LucidTheme.studioDark.tokens : LucidTheme.editorialLight.tokens
+            }
+            return preferences.theme.themeTokens
+        }()
 
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = context.coordinator
         webView.setValue(false, forKey: "drawsBackground")
+        webView.underPageBackgroundColor = NSColor(Color(hex: effectiveTokens.previewBackground))
 
         context.coordinator.renderCoordinator.setWebView(webView)
 
@@ -70,14 +99,23 @@ public struct PreviewWebView: NSViewRepresentable {
     public func updateNSView(_ webView: WKWebView, context: Context) {
         context.coordinator.parent = self
 
-        guard context.coordinator.isPageLoaded else { return }
+        let tokens = preferences.theme.themeTokens
+        webView.underPageBackgroundColor = NSColor(Color(hex: tokens.previewBackground))
 
         // Update preferences
         let prefsJSON = preferences.jsonPayload(systemColorScheme: colorScheme)
         webView.evaluateJavaScript("if (window.lucid) { window.lucid.updatePreferences(\(prefsJSON)); }")
 
-        // Schedule debounced render through the coordinator
-        context.coordinator.renderCoordinator.scheduleRender(markdown: markdown)
+        // Schedule render: immediate on first load or file change, debounced on interactive typing
+        let isFirstRender = !context.coordinator.hasRenderedFirstContent
+        let isNewContent = context.coordinator.lastRenderedMarkdown != markdown
+        if isFirstRender || isNewContent {
+            context.coordinator.lastRenderedMarkdown = markdown
+            context.coordinator.renderCoordinator.scheduleRender(markdown: markdown, immediate: isFirstRender)
+            if isFirstRender && context.coordinator.renderCoordinator.isBridgeReady {
+                context.coordinator.hasRenderedFirstContent = true
+            }
+        }
 
         // Scroll to heading if requested
         if let headingId = scrollToHeadingId, headingId != context.coordinator.lastScrolledHeadingId {
@@ -95,6 +133,8 @@ public struct PreviewWebView: NSViewRepresentable {
     public final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         var parent: PreviewWebView
         var isPageLoaded = false
+        var hasRenderedFirstContent = false
+        var lastRenderedMarkdown = ""
         var lastScrolledHeadingId: String?
         var lastAppliedFraction: Double = -1
         let renderCoordinator = PreviewRenderCoordinator()
@@ -107,14 +147,25 @@ public struct PreviewWebView: NSViewRepresentable {
             isPageLoaded = true
             renderCoordinator.setWebView(webView)
 
-            let prefsJSON = parent.preferences.jsonPayload(systemColorScheme: .dark)
+            let prefsJSON = parent.preferences.jsonPayload(systemColorScheme: parent.colorScheme)
             webView.evaluateJavaScript("if (window.lucid) { window.lucid.updatePreferences(\(prefsJSON)); }")
 
-            renderCoordinator.scheduleRender(markdown: parent.markdown, immediate: true)
+            // Check if window.lucid is already defined (e.g. from inline script)
+            webView.evaluateJavaScript("typeof window.lucid !== 'undefined'") { [weak self] res, _ in
+                if let isReady = res as? Bool, isReady {
+                    self?.renderCoordinator.setBridgeReady(true)
+                    self?.hasRenderedFirstContent = true
+                    self?.renderCoordinator.scheduleRender(markdown: self?.parent.markdown ?? "", immediate: true)
+                }
+            }
         }
 
         public func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-            if message.name == "lucidScroll", let body = message.body as? [String: Any] {
+            if message.name == "lucidReady" {
+                renderCoordinator.setBridgeReady(true)
+                hasRenderedFirstContent = true
+                renderCoordinator.scheduleRender(markdown: parent.markdown, immediate: true)
+            } else if message.name == "lucidScroll", let body = message.body as? [String: Any] {
                 if let fraction = body["fraction"] as? Double {
                     parent.onScrollFractionChanged?(fraction)
                 }
@@ -150,6 +201,8 @@ public struct PreviewWebView: NSViewRepresentable {
                 }
             } else if message.name == "lucidLinkClicked", let href = message.body as? String {
                 handleLinkClick(href)
+            } else if message.name == "lucidSaveSvg", let body = message.body as? [String: Any], let svgString = body["svg"] as? String {
+                ExportService.shared.exportSVG(svgString: svgString)
             }
         }
 

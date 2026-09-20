@@ -1,17 +1,34 @@
 import SwiftUI
-import WebKit
 
 public struct FindBarView: View {
     @Binding var isPresented: Bool
-    var webView: WKWebView?
-    @State private var query: String = ""
-    @State private var matchCount: Int = 0
-    @State private var currentIndex: Int = 0
+    @Binding var query: String
+    @Binding var matchCount: Int
+    @Binding var currentIndex: Int
+    var onPerformFind: (String) -> Void
+    var onFindNext: () -> Void
+    var onFindPrev: () -> Void
+    var onDismiss: () -> Void
     @FocusState private var isFieldFocused: Bool
 
-    public init(isPresented: Binding<Bool>, webView: WKWebView?) {
+    public init(
+        isPresented: Binding<Bool>,
+        query: Binding<String>,
+        matchCount: Binding<Int>,
+        currentIndex: Binding<Int>,
+        onPerformFind: @escaping (String) -> Void,
+        onFindNext: @escaping () -> Void,
+        onFindPrev: @escaping () -> Void,
+        onDismiss: @escaping () -> Void
+    ) {
         self._isPresented = isPresented
-        self.webView = webView
+        self._query = query
+        self._matchCount = matchCount
+        self._currentIndex = currentIndex
+        self.onPerformFind = onPerformFind
+        self.onFindNext = onFindNext
+        self.onFindPrev = onFindPrev
+        self.onDismiss = onDismiss
     }
 
     public var body: some View {
@@ -26,10 +43,10 @@ public struct FindBarView: View {
                 .focused($isFieldFocused)
                 .frame(width: 190)
                 .onChange(of: query) { _, newQuery in
-                    performFind(newQuery)
+                    onPerformFind(newQuery)
                 }
                 .onSubmit {
-                    findNext()
+                    onFindNext()
                 }
 
             if !query.isEmpty {
@@ -45,7 +62,7 @@ public struct FindBarView: View {
                     helpText: "Previous Match",
                     shortcutText: "⇧⌘G"
                 ) {
-                    findPrev()
+                    onFindPrev()
                 }
                 .disabled(matchCount == 0)
 
@@ -56,7 +73,7 @@ public struct FindBarView: View {
                     helpText: "Next Match",
                     shortcutText: "⌘G"
                 ) {
-                    findNext()
+                    onFindNext()
                 }
                 .disabled(matchCount == 0)
             }
@@ -84,41 +101,21 @@ public struct FindBarView: View {
         .shadow(color: Color.black.opacity(0.12), radius: 10, x: 0, y: 4)
         .onAppear {
             isFieldFocused = true
+            if !query.isEmpty {
+                onPerformFind(query)
+            }
         }
-        .onDisappear {
-            clearFind()
+        .onExitCommand {
+            closeFind()
         }
-    }
-
-    private func performFind(_ text: String) {
-        guard let webView = webView else { return }
-        let escaped = text.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "'", with: "\\'")
-        webView.evaluateJavaScript("window.lucid.find('\(escaped)')")
-    }
-
-    private func findNext() {
-        webView?.evaluateJavaScript("window.lucid.findNext()")
-    }
-
-    private func findPrev() {
-        webView?.evaluateJavaScript("window.lucid.findPrev()")
+        .onKeyPress(.escape) {
+            closeFind()
+            return .handled
+        }
     }
 
     private func closeFind() {
-        clearFind()
         isPresented = false
-    }
-
-    private func clearFind() {
-        webView?.evaluateJavaScript("window.lucid.clearFind()")
-        query = ""
-        matchCount = 0
-        currentIndex = 0
-    }
-
-    // Called via message handler from JS
-    public func updateMatchStats(count: Int, index: Int) {
-        self.matchCount = count
-        self.currentIndex = index
+        onDismiss()
     }
 }

@@ -1,5 +1,12 @@
 import SwiftUI
 
+public struct SidebarWidthPreferenceKey: PreferenceKey {
+    public static var defaultValue: CGFloat = 220
+    public static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
 public struct OutlineSidebarView: View {
     let headings: [HeadingItem]
     let activeHeadingId: String?
@@ -12,9 +19,8 @@ public struct OutlineSidebarView: View {
     var wordCount: Int = 0
     var charCount: Int = 0
     var readingTimeMinutes: Int = 1
-    /// Space reserved above the sidebar header so its search field clears the
-    /// floating glass toolbar, while the sidebar material runs continuously behind it.
-    var topInset: CGFloat = 0
+    var trafficLightWidth: CGFloat = 77
+    var onToggleSidebar: (() -> Void)? = nil
 
     public init(
         headings: [HeadingItem],
@@ -23,7 +29,8 @@ public struct OutlineSidebarView: View {
         wordCount: Int = 0,
         charCount: Int = 0,
         readingTimeMinutes: Int = 1,
-        topInset: CGFloat = 0,
+        trafficLightWidth: CGFloat = 77,
+        onToggleSidebar: (() -> Void)? = nil,
         onSelectHeading: @escaping (String) -> Void
     ) {
         self.headings = headings
@@ -32,7 +39,8 @@ public struct OutlineSidebarView: View {
         self.wordCount = wordCount
         self.charCount = charCount
         self.readingTimeMinutes = readingTimeMinutes
-        self.topInset = topInset
+        self.trafficLightWidth = trafficLightWidth
+        self.onToggleSidebar = onToggleSidebar
         self.onSelectHeading = onSelectHeading
     }
 
@@ -45,11 +53,28 @@ public struct OutlineSidebarView: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Clearance for the floating glass toolbar; the recessed sidebar
-            // material continues behind it for a single, layered surface.
-            if topInset > 0 {
-                Color.clear.frame(height: topInset)
+            // Top titlebar row: Aligned with the document top chrome
+            HStack(spacing: LucidSpacing.small) {
+                Color.clear
+                    .frame(width: trafficLightWidth, height: 1)
+                    .allowsHitTesting(false)
+
+                if let onToggle = onToggleSidebar {
+                    LucidIconButton(
+                        icon: "sidebar.leading",
+                        size: 26,
+                        iconSize: 13,
+                        isActive: true,
+                        helpText: "Toggle Outline Sidebar",
+                        shortcutText: "⌃⌘S"
+                    ) {
+                        onToggle()
+                    }
+                }
+
+                LucidWindowDragArea()
             }
+            .frame(height: LucidChrome.toolbarHeight)
 
             // Search Bar & Contextual Stats Button
             HStack(spacing: LucidSpacing.xSmall) {
@@ -117,10 +142,17 @@ public struct OutlineSidebarView: View {
 
             // Outline list
             if filteredHeadings.isEmpty {
+                let hasContent = wordCount > 0 || charCount > 0
+                let isSearching = !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                let emptyTitle = isSearching ? "No Matches" : (hasContent ? "No Headings" : "No Content")
+                let emptySubtitle = isSearching
+                    ? "Try a different search query."
+                    : (hasContent ? "No Markdown headings found in this document." : "Open or write Markdown to view outline.")
+
                 LucidEmptyState(
-                    icon: "list.bullet.indent",
-                    title: headings.isEmpty ? "No Headings" : "No Matches",
-                    subtitle: headings.isEmpty ? "Headings will appear here as you write." : "Try a different search query."
+                    icon: isSearching ? "magnifyingglass" : "list.bullet.indent",
+                    title: emptyTitle,
+                    subtitle: emptySubtitle
                 )
                 .frame(maxHeight: .infinity)
             } else {
@@ -148,10 +180,19 @@ public struct OutlineSidebarView: View {
                 }
             }
         }
-        .frame(minWidth: 180, idealWidth: 220, maxWidth: 300)
+        .frame(minWidth: 180, idealWidth: 220, maxWidth: 320)
         .background(
-            LucidVisualEffectView(material: .sidebar, blendingMode: .behindWindow)
-                .ignoresSafeArea()
+            GeometryReader { geo in
+                Color.clear.preference(key: SidebarWidthPreferenceKey.self, value: geo.size.width)
+            }
         )
+        .background(
+            ZStack {
+                LucidVisualEffectView(material: .sidebar, blendingMode: .behindWindow)
+                Color(hex: preferences.theme.themeTokens.sidebarBackground).opacity(0.85)
+            }
+            .ignoresSafeArea()
+        )
+        .ignoresSafeArea()
     }
 }

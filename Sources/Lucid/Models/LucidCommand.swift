@@ -10,7 +10,6 @@ public enum LucidCommandID: String, CaseIterable, Identifiable, Codable {
     case viewModeEditor = "view.modeEditor"
     case toggleFocusMode = "view.toggleFocusMode"
     case toggleTypewriterMode = "view.toggleTypewriterMode"
-    case toggleOutline = "view.toggleOutline"
     case toggleStatusBar = "view.toggleStatusBar"
 
     // Typography & Zoom
@@ -116,8 +115,7 @@ public final class LucidCommandRegistry {
         reg(.viewModeSplit, "Split Mode", "Side-by-side Markdown source and rendered preview", "rectangle.split.2x1", "2", .command, .view)
         reg(.viewModeEditor, "Editor Mode", "Full-width Markdown source editor", "pencil", "3", .command, .view)
         reg(.toggleFocusMode, "Toggle Focus Mode", "Dim inactive paragraphs to concentrate on the active block", "scope", "d", [.command, .shift], .view)
-        reg(.toggleTypewriterMode, "Toggle Typewriter Mode", "Keep the active typing line vertically centered", "text.aligncenter", "t", [.command, .shift], .view)
-        reg(.toggleOutline, "Toggle Table of Contents", "Show or hide the document outline", "list.bullet.indent", "t", [.command, .option], .view)
+        reg(.toggleTypewriterMode, "Toggle Typewriter Mode", "Keep the active typing line vertically centered", "text.aligncenter", nil, [], .view)
         reg(.toggleStatusBar, "Toggle Status Bar", "Show or hide the bottom document metrics bar", "menubar.dock.rectangle", nil, [], .view)
 
         // Typography & Font size
@@ -138,8 +136,8 @@ public final class LucidCommandRegistry {
 
         // File & Export (Standard macOS: ⌘P is Print; Export has no colliding shortcut)
         reg(.exportPDF, "Export as PDF…", "Export document as paginated vector PDF", "arrow.down.doc", nil, [], .file)
-        reg(.exportHTML, "Export as Standalone HTML…", "Export self-contained HTML file with embedded styles", "chevron.left.forwardslash.chevron.right", "e", .command, .file)
-        reg(.copyRichText, "Copy Formatted Rich Text", "Copy formatted HTML/rich text to clipboard", "doc.on.doc", "c", [.command, .option], .file)
+        reg(.exportHTML, "Export as Standalone HTML…", "Export self-contained HTML file with embedded styles", "chevron.left.forwardslash.chevron.right", nil, [], .file)
+        reg(.copyRichText, "Copy Formatted Rich Text", "Copy formatted HTML/rich text to clipboard", "doc.on.doc", nil, [], .file)
 
         // Application
         reg(.openCommandPalette, "Command Palette…", "Search all commands, themes, and actions", "command", "k", .command, .application)

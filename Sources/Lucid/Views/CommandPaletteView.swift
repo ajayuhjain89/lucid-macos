@@ -42,13 +42,18 @@ public struct CommandPaletteView: View {
 
     private var items: [CommandPaletteItem] {
         var list: [CommandPaletteItem] = []
+        let reg = LucidCommandRegistry.shared
+
+        func sc(_ id: LucidCommandID) -> String? {
+            reg.metadata(for: id)?.shortcutDisplayString
+        }
 
         // 1. Canonical View & Mode commands
         list.append(CommandPaletteItem(
             title: "Reader Mode",
             subtitle: "Clean, distraction-free reading canvas",
             icon: "book",
-            shortcut: "⌘1",
+            shortcut: sc(.viewModeReader),
             category: "View"
         ) { preferences.viewMode = .reader })
 
@@ -56,7 +61,7 @@ public struct CommandPaletteView: View {
             title: "Split Mode",
             subtitle: "Side-by-side Markdown source and rendered preview",
             icon: "rectangle.split.2x1",
-            shortcut: "⌘2",
+            shortcut: sc(.viewModeSplit),
             category: "View"
         ) { preferences.viewMode = .split })
 
@@ -64,7 +69,7 @@ public struct CommandPaletteView: View {
             title: "Editor Mode",
             subtitle: "Focused source text editor",
             icon: "pencil",
-            shortcut: "⌘3",
+            shortcut: sc(.viewModeEditor),
             category: "View"
         ) { preferences.viewMode = .editor })
 
@@ -72,7 +77,7 @@ public struct CommandPaletteView: View {
             title: "Toggle Focus Mode",
             subtitle: "Dim inactive paragraphs to concentrate on the active block",
             icon: "scope",
-            shortcut: "⌘⇧D",
+            shortcut: sc(.toggleFocusMode),
             category: "View"
         ) { preferences.focusMode.toggle() })
 
@@ -80,15 +85,15 @@ public struct CommandPaletteView: View {
             title: "Toggle Typewriter Mode",
             subtitle: "Keep active typing line vertically centered",
             icon: "text.aligncenter",
-            shortcut: "⌘⇧T",
+            shortcut: sc(.toggleTypewriterMode),
             category: "View"
         ) { preferences.typewriterMode.toggle() })
 
         list.append(CommandPaletteItem(
-            title: "Toggle Table of Contents",
-            subtitle: "Show or hide the outline sidebar",
-            icon: "list.bullet.indent",
-            shortcut: "⌘⌥T",
+            title: "Toggle Sidebar",
+            subtitle: "Show or hide the outline navigation sidebar",
+            icon: "sidebar.leading",
+            shortcut: sc(.toggleSidebar),
             category: "View"
         ) { preferences.showOutline.toggle() })
 
@@ -96,10 +101,36 @@ public struct CommandPaletteView: View {
             title: "Toggle Status Bar",
             subtitle: "Show or hide bottom document metrics",
             icon: "menubar.dock.rectangle",
+            shortcut: sc(.toggleStatusBar),
             category: "View"
         ) { preferences.showStatusBar.toggle() })
 
-        // 2. Presets
+        // 2. Find & Edit commands
+        list.append(CommandPaletteItem(
+            title: "Find in Document…",
+            subtitle: "Search text within the current document",
+            icon: "magnifyingglass",
+            shortcut: sc(.findInDocument),
+            category: "Edit"
+        ) { NotificationCenter.default.post(name: NSNotification.Name("LucidToggleFind"), object: nil) })
+
+        list.append(CommandPaletteItem(
+            title: "Find Next",
+            subtitle: "Jump to the next search match",
+            icon: "chevron.down",
+            shortcut: sc(.findNext),
+            category: "Edit"
+        ) { NotificationCenter.default.post(name: NSNotification.Name("LucidFindNext"), object: nil) })
+
+        list.append(CommandPaletteItem(
+            title: "Find Previous",
+            subtitle: "Jump to the previous search match",
+            icon: "chevron.up",
+            shortcut: sc(.findPrevious),
+            category: "Edit"
+        ) { NotificationCenter.default.post(name: NSNotification.Name("LucidFindPrevious"), object: nil) })
+
+        // 3. Presets
         for preset in LucidPreset.allCases {
             list.append(CommandPaletteItem(
                 title: "Apply Preset: \(preset.displayName)",
@@ -109,7 +140,7 @@ public struct CommandPaletteView: View {
             ) { preferences.applyPreset(preset) })
         }
 
-        // 3. Curated Themes
+        // 4. Curated Themes
         for theme in ThemeMode.curatedThemes {
             list.append(CommandPaletteItem(
                 title: "Theme: \(theme.displayName)",
@@ -119,7 +150,7 @@ public struct CommandPaletteView: View {
             ) { preferences.theme = theme })
         }
 
-        // 4. Insert Templates
+        // 5. Insert Templates
         list.append(CommandPaletteItem(
             title: "Insert Table",
             subtitle: "Insert formatted 3-column Markdown table",
@@ -148,11 +179,12 @@ public struct CommandPaletteView: View {
             category: "Insert"
         ) { onInsertSnippet("mermaid") })
 
-        // 5. File & Export
+        // 6. File & Export
         list.append(CommandPaletteItem(
             title: "Export as PDF…",
             subtitle: "Paginated vector PDF document",
             icon: "arrow.down.doc",
+            shortcut: sc(.exportPDF),
             category: "File & Export"
         ) { onExportPDF() })
 
@@ -160,7 +192,7 @@ public struct CommandPaletteView: View {
             title: "Export as Standalone HTML…",
             subtitle: "Self-contained HTML file with embedded styles",
             icon: "chevron.left.forwardslash.chevron.right",
-            shortcut: "⌘E",
+            shortcut: sc(.exportHTML),
             category: "File & Export"
         ) { onExportHTML() })
 
@@ -168,16 +200,16 @@ public struct CommandPaletteView: View {
             title: "Copy Formatted Rich Text",
             subtitle: "Copy formatted content to system clipboard",
             icon: "doc.on.doc",
-            shortcut: "⌥⌘C",
+            shortcut: sc(.copyRichText),
             category: "File & Export"
         ) { onCopyRichText() })
 
-        // 6. Application
+        // 7. Application
         list.append(CommandPaletteItem(
-            title: "Open Preferences…",
-            subtitle: "Open Lucid Settings window",
+            title: "Settings…",
+            subtitle: "Open Lucid Preferences",
             icon: "gearshape",
-            shortcut: "⌘,",
+            shortcut: sc(.openSettings),
             category: "Application"
         ) { SettingsWindowManager.shared.showSettings(preferences: preferences) })
 
