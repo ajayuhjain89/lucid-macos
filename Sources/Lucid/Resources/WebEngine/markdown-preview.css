@@ -15,7 +15,7 @@
   /* Space reserved at the top of the document for the floating glass toolbar
      (toolbar height + breathing room). Content scrolls beneath the toolbar, so
      at rest the first heading clears it, and on scroll it passes underneath. */
-  --lucid-top-inset: 72px;
+  --lucid-top-inset: 48px;
   /* One centered column. `--lucid-content-width` is normally supplied by the
      app's Column Width preference; everything shares this width so left and
      right edges line up and the whole column stays centered in the window. */
@@ -147,6 +147,17 @@ body.vscode-body h6 {
   color: var(--lucid-fg-muted);
 }
 
+body.vscode-body h1 code,
+body.vscode-body h2 code,
+body.vscode-body h3 code,
+body.vscode-body h4 code,
+body.vscode-body h5 code,
+body.vscode-body h6 code {
+  font-size: 0.88em;
+  font-weight: 600;
+  vertical-align: 0.05em;
+}
+
 /* Heading anchors — floating in the margin, revealed on hover. */
 .lucid-anchor {
   position: absolute;
@@ -174,7 +185,7 @@ body.vscode-body h6:hover .lucid-anchor {
 }
 .lucid-anchor:hover {
   opacity: 1 !important;
-  text-decoration: underline;
+  text-decoration: none;
 }
 
 body.vscode-body p {
@@ -188,20 +199,20 @@ body.vscode-body b {
 }
 
 /* ============================================================
-   LINKS — extension treatment: underlined, external-link cue
+   LINKS — native macOS reading treatment: no permanent underline,
+   refined hover state and clear focus rings
    ============================================================ */
 body.vscode-body a {
   color: var(--lucid-link);
-  text-decoration: underline;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 2px;
-  transition: color 0.15s ease;
+  text-decoration: none;
+  transition: color 0.15s ease, opacity 0.15s ease;
 }
 body.vscode-body a:visited {
   color: var(--lucid-link);
 }
 body.vscode-body a:hover {
-  text-decoration-thickness: 2px;
+  opacity: 0.82;
+  text-decoration: none;
 }
 body.vscode-body a:focus-visible {
   outline: 2px solid var(--lucid-accent);
@@ -631,6 +642,7 @@ body[data-theme="sepia"] ::selection { background: rgba(140, 74, 30, 0.18); }
    ============================================================ */
 
 /* 1. Studio Dark */
+:root[data-theme="dark"],
 body.vscode-dark,
 body[data-theme="dark"] {
   --lucid-bg: #171717;
@@ -658,6 +670,7 @@ body[data-theme="dark"] {
 }
 
 /* 2. Editorial Light — extension default (light) values */
+:root[data-theme="light"],
 body[data-theme="light"] {
   --lucid-bg: #ffffff;
   --lucid-fg: #242424;
@@ -684,6 +697,7 @@ body[data-theme="light"] {
 }
 
 /* 3. Warm Book Sepia — same relationships, warm tones */
+:root[data-theme="sepia"],
 body[data-theme="sepia"] {
   --lucid-bg: #fcf8f2;
   --lucid-fg: #382d22;
@@ -816,52 +830,197 @@ body.vscode-body #lucid-content > * {
 }
 
 /* ============================================================
-   MERMAID DIAGRAMS (macOS container + hover toolbar)
+   MERMAID DIAGRAMS — Overhauled bounded viewport, interactive
+   pan/zoom/fit/reset/expand, and floating glass toolbar
    ============================================================ */
-.mermaid-wrapper {
+.mermaid-container, .mermaid-wrapper {
   position: relative;
-  margin: 2em auto;
+  margin: 2.2em auto;
   max-width: var(--lucid-content-width, 1040px);
-  padding: 22px 20px;
   background: var(--lucid-diagram-bg);
   border: 1px solid var(--lucid-diagram-border);
   border-radius: 8px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  overflow-x: auto;
+  overflow: hidden;
   box-sizing: border-box;
 }
-.mermaid svg {
-  transform: scale(var(--lucid-mermaid-scale, 1.0));
-  transform-origin: center center;
-  transition: transform 0.15s ease;
-  max-width: 100%;
-}
+
 .mermaid-toolbar {
   position: absolute;
   top: 8px;
-  right: 10px;
+  right: 8px;
   display: flex;
+  align-items: center;
   gap: 3px;
+  padding: 3px 5px;
+  background: var(--lucid-details-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--lucid-diagram-border);
+  border-radius: 6px;
   opacity: 0;
   transition: opacity 0.18s ease;
-  z-index: 10;
+  z-index: 20;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16);
 }
-.mermaid-wrapper:hover .mermaid-toolbar { opacity: 1; }
-.lucid-btn-zoom, .lucid-btn-copy-svg, .lucid-btn-save-svg {
-  padding: 2px 7px;
+
+.mermaid-container:hover .mermaid-toolbar,
+.mermaid-wrapper:hover .mermaid-toolbar,
+.mermaid-toolbar:hover,
+.mermaid-container.is-active .mermaid-toolbar {
+  opacity: 1;
+}
+
+.mermaid-toolbar-sep {
+  display: inline-block;
+  width: 1px;
+  height: 12px;
+  background: var(--lucid-diagram-border);
+  margin: 0 2px;
+}
+
+.lucid-mermaid-btn,
+.lucid-btn-zoom,
+.lucid-btn-copy-svg,
+.lucid-btn-save-svg {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 7px;
   font: 500 11px var(--lucid-font-family);
   color: var(--lucid-fg-muted);
-  background: rgba(128, 128, 128, 0.10);
-  border: 1px solid var(--lucid-diagram-border);
+  background: transparent;
+  border: 1px solid transparent;
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.15s ease;
+  user-select: none;
+  line-height: 1;
 }
-.lucid-btn-zoom:hover, .lucid-btn-copy-svg:hover, .lucid-btn-save-svg:hover {
-  background: rgba(128, 128, 128, 0.2);
+
+.lucid-mermaid-btn:hover,
+.lucid-btn-zoom:hover,
+.lucid-btn-copy-svg:hover,
+.lucid-btn-save-svg:hover {
+  background: rgba(128, 128, 128, 0.16);
   color: var(--lucid-fg);
+}
+
+.lucid-mermaid-btn.active {
+  background: var(--lucid-accent);
+  color: #ffffff;
+}
+
+.mermaid-viewport {
+  position: relative;
+  width: 100%;
+  min-height: 220px;
+  max-height: 560px;
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 32px 20px;
+  box-sizing: border-box;
+  touch-action: pan-y;
+}
+
+.mermaid-viewport.is-panning,
+.mermaid-viewport.is-dragging {
+  touch-action: none;
+}
+
+.mermaid-viewport.is-panning {
+  cursor: grab;
+}
+
+.mermaid-viewport.is-dragging {
+  cursor: grabbing !important;
+}
+
+.mermaid-canvas {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  transform-origin: center center;
+  transition: transform 0.08s ease-out;
+  will-change: transform;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+}
+
+.mermaid svg {
+  display: block;
+  /* Readability floor: diagrams never shrink below legible scale */
+  min-width: 280px;
+  max-width: none !important;
+  height: auto;
+}
+
+/* ============================================================
+   MERMAID EXPAND MODAL — Full-window diagram inspection
+   ============================================================ */
+.lucid-mermaid-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.lucid-mermaid-modal.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.lucid-mermaid-modal-content {
+  position: relative;
+  width: 92vw;
+  height: 88vh;
+  background: var(--lucid-bg);
+  border: 1px solid var(--lucid-diagram-border);
+  border-radius: 12px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.lucid-mermaid-modal-header {
+  height: 42px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--lucid-diagram-border);
+  background: var(--lucid-details-bg);
+}
+
+.lucid-mermaid-modal-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--lucid-fg-secondary);
+}
+
+.lucid-mermaid-modal-body {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 32px;
 }
 
 /* ============================================================
