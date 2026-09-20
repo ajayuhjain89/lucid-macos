@@ -1,395 +1,494 @@
+/* ============================================================
+   LUCID READER — ported from the Lucid VS Code extension
+   (lucid/markdown-preview.css). The extension is the visual
+   source of truth; this file adapts its document design to the
+   native macOS shell (CSS-variable theming + #lucid-content DOM
+   + macOS-only reader features).
+   ============================================================ */
+
 :root {
   --lucid-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --lucid-font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+  --lucid-font-mono: "SFMono-Regular", ui-monospace, "SF Mono", Consolas, "Liberation Mono", Menlo, Courier, monospace;
   --lucid-font-serif: "New York", Charter, "Times New Roman", serif;
   --lucid-font-size: 18px;
   --lucid-line-height: 1.75;
-  --lucid-content-width: 1040px;
-  --lucid-accent: #2f81f7;
-  
-  --lucid-bg: #171717;
-  --lucid-fg: #e6e6e6;
-  --lucid-fg-heading: #ffffff;
-  --lucid-fg-muted: #8b949e;
-  --lucid-border: #454545;
-  --lucid-card-bg: #1f2329;
-  --lucid-code-bg: #2a2a2a;
-  --lucid-code-fg: #ffb4b4;
-  --lucid-pre-bg: #1f2329;
-  --lucid-pre-fg: #f4f7fb;
-  --lucid-pre-border: #343a43;
-  --lucid-table-header: #252525;
-  --lucid-quote-border: #666666;
-  --lucid-quote-fg: #b8b8b8;
-  --lucid-shadow: 0 8px 24px rgba(20, 24, 30, 0.12);
-}
+  /* Space reserved at the top of the document for the floating glass toolbar
+     (toolbar height + breathing room). Content scrolls beneath the toolbar, so
+     at rest the first heading clears it, and on scroll it passes underneath. */
+  --lucid-top-inset: 72px;
+  /* One centered column. `--lucid-content-width` is normally supplied by the
+     app's Column Width preference; everything shares this width so left and
+     right edges line up and the whole column stays centered in the window. */
+  --lucid-content-width: min(1200px, 90vw);
+  --lucid-reading-width: var(--lucid-content-width);
 
-body[data-theme="light"] {
-  --lucid-bg: #ffffff;
-  --lucid-fg: #242424;
-  --lucid-fg-heading: #171717;
-  --lucid-fg-muted: #57606a;
-  --lucid-border: #dddddd;
-  --lucid-card-bg: #f8f9fa;
-  --lucid-code-bg: #f2f2f2;
-  --lucid-code-fg: #9b1c1c;
-  --lucid-pre-bg: #1f2329;
-  --lucid-pre-fg: #f4f7fb;
-  --lucid-pre-border: #343a43;
-  --lucid-table-header: #f5f5f5;
-  --lucid-quote-border: #c9c9c9;
-  --lucid-quote-fg: #555555;
-  --lucid-accent: #1769aa;
-  --lucid-shadow: 0 8px 24px rgba(20, 24, 30, 0.12);
-}
-
-body[data-theme="dark"] {
-  --lucid-bg: #171717;
-  --lucid-fg: #e6e6e6;
-  --lucid-fg-heading: #ffffff;
-  --lucid-fg-muted: #8b949e;
-  --lucid-border: #454545;
-  --lucid-card-bg: #1f2329;
-  --lucid-code-bg: #2a2a2a;
-  --lucid-code-fg: #ffb4b4;
-  --lucid-pre-bg: #1f2329;
-  --lucid-pre-fg: #f4f7fb;
-  --lucid-pre-border: #343a43;
-  --lucid-table-header: #252525;
-  --lucid-quote-border: #666666;
-  --lucid-quote-fg: #b8b8b8;
-  --lucid-accent: #2f81f7;
-  --lucid-shadow: 0 8px 24px rgba(20, 24, 30, 0.4);
-}
-
-body[data-theme="sepia"] {
-  --lucid-bg: #fbf0d9;
-  --lucid-fg: #433422;
-  --lucid-fg-heading: #2d2216;
-  --lucid-fg-muted: #796855;
-  --lucid-border: #e2d5c1;
-  --lucid-card-bg: #f3e7cf;
-  --lucid-code-bg: #eee1cc;
-  --lucid-code-fg: #9e4324;
-  --lucid-pre-bg: #2d261e;
-  --lucid-pre-fg: #f4ecdf;
-  --lucid-pre-border: #4a3e31;
-  --lucid-table-header: #ede2cd;
-  --lucid-quote-border: #d4c4ad;
-  --lucid-quote-fg: #63523f;
-  --lucid-accent: #a05a2c;
-  --lucid-shadow: 0 4px 16px rgba(67, 52, 34, 0.08);
-}
-
-body[data-theme="oled"] {
-  --lucid-bg: #000000;
-  --lucid-fg: #eaeaea;
-  --lucid-fg-heading: #ffffff;
-  --lucid-fg-muted: #888888;
-  --lucid-border: #222222;
-  --lucid-card-bg: #0d0d0d;
-  --lucid-code-bg: #141414;
-  --lucid-code-fg: #ff857f;
-  --lucid-pre-bg: #0a0a0a;
-  --lucid-pre-fg: #ededed;
-  --lucid-pre-border: #222222;
-  --lucid-table-header: #111111;
-  --lucid-quote-border: #262626;
-  --lucid-quote-fg: #888888;
+  /* Interactive accent (user-customizable via preferences). */
   --lucid-accent: #388bfd;
-  --lucid-shadow: 0 8px 24px rgba(0, 0, 0, 0.7);
-}
+  /* Link colour defaults to the accent; sepia overrides it to warm brown. */
+  --lucid-link: var(--lucid-accent);
 
-body[data-theme="nord"] {
-  --lucid-bg: #2e3440;
-  --lucid-fg: #eceff4;
-  --lucid-fg-heading: #eceff4;
-  --lucid-fg-muted: #d8dee9;
-  --lucid-border: #434c5e;
-  --lucid-card-bg: #3b4252;
-  --lucid-code-bg: #3b4252;
-  --lucid-code-fg: #ebcb8b;
-  --lucid-pre-bg: #242933;
-  --lucid-pre-fg: #eceff4;
-  --lucid-pre-border: #4c566a;
-  --lucid-table-header: #3b4252;
-  --lucid-quote-border: #4c566a;
-  --lucid-quote-fg: #e5e9f0;
-  --lucid-accent: #88c0d0;
-  --lucid-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-}
+  /* Studio Dark (default) — extension .vscode-dark values. */
+  --lucid-bg: #171717;
+  --lucid-fg: #e6e6e6;
+  --lucid-fg-heading: #ffffff;
+  --lucid-fg-secondary: #cfcfcf;
+  --lucid-fg-muted: #a8a8a8;
+  --lucid-fg-tertiary: #8b95a1;
+  --lucid-border: #454545;
+  --lucid-code-fg: #ffb4b4;
+  --lucid-code-bg: #2a2a2a;
+  --lucid-quote-fg: #b8b8b8;
+  --lucid-quote-border: #666666;
+  --lucid-table-header-bg: #252525;
+  --lucid-table-stripe: #1e1e1e;
+  --lucid-table-hover: #262b31;
+  --lucid-details-bg: #1c1c1c;
+  --lucid-details-bg-open: #202020;
+  --lucid-toc-bg: #1e1e1e;
+  --lucid-figcaption: #a8a8a8;
+  --lucid-kbd-bg: #2a2a2a;
+  --lucid-kbd-border: #555555;
+  --lucid-diagram-bg: #1a1a1a;
+  --lucid-diagram-border: rgba(255, 255, 255, 0.06);
 
-body[data-theme="dracula"] {
-  --lucid-bg: #282a36;
-  --lucid-fg: #f8f8f2;
-  --lucid-fg-heading: #50fa7b;
-  --lucid-fg-muted: #6272a4;
-  --lucid-border: #44475a;
-  --lucid-card-bg: #343746;
-  --lucid-code-bg: #44475a;
-  --lucid-code-fg: #ff79c6;
-  --lucid-pre-bg: #1e1f29;
-  --lucid-pre-fg: #f8f8f2;
-  --lucid-pre-border: #44475a;
-  --lucid-table-header: #343746;
-  --lucid-quote-border: #6272a4;
-  --lucid-quote-fg: #f1fa8c;
-  --lucid-accent: #bd93f9;
-  --lucid-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  /* Code surfaces stay graphite across every theme (extension keeps
+     `pre` at #1f2329 !important regardless of the active theme). */
+  --lucid-pre-bg: #1f2329;
+  --lucid-pre-fg: #f4f7fb;
+  --lucid-pre-border: #343a43;
+  --lucid-codebar-bg: #191d23;
+  --lucid-codebar-border: #333a43;
 }
 
 html {
   scroll-behavior: smooth;
+  /* Anchor/heading/find navigation lands below the floating toolbar, never
+     hidden beneath it. */
+  scroll-padding-top: var(--lucid-top-inset);
 }
 
-body {
+body.vscode-body {
   box-sizing: border-box;
   max-width: var(--lucid-content-width, 1040px);
   margin: 0 auto;
-  padding: 48px 40px 100px;
+  padding: var(--lucid-top-inset) 40px 88px;
   color: var(--lucid-fg);
   background: var(--lucid-bg);
   font-family: var(--lucid-font-family);
-  font-size: var(--lucid-font-size, 18px);
-  line-height: var(--lucid-line-height, 1.75);
+  font-size: var(--lucid-font-size);
+  line-height: var(--lucid-line-height);
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  transition: background 0.15s ease, color 0.15s ease;
+  text-rendering: optimizeLegibility;
   position: relative;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
-/* In-Place Live Editing on the Go */
-#lucid-content[contenteditable="true"] {
-  outline: none;
-  cursor: text;
-  min-height: 80vh;
+/* Responsive gutters: keep safe margins on small windows. The top inset stays
+   constant because the toolbar height does not change with window width. */
+@media (max-width: 820px) {
+  body.vscode-body { padding: var(--lucid-top-inset) 24px 72px; }
 }
-#lucid-content[contenteditable="true"] h1:hover,
-#lucid-content[contenteditable="true"] h2:hover,
-#lucid-content[contenteditable="true"] h3:hover,
-#lucid-content[contenteditable="true"] p:hover,
-#lucid-content[contenteditable="true"] li:hover,
-#lucid-content[contenteditable="true"] td:hover,
-#lucid-content[contenteditable="true"] th:hover {
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 4px;
+@media (max-width: 560px) {
+  body.vscode-body { padding: var(--lucid-top-inset) 16px 56px; }
 }
 
-/* Focus Mode */
-body.lucid-focus-mode #lucid-content > * {
-  opacity: 0.25;
-  transition: opacity 0.25s ease;
-}
-body.lucid-focus-mode #lucid-content > *:focus-within,
-body.lucid-focus-mode #lucid-content > *.lucid-active-block {
-  opacity: 1;
-}
-
-/* Typewriter Mode */
-body.lucid-typewriter-mode {
-  padding-bottom: 60vh !important;
-}
-
-/* Floating Selection Bubble Toolbar */
-.lucid-selection-bubble {
-  position: absolute;
-  z-index: 10000;
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  padding: 4px 6px;
-  background: rgba(26, 26, 26, 0.94);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 8px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
-  pointer-events: auto;
-  user-select: none;
-  animation: lucidBubbleFade 0.15s ease forwards;
-}
-@keyframes lucidBubbleFade {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.lucid-bubble-btn {
-  padding: 4px 8px;
-  font-size: 11px;
-  font-weight: 600;
-  color: #e6e6e6;
-  background: transparent;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background 0.1s ease, color 0.1s ease;
-}
-.lucid-bubble-btn:hover {
-  background: rgba(255, 255, 255, 0.18);
-  color: #ffffff;
-}
-
-h1, h2, h3, h4, h5, h6 {
+/* ============================================================
+   TYPOGRAPHY — extension heading language (strong presence)
+   ============================================================ */
+body.vscode-body h1,
+body.vscode-body h2,
+body.vscode-body h3,
+body.vscode-body h4,
+body.vscode-body h5,
+body.vscode-body h6 {
+  position: relative;
   color: var(--lucid-fg-heading);
   font-family: var(--lucid-font-family);
+  font-weight: 700;
   line-height: 1.25;
   letter-spacing: 0;
-  scroll-margin-top: 36px;
+  /* Small extra nudge; the toolbar clearance itself comes from
+     html { scroll-padding-top } so navigation targets are not double-offset. */
+  scroll-margin-top: 8px;
 }
 
-h1 {
+body.vscode-body h1 {
   margin: 0 0 32px;
   font-size: 2.35em;
   letter-spacing: -0.02em;
 }
 
-h2 {
-  margin-top: 2.4em;
-  margin-bottom: 16px;
+body.vscode-body h2 {
+  margin: 2.4em 0 0.7em;
   font-size: 1.55em;
 }
 
-h3 {
-  margin-top: 2em;
-  margin-bottom: 12px;
+body.vscode-body h3 {
+  margin: 2em 0 0.5em;
   font-size: 1.2em;
 }
 
-h4 {
-  margin-top: 1.4em;
-  margin-bottom: 8px;
+body.vscode-body h4 {
+  margin: 1.8em 0 0.4em;
   font-size: 1.05em;
 }
 
-h5, h6 {
-  margin-top: 1.2em;
-  margin-bottom: 8px;
-  font-size: 1em;
+body.vscode-body h5 {
+  margin: 1.6em 0 0.4em;
+  font-size: 0.95em;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--lucid-fg-secondary);
 }
 
-p {
+body.vscode-body h6 {
+  margin: 1.5em 0 0.4em;
+  font-size: 0.88em;
+  color: var(--lucid-fg-muted);
+}
+
+/* Heading anchors — floating in the margin, revealed on hover. */
+.lucid-anchor {
+  position: absolute;
+  left: -1.05em;
+  top: 0.12em;
+  opacity: 0;
+  color: var(--lucid-accent);
+  text-decoration: none;
+  font-size: 0.7em;
+  font-weight: 400;
+  line-height: 1;
+  padding: 2px 4px;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+  user-select: none;
+}
+body.vscode-body h1:hover .lucid-anchor,
+body.vscode-body h2:hover .lucid-anchor,
+body.vscode-body h3:hover .lucid-anchor,
+body.vscode-body h4:hover .lucid-anchor,
+body.vscode-body h5:hover .lucid-anchor,
+body.vscode-body h6:hover .lucid-anchor {
+  opacity: 0.55;
+  pointer-events: auto;
+}
+.lucid-anchor:hover {
+  opacity: 1 !important;
+  text-decoration: underline;
+}
+
+body.vscode-body p {
   margin: 0 0 1.35em;
 }
 
-a {
-  color: var(--lucid-accent);
-  text-decoration: none;
-  border-bottom: 1px solid transparent;
-  transition: border-color 0.15s ease;
-}
-a:hover {
-  border-bottom-color: var(--lucid-accent);
+body.vscode-body strong,
+body.vscode-body b {
+  font-weight: 700;
+  color: var(--lucid-fg-heading);
 }
 
-blockquote {
+/* ============================================================
+   LINKS — extension treatment: underlined, external-link cue
+   ============================================================ */
+body.vscode-body a {
+  color: var(--lucid-link);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  transition: color 0.15s ease;
+}
+body.vscode-body a:visited {
+  color: var(--lucid-link);
+}
+body.vscode-body a:hover {
+  text-decoration-thickness: 2px;
+}
+body.vscode-body a:focus-visible {
+  outline: 2px solid var(--lucid-accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* External-link cue. */
+body.vscode-body a[href^="http"]::after {
+  content: " \2197";
+  font-size: 0.72em;
+  vertical-align: 0.15em;
+  opacity: 0.55;
+}
+body.vscode-body a[href^="http"]:has(img)::after,
+body.vscode-body a[href^="http"]:has(code)::after {
+  content: none;
+}
+
+/* ============================================================
+   BLOCKQUOTES (ordinary, non-alert)
+   ============================================================ */
+body.vscode-body blockquote:not(.markdown-alert) {
   margin: 1.8em 0;
   padding: 0 1.25em;
   color: var(--lucid-quote-fg);
   border-left: 3px solid var(--lucid-quote-border);
   background: transparent;
+  border-radius: 0;
 }
-blockquote > :first-child { margin-top: 0; }
-blockquote > :last-child { margin-bottom: 0; }
+body.vscode-body blockquote:not(.markdown-alert) > :first-child { margin-top: 0; }
+body.vscode-body blockquote:not(.markdown-alert) > :last-child { margin-bottom: 0; }
+body.vscode-body blockquote blockquote { margin: 0.8em 0; }
 
-code {
+/* ============================================================
+   INLINE CODE — extension red-tinted chip, no border
+   ============================================================ */
+body.vscode-body code {
   padding: 0.12em 0.35em;
   color: var(--lucid-code-fg);
   background: var(--lucid-code-bg);
+  border: none;
   border-radius: 4px;
   font-family: var(--lucid-font-mono);
   font-size: 0.86em;
 }
 
-/* Enhanced Code Block matching Extension */
-.lucid-code-block {
+/* ============================================================
+   CODE BLOCKS — graphite surface, persistent code bar
+   ============================================================ */
+body.vscode-body pre {
   margin: 1.7em 0;
-  border: 1px solid var(--lucid-pre-border);
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: var(--lucid-shadow);
-  background: var(--lucid-pre-bg);
-}
-
-.lucid-code-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 6px 14px;
-  background: rgba(0, 0, 0, 0.25);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  user-select: none;
-}
-
-.lucid-code-lang {
-  font-family: var(--lucid-font-mono);
-  font-size: 0.72em;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  color: #8b949e;
-}
-
-.lucid-btn-copy-code, .lucid-btn-copy-svg, .lucid-btn-save-svg {
-  padding: 3px 8px;
-  font-size: 0.72em;
-  font-weight: 500;
-  color: #c9d1d9;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-.lucid-btn-copy-code:hover, .lucid-btn-copy-svg:hover, .lucid-btn-save-svg:hover {
-  background: rgba(255, 255, 255, 0.18);
-  color: #ffffff;
-}
-
-.lucid-code-block pre {
-  margin: 0;
   padding: 20px 22px;
   overflow-x: auto;
+  color: var(--lucid-pre-fg) !important;
+  background: var(--lucid-pre-bg) !important;
+  border: 1px solid var(--lucid-pre-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(20, 24, 30, 0.18);
+  line-height: 1.55;
+  box-sizing: border-box;
+}
+
+body.vscode-body pre code {
+  padding: 0;
+  color: inherit !important;
+  background: transparent !important;
   border: none;
   border-radius: 0;
-  box-shadow: none;
-  background: transparent !important;
-  line-height: 1.55;
-}
-
-.lucid-code-block pre code {
-  padding: 0;
-  color: var(--lucid-pre-fg) !important;
-  background: transparent !important;
   font-family: var(--lucid-font-mono);
   font-size: 0.86em;
+  -webkit-font-smoothing: antialiased;
+}
+/* Highlight.js base colour should follow the graphite surface, not the
+   theme's own dimmed grey, so plain code text stays bright like the extension. */
+body.vscode-body pre code.hljs { color: var(--lucid-pre-fg); background: transparent; }
+
+/* Persistent code bar (extension logic): language label + Copy. */
+body.vscode-body pre.lucid-enhanced {
+  position: relative;
+  padding-top: 46px;
+}
+body.vscode-body .lucid-codebar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  height: 34px;
+  padding: 0 14px;
+  background: var(--lucid-codebar-bg);
+  border-bottom: 1px solid var(--lucid-codebar-border);
+  border-radius: 8px 8px 0 0;
+  user-select: none;
+}
+body.vscode-body .lucid-lang {
+  margin-right: auto;
+  color: var(--lucid-fg-tertiary);
+  font-family: var(--lucid-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+body.vscode-body .lucid-copy {
+  padding: 3px 11px;
+  color: #cdd6e0;
+  background: transparent;
+  border: 1px solid #3f4854;
+  border-radius: 5px;
+  font: 500 11px var(--lucid-font-family);
+  cursor: pointer;
+  opacity: 0.85;
+  transition: color 0.15s ease, background 0.15s ease, opacity 0.15s ease;
+}
+body.vscode-body .lucid-copy:hover {
+  opacity: 1;
+  background: #2a313a;
+  color: #ffffff;
+}
+body.vscode-body .lucid-copy.lucid-copied {
+  color: #ffffff;
+  background: #1a7f37;
+  border-color: #1a7f37;
+  opacity: 1;
 }
 
-/* Tables matching Extension */
-table {
-  display: block;
+/* ASCII / box-drawing diagrams: crisp monospace presentation. */
+body.vscode-body pre.lucid-ascii-diagram code {
+  font-size: 13px;
+  line-height: 1.26;
+  letter-spacing: 0;
+}
+
+/* Code-block scrollbars (extension). */
+body.vscode-body pre::-webkit-scrollbar { height: 10px; }
+body.vscode-body pre::-webkit-scrollbar-thumb { background: #4a515b; border-radius: 6px; }
+body.vscode-body pre::-webkit-scrollbar-track { background: transparent; }
+
+/* ============================================================
+   TABLES — extension bordered grid, header fill, striping
+   ============================================================ */
+.lucid-table-wrapper {
+  max-width: 100%;
   width: 100%;
+  margin: 1.6em 0;
   overflow-x: auto;
+  display: flex;
+  justify-content: flex-start;
+  box-sizing: border-box;
+}
+.lucid-table-wrapper.lucid-wide {
+  max-width: var(--lucid-content-width, 1040px);
+}
+
+body.vscode-body table {
+  width: auto;
+  max-width: 100%;
+  margin: 0;
   border-collapse: collapse;
-  margin: 1.8em 0;
+  border-spacing: 0;
   font-size: 0.92em;
+  line-height: 1.55;
+  box-sizing: border-box;
 }
 
-th, td {
+body.vscode-body th,
+body.vscode-body td {
   padding: 10px 14px;
-  border: 1px solid var(--lucid-border);
   text-align: left;
+  vertical-align: top;
+  border: 1px solid var(--lucid-border);
 }
 
-th {
+body.vscode-body th {
   color: var(--lucid-fg-heading);
-  background: var(--lucid-table-header);
-  font-weight: 650;
+  background: var(--lucid-table-header-bg);
   font-family: var(--lucid-font-family);
+  font-weight: 650;
 }
 
-tr:nth-child(even) td {
-  background: rgba(255, 255, 255, 0.02);
+body.vscode-body tbody tr:nth-child(even) {
+  background: var(--lucid-table-stripe);
+}
+body.vscode-body tbody tr:hover {
+  background: var(--lucid-table-hover);
 }
 
-img {
+/* ---------- Table of Contents (typeset index) ---------- */
+body.vscode-body table.lucid-toc-table {
+  width: 100% !important;
+  max-width: var(--lucid-reading-width, 940px) !important;
+  margin: 1.4em auto !important;
+  border-collapse: collapse;
+  font-size: 0.95em;
+}
+body.vscode-body table.lucid-toc-table th {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--lucid-border);
+  padding: 6px 12px;
+  font-size: 0.8em;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--lucid-fg-tertiary);
+}
+body.vscode-body table.lucid-toc-table td {
+  padding: 6px 12px;
+  border: none;
+  border-bottom: 1px solid var(--lucid-border);
+}
+body.vscode-body table.lucid-toc-table tbody tr:nth-child(even),
+body.vscode-body table.lucid-toc-table tbody tr:hover {
+  background: transparent;
+}
+body.vscode-body table.lucid-toc-table td:first-child {
+  color: var(--lucid-fg-tertiary);
+  font-family: var(--lucid-font-mono);
+  font-size: 0.85em;
+  font-variant-numeric: tabular-nums;
+  width: 3.5em;
+  opacity: 0.75;
+}
+body.vscode-body table.lucid-toc-table td a {
+  color: var(--lucid-fg);
+  text-decoration: none;
+  font-weight: 450;
+}
+body.vscode-body table.lucid-toc-table td a:hover {
+  color: var(--lucid-accent);
+  text-decoration: none;
+}
+body.vscode-body table.lucid-toc-table td a::after { content: none !important; }
+
+/* ============================================================
+   HORIZONTAL RULES
+   ============================================================ */
+body.vscode-body hr {
+  margin: 3em 0;
+  border: 0;
+  border-top: 1px solid var(--lucid-border);
+}
+
+/* ============================================================
+   LISTS
+   ============================================================ */
+body.vscode-body ul,
+body.vscode-body ol {
+  margin: 0 0 1.35em;
+  padding-left: 1.6em;
+  box-sizing: border-box;
+}
+body.vscode-body li {
+  margin: 0.3em 0;
+}
+body.vscode-body li > ul,
+body.vscode-body li > ol {
+  margin: 0.3em 0 0.6em;
+}
+body.vscode-body li::marker {
+  color: var(--lucid-accent);
+}
+
+/* Task lists */
+body.vscode-body ul.contains-task-list {
+  padding-left: 0.35em;
+  list-style: none;
+}
+body.vscode-body .task-list-item {
+  margin: 0.4em 0;
+  list-style: none;
+}
+body.vscode-body .task-list-item input[type="checkbox"] {
+  width: 1.05em;
+  height: 1.05em;
+  margin: 0 0.55em 0 0;
+  accent-color: var(--lucid-accent);
+  vertical-align: -0.08em;
+}
+
+/* ============================================================
+   IMAGES
+   ============================================================ */
+body.vscode-body img {
   display: block;
   max-width: 100%;
   height: auto;
@@ -397,12 +496,16 @@ img {
   border-radius: 8px;
   box-shadow: 0 2px 14px rgba(0, 0, 0, 0.45);
 }
-
-p > img:only-child {
-  display: block;
+body[data-theme="light"] img,
+body[data-theme="sepia"] img {
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.12);
 }
-p > img:not(:only-child),
-a > img {
+/* Badges & inline images: exempt from block margins/shadows. */
+body.vscode-body img[src*="shields.io"],
+body.vscode-body img[src*="badge"],
+body.vscode-body img.badge,
+body.vscode-body p:has(> img:not(:only-child)) img,
+body.vscode-body a:has(> img) img {
   display: inline-block;
   margin: 0.2em 0.25em;
   border-radius: 4px;
@@ -410,96 +513,269 @@ a > img {
   vertical-align: middle;
 }
 
-hr {
-  margin: 3em 0;
-  border: 0;
-  border-top: 1px solid var(--lucid-border);
+/* ============================================================
+   FIGURES / CAPTIONS
+   ============================================================ */
+body.vscode-body figure {
+  margin: 2em 0;
+  text-align: center;
+}
+body.vscode-body figcaption {
+  margin-top: 0.6em;
+  color: var(--lucid-figcaption);
+  font-size: 0.88em;
 }
 
-ul, ol {
-  padding-left: 2em;
-  margin: 0 0 1.4em;
+/* ============================================================
+   DISCLOSURE (details / summary)
+   ============================================================ */
+body.vscode-body details:not(.markdown-alert) {
+  margin: 1.5em 0;
+  padding: 0.8em 1.1em;
+  background: var(--lucid-details-bg);
+  border: 1px solid var(--lucid-border);
+  border-radius: 8px;
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
-li {
-  margin: 0.35em 0;
+body.vscode-body details:not(.markdown-alert)[open] {
+  background: var(--lucid-details-bg-open);
 }
-li > p {
-  margin: 0;
-}
-
-/* Task lists */
-ul.contains-task-list {
-  padding-left: 0.35em;
-  list-style: none;
-}
-.task-list-item {
-  margin: 0.4em 0;
-  list-style: none;
-}
-.task-list-item input[type="checkbox"],
-.task-list-item-checkbox {
-  width: 1.05em;
-  height: 1.05em;
-  margin: 0 0.55em 0 0;
-  accent-color: #6cb6ff;
-  vertical-align: -0.08em;
+body.vscode-body details:not(.markdown-alert) > summary {
   cursor: pointer;
+  color: var(--lucid-fg-heading);
+  font-weight: 650;
+  user-select: none;
+}
+body.vscode-body details:not(.markdown-alert)[open] > summary {
+  margin-bottom: 0.85em;
+  padding-bottom: 0.4em;
+  border-bottom: 1px solid var(--lucid-border);
 }
 
-/* GitHub Alerts matching Extension EXACTLY */
-blockquote.markdown-alert,
-.lucid-alert {
+/* ============================================================
+   KEYBOARD / INS / MARK / SUB / SUP / ABBR / DL
+   ============================================================ */
+body.vscode-body kbd {
+  display: inline-block;
+  padding: 0.12em 0.5em;
+  color: var(--lucid-fg);
+  background: var(--lucid-kbd-bg);
+  border: 1px solid var(--lucid-kbd-border);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  font-family: var(--lucid-font-mono);
+  font-size: 0.82em;
+  line-height: 1.4;
+}
+body.vscode-body ins {
+  text-decoration: underline;
+  text-decoration-color: #4ac26b;
+  text-underline-offset: 2px;
+  background: rgba(74, 194, 107, 0.14);
+}
+body[data-theme="light"] ins,
+body[data-theme="sepia"] ins {
+  text-decoration-color: #1a7f37;
+  background: rgba(26, 127, 55, 0.1);
+}
+body.vscode-body mark {
+  padding: 0.05em 0.25em;
+  color: #fdf6d6;
+  background: #6b5d1b;
+  border-radius: 3px;
+}
+body[data-theme="light"] mark,
+body[data-theme="sepia"] mark {
+  color: #242424;
+  background: #fff3a3;
+}
+body.vscode-body sub,
+body.vscode-body sup {
+  font-size: 0.72em;
+  line-height: 0;
+}
+body.vscode-body abbr[title] {
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+  cursor: help;
+}
+body.vscode-body dl { margin: 1.35em 0; }
+body.vscode-body dt { margin-top: 1em; font-weight: 700; color: var(--lucid-fg-heading); }
+body.vscode-body dd { margin: 0.25em 0 0 1.4em; color: var(--lucid-fg-secondary); }
+
+/* ============================================================
+   FOOTNOTES
+   ============================================================ */
+body.vscode-body .footnotes {
+  margin-top: 3em;
+  padding-top: 1em;
+  color: var(--lucid-quote-fg);
+  border-top: 1px solid var(--lucid-border);
+  font-size: 0.9em;
+}
+body.vscode-body sup.footnote-ref a { text-decoration: none; }
+
+/* ============================================================
+   SELECTION
+   ============================================================ */
+body.vscode-body ::selection {
+  background: rgba(56, 139, 253, 0.24);
+}
+body[data-theme="light"] ::selection { background: rgba(23, 105, 170, 0.20); }
+body[data-theme="sepia"] ::selection { background: rgba(140, 74, 30, 0.18); }
+
+/* ============================================================
+   THEMES — extension colour values fed into the variable system
+   (only theme-scoped vars are redefined; --lucid-accent stays
+   user-controlled and is intentionally NOT overridden per theme).
+   ============================================================ */
+
+/* 1. Studio Dark */
+body.vscode-dark,
+body[data-theme="dark"] {
+  --lucid-bg: #171717;
+  --lucid-fg: #e6e6e6;
+  --lucid-fg-heading: #ffffff;
+  --lucid-fg-secondary: #cfcfcf;
+  --lucid-fg-muted: #a8a8a8;
+  --lucid-fg-tertiary: #8b95a1;
+  --lucid-border: #454545;
+  --lucid-code-fg: #ffb4b4;
+  --lucid-code-bg: #2a2a2a;
+  --lucid-quote-fg: #b8b8b8;
+  --lucid-quote-border: #666666;
+  --lucid-table-header-bg: #252525;
+  --lucid-table-stripe: #1e1e1e;
+  --lucid-table-hover: #262b31;
+  --lucid-details-bg: #1c1c1c;
+  --lucid-details-bg-open: #202020;
+  --lucid-toc-bg: #1e1e1e;
+  --lucid-figcaption: #a8a8a8;
+  --lucid-kbd-bg: #2a2a2a;
+  --lucid-kbd-border: #555555;
+  --lucid-diagram-bg: #1a1a1a;
+  --lucid-diagram-border: rgba(255, 255, 255, 0.06);
+}
+
+/* 2. Editorial Light — extension default (light) values */
+body[data-theme="light"] {
+  --lucid-bg: #ffffff;
+  --lucid-fg: #242424;
+  --lucid-fg-heading: #171717;
+  --lucid-fg-secondary: #444444;
+  --lucid-fg-muted: #666666;
+  --lucid-fg-tertiary: #8a8f98;
+  --lucid-border: #dddddd;
+  --lucid-code-fg: #9b1c1c;
+  --lucid-code-bg: #f2f2f2;
+  --lucid-quote-fg: #555555;
+  --lucid-quote-border: #c9c9c9;
+  --lucid-table-header-bg: #f5f5f5;
+  --lucid-table-stripe: #fafafa;
+  --lucid-table-hover: #f0f4f8;
+  --lucid-details-bg: #fafafa;
+  --lucid-details-bg-open: #fdfdfd;
+  --lucid-toc-bg: #f8f9fa;
+  --lucid-figcaption: #666666;
+  --lucid-kbd-bg: #f5f5f5;
+  --lucid-kbd-border: #cfcfcf;
+  --lucid-diagram-bg: #f6f8fa;
+  --lucid-diagram-border: rgba(0, 0, 0, 0.06);
+}
+
+/* 3. Warm Book Sepia — same relationships, warm tones */
+body[data-theme="sepia"] {
+  --lucid-bg: #fcf8f2;
+  --lucid-fg: #382d22;
+  --lucid-fg-heading: #261e16;
+  --lucid-fg-secondary: #63523f;
+  --lucid-fg-muted: #7d6b58;
+  --lucid-fg-tertiary: #9c8a76;
+  --lucid-link: #8c4a1e;
+  --lucid-border: #ddd0bb;
+  --lucid-code-fg: #9b1c1c;
+  --lucid-code-bg: #efe6d6;
+  --lucid-quote-fg: #63523f;
+  --lucid-quote-border: #c8b79c;
+  --lucid-table-header-bg: #f1e9db;
+  --lucid-table-stripe: #f7f1e6;
+  --lucid-table-hover: #efe6d6;
+  --lucid-details-bg: #f5efe3;
+  --lucid-details-bg-open: #f8f3ea;
+  --lucid-toc-bg: #f5efe3;
+  --lucid-figcaption: #7d6b58;
+  --lucid-kbd-bg: #f1e9db;
+  --lucid-kbd-border: #cbbaa0;
+  --lucid-diagram-bg: #f5efe3;
+  --lucid-diagram-border: rgba(56, 45, 34, 0.10);
+}
+
+/* ============================================================
+   CALLOUTS / GITHUB-STYLE ALERTS — extension design
+   ============================================================ */
+body.vscode-body blockquote.markdown-alert,
+body.vscode-body details.markdown-alert {
   --alert-color: #2f81f7;
   --alert-bg: rgba(47, 129, 247, 0.08);
   margin: 1.6em 0;
   padding: 14px 18px 15px;
-  color: #dedede;
-  background: color-mix(in srgb, var(--alert-color) 13%, #171717);
-  border: 1px solid color-mix(in srgb, var(--alert-color) 45%, transparent);
-  border-left: 5px solid var(--alert-color);
-  border-radius: 7px;
-}
-
-body[data-theme="light"] blockquote.markdown-alert,
-body[data-theme="light"] .lucid-alert {
-  color: #343434;
+  color: var(--lucid-fg);
   background: var(--alert-bg);
   border: 1px solid color-mix(in srgb, var(--alert-color) 32%, transparent);
   border-left: 5px solid var(--alert-color);
+  border-radius: 7px;
+  box-sizing: border-box;
+}
+body.vscode-body .markdown-alert-note { --alert-color: #2f81f7; --alert-bg: rgba(47, 129, 247, 0.08); }
+body.vscode-body .markdown-alert-tip { --alert-color: #1a7f37; --alert-bg: rgba(26, 127, 55, 0.08); }
+body.vscode-body .markdown-alert-important { --alert-color: #8250df; --alert-bg: rgba(130, 80, 223, 0.08); }
+body.vscode-body .markdown-alert-warning { --alert-color: #9a6700; --alert-bg: rgba(154, 103, 0, 0.10); }
+body.vscode-body .markdown-alert-caution { --alert-color: #cf222e; --alert-bg: rgba(207, 34, 46, 0.08); }
+/* Extended Obsidian-style variants (macOS bridge supports more types). */
+body.vscode-body .markdown-alert-example { --alert-color: #8250df; --alert-bg: rgba(130, 80, 223, 0.08); }
+body.vscode-body .markdown-alert-question,
+body.vscode-body .markdown-alert-info { --alert-color: #2f81f7; --alert-bg: rgba(47, 129, 247, 0.08); }
+body.vscode-body .markdown-alert-quote,
+body.vscode-body .markdown-alert-abstract { --alert-color: #57606a; --alert-bg: rgba(87, 96, 106, 0.08); }
+body.vscode-body .markdown-alert-bug,
+body.vscode-body .markdown-alert-failure { --alert-color: #cf222e; --alert-bg: rgba(207, 34, 46, 0.08); }
+body.vscode-body .markdown-alert-success { --alert-color: #1a7f37; --alert-bg: rgba(26, 127, 55, 0.08); }
+
+/* Dark alerts: tint the surface against the graphite page. */
+body.vscode-dark blockquote.markdown-alert,
+body[data-theme="dark"] blockquote.markdown-alert,
+body.vscode-dark details.markdown-alert,
+body[data-theme="dark"] details.markdown-alert {
+  color: #dedede;
+  background: color-mix(in srgb, var(--alert-color) 13%, #171717);
+  border-color: color-mix(in srgb, var(--alert-color) 45%, transparent);
+  border-left-color: var(--alert-color);
 }
 
-.lucid-alert-note { --alert-color: #2f81f7; --alert-bg: rgba(47, 129, 247, 0.08); }
-.lucid-alert-tip { --alert-color: #1a7f37; --alert-bg: rgba(26, 127, 55, 0.08); }
-.lucid-alert-important { --alert-color: #8250df; --alert-bg: rgba(130, 80, 223, 0.08); }
-.lucid-alert-warning { --alert-color: #9a6700; --alert-bg: rgba(154, 103, 0, 0.1); }
-.lucid-alert-caution { --alert-color: #cf222e; --alert-bg: rgba(207, 34, 46, 0.08); }
-
-.lucid-alert-example { --alert-color: #0891b2; --alert-bg: rgba(8, 145, 178, 0.08); }
-.lucid-alert-question { --alert-color: #d946ef; --alert-bg: rgba(217, 70, 239, 0.08); }
-.lucid-alert-quote { --alert-color: #64748b; --alert-bg: rgba(100, 116, 139, 0.08); }
-.lucid-alert-abstract { --alert-color: #0284c7; --alert-bg: rgba(2, 132, 199, 0.08); }
-.lucid-alert-bug { --alert-color: #e11d48; --alert-bg: rgba(225, 29, 72, 0.08); }
-.lucid-alert-info { --alert-color: #0284c7; --alert-bg: rgba(2, 132, 199, 0.08); }
-.lucid-alert-success { --alert-color: #16a34a; --alert-bg: rgba(22, 163, 74, 0.08); }
-.lucid-alert-failure { --alert-color: #dc2626; --alert-bg: rgba(220, 38, 38, 0.08); }
-
-.lucid-alert-title,
-.markdown-alert-title {
+body.vscode-body .markdown-alert-title {
   display: flex;
   align-items: center;
   gap: 0.52em;
   margin-bottom: 0.55em;
   color: var(--alert-color);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--lucid-font-family);
   font-size: 0.86em;
   font-weight: 750;
   letter-spacing: 0.045em;
   line-height: 1.35;
   text-transform: uppercase;
 }
+body.vscode-body details.markdown-alert > summary {
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+body.vscode-body details.markdown-alert > summary .markdown-alert-title {
+  margin-bottom: 0;
+}
 
-.lucid-alert-icon,
-.markdown-alert-icon {
+/* Filled-circle icon badge (extension look). */
+body.vscode-body .markdown-alert-icon {
   display: inline-grid;
   width: 1.28em;
   height: 1.28em;
@@ -508,130 +784,210 @@ body[data-theme="light"] .lucid-alert {
   background: var(--alert-color);
   border-radius: 50%;
   font-size: 0.82em;
-  font-weight: 800;
   line-height: 1;
+  flex: none;
 }
-
-.lucid-alert-icon svg {
-  width: 0.75em;
-  height: 0.75em;
+body.vscode-body .markdown-alert-icon svg {
+  width: 0.8em;
+  height: 0.8em;
   fill: #ffffff;
 }
+body.vscode-body blockquote.markdown-alert > p:last-child,
+body.vscode-body .markdown-alert-content > :last-child {
+  margin-bottom: 0;
+}
+body.vscode-body .markdown-alert-content { margin-top: 0.35em; }
+body.vscode-body details.markdown-alert[open] .markdown-alert-content { margin-top: 0.85em; }
 
-/* Collapsible Callouts */
-details.lucid-alert {
-  padding: 12px 18px;
+/* ============================================================
+   COLUMN LAYOUT
+   A single column, centered in the window. Every top-level block
+   shares the same width, so prose, code blocks, and tables all
+   line up on both edges. Content that is genuinely wider than the
+   column (large tables, ASCII diagrams) scrolls horizontally
+   inside its own block rather than breaking the alignment.
+   ============================================================ */
+body.vscode-body #lucid-content {
+  max-width: var(--lucid-content-width, 1200px);
+  margin: 0 auto;
 }
-details.lucid-alert summary {
-  cursor: pointer;
-  outline: none;
-}
-details.lucid-alert summary::-webkit-details-marker {
-  display: none;
-}
-details.lucid-alert[open] summary {
-  margin-bottom: 10px;
-}
-
-/* Breakout layout */
-body:not(.no-breakout) table,
-body:not(.no-breakout) .lucid-code-block,
-body:not(.no-breakout) .mermaid-wrapper {
-  max-width: 100vw;
-  width: calc(100% + 64px);
-  margin-left: -32px;
-  margin-right: -32px;
+body.vscode-body #lucid-content > * {
+  max-width: 100%;
 }
 
-/* Mermaid styling & Toolbar */
+/* ============================================================
+   MERMAID DIAGRAMS (macOS container + hover toolbar)
+   ============================================================ */
 .mermaid-wrapper {
   position: relative;
-  margin: 2.4em 0;
-  padding: 28px 24px;
-  background: var(--lucid-card-bg);
-  border: 1px solid var(--lucid-border);
+  margin: 2em auto;
+  max-width: var(--lucid-content-width, 1040px);
+  padding: 22px 20px;
+  background: var(--lucid-diagram-bg);
+  border: 1px solid var(--lucid-diagram-border);
   border-radius: 8px;
-  box-shadow: var(--lucid-shadow);
   display: flex;
   justify-content: center;
   align-items: center;
   overflow-x: auto;
+  box-sizing: border-box;
+}
+.mermaid svg {
+  transform: scale(var(--lucid-mermaid-scale, 1.0));
+  transform-origin: center center;
+  transition: transform 0.15s ease;
+  max-width: 100%;
 }
 .mermaid-toolbar {
   position: absolute;
   top: 8px;
-  right: 12px;
+  right: 10px;
   display: flex;
-  gap: 6px;
+  gap: 3px;
   opacity: 0;
-  transition: opacity 0.2s ease;
+  transition: opacity 0.18s ease;
+  z-index: 10;
 }
-.mermaid-wrapper:hover .mermaid-toolbar {
-  opacity: 1;
+.mermaid-wrapper:hover .mermaid-toolbar { opacity: 1; }
+.lucid-btn-zoom, .lucid-btn-copy-svg, .lucid-btn-save-svg {
+  padding: 2px 7px;
+  font: 500 11px var(--lucid-font-family);
+  color: var(--lucid-fg-muted);
+  background: rgba(128, 128, 128, 0.10);
+  border: 1px solid var(--lucid-diagram-border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.lucid-btn-zoom:hover, .lucid-btn-copy-svg:hover, .lucid-btn-save-svg:hover {
+  background: rgba(128, 128, 128, 0.2);
+  color: var(--lucid-fg);
 }
 
-/* KaTeX Equations & Formula Blocks */
+/* ============================================================
+   MATH (KaTeX) — extension sizing + macOS copy button
+   ============================================================ */
+body.vscode-body .katex { font-size: 1.05em; }
+body.vscode-body .katex-display {
+  margin: 1.5em 0;
+  padding: 0.5em 0.2em;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+body.vscode-body .katex-display > .katex { white-space: nowrap; }
+
 .lucid-math-block {
   position: relative;
-  margin: 1.8em 0;
-  padding: 12px 0;
+  margin: 1.6em auto;
+  padding: 8px 0;
   display: flex;
   justify-content: center;
   align-items: center;
   overflow-x: auto;
-  overflow-y: hidden;
+  font-size: calc(var(--lucid-math-scale, 1.0) * 1em);
+  box-sizing: border-box;
 }
-.lucid-math-block:hover .lucid-btn-copy-latex {
-  opacity: 1;
-}
+.lucid-math-block:hover .lucid-btn-copy-latex { opacity: 1; }
 .lucid-btn-copy-latex {
   position: absolute;
-  top: 4px;
-  right: 8px;
+  top: 2px;
+  right: 6px;
   opacity: 0;
   padding: 2px 7px;
-  font-size: 0.7em;
+  font: 500 11px var(--lucid-font-family);
   color: var(--lucid-fg-muted);
-  background: var(--lucid-card-bg);
+  background: var(--lucid-pre-bg);
   border: 1px solid var(--lucid-border);
   border-radius: 4px;
   cursor: pointer;
   transition: opacity 0.15s ease;
 }
-.katex-display {
-  margin: 0 !important;
-}
 
-/* In-Page Search Highlights */
+/* ============================================================
+   FIND HIGHLIGHTS (macOS in-page find)
+   ============================================================ */
 mark.lucid-find-match {
-  background: #ffdf5d;
-  color: #171717;
-  padding: 1px 2px;
+  padding: 0;
+  color: inherit;
+  background: rgba(56, 139, 253, 0.32);
   border-radius: 2px;
 }
 mark.lucid-find-active {
-  background: #ff9800 !important;
-  color: #000000 !important;
-  outline: 2px solid #e65100;
-  border-radius: 2px;
+  background: #ff9632;
+  color: #1a1200;
 }
 
-/* Footnote Tooltip */
-.lucid-footnote-tooltip {
-  position: absolute;
-  z-index: 1000;
-  max-width: 320px;
-  padding: 10px 14px;
-  font-size: 0.85em;
-  color: var(--lucid-fg);
-  background: var(--lucid-card-bg);
-  border: 1px solid var(--lucid-border);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-  pointer-events: none;
-  animation: lucidTooltipFade 0.15s ease forwards;
+/* ============================================================
+   FOCUS MODE (dim inactive blocks)
+   ============================================================ */
+body.lucid-focus-mode #lucid-content > * {
+  transition: opacity 0.2s ease;
+  opacity: 0.32;
 }
-@keyframes lucidTooltipFade {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
+body.lucid-focus-mode #lucid-content > .lucid-active-block {
+  opacity: 1;
+}
+
+/* ============================================================
+   ERROR ISOLATION (math / diagram render failures)
+   ============================================================ */
+.lucid-math-error, .lucid-diagram-error {
+  padding: 10px 14px;
+  margin: 1.4em auto;
+  max-width: var(--lucid-reading-width, 720px);
+  background: rgba(207, 34, 46, 0.06);
+  border: 1px solid rgba(207, 34, 46, 0.22);
+  border-left: 3px solid #cf222e;
+  border-radius: 6px;
+  font-size: 0.88em;
+  box-sizing: border-box;
+}
+.lucid-math-error .lucid-error-msg, .lucid-diagram-error .lucid-error-title {
+  font-weight: 600;
+  color: #cf222e;
+  margin-bottom: 3px;
+}
+.lucid-math-error pre, .lucid-diagram-error pre {
+  margin: 4px 0 0;
+  padding: 6px 8px;
+  font-size: 0.85em;
+  background: rgba(0, 0, 0, 0.1);
+}
+
+/* ============================================================
+   NATIVE-FEELING SCROLLBARS
+   ============================================================ */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.2);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(128, 128, 128, 0.32); }
+
+/* ============================================================
+   PRINT / "Save as PDF"
+   ============================================================ */
+@media print {
+  body.vscode-body {
+    max-width: none;
+    padding: 0;
+    color: #000000;
+    background: #ffffff;
+    font-size: 12pt;
+  }
+  body.vscode-body #lucid-content > * { max-width: none !important; }
+  body.vscode-body pre {
+    color: #1a1a1a !important;
+    background: #f5f5f5 !important;
+    border: 1px solid #cccccc;
+    box-shadow: none;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  body.vscode-body pre code, body.vscode-body pre code.hljs { color: #1a1a1a !important; }
+  body.vscode-body a { color: #000000; }
+  body.vscode-body h2, body.vscode-body h3 { page-break-after: avoid; }
+  body.vscode-body pre, body.vscode-body table,
+  body.vscode-body blockquote, body.vscode-body .katex-display { page-break-inside: avoid; }
 }

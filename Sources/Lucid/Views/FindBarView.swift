@@ -15,14 +15,16 @@ public struct FindBarView: View {
     }
 
     public var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: LucidSpacing.small) {
             Image(systemName: "magnifyingglass")
-                .foregroundColor(.secondary)
+                .foregroundColor(LucidColors.textSecondary)
+                .font(.system(size: 12, weight: .medium))
 
             TextField("Find in document…", text: $query)
                 .textFieldStyle(.plain)
+                .font(LucidTypography.label)
                 .focused($isFieldFocused)
-                .frame(width: 180)
+                .frame(width: 190)
                 .onChange(of: query) { _, newQuery in
                     performFind(newQuery)
                 }
@@ -32,44 +34,54 @@ public struct FindBarView: View {
 
             if !query.isEmpty {
                 Text(matchCount > 0 ? "\(currentIndex) of \(matchCount)" : "No matches")
-                    .font(.caption.monospacedDigit())
-                    .foregroundColor(matchCount > 0 ? .secondary : .red)
-                    .padding(.horizontal, 4)
+                    .font(LucidTypography.metadata)
+                    .foregroundColor(matchCount > 0 ? LucidColors.textSecondary : LucidColors.warning)
+                    .padding(.horizontal, 2)
 
-                Button(action: findPrev) {
-                    Image(systemName: "chevron.up")
+                LucidIconButton(
+                    icon: "chevron.up",
+                    size: 22,
+                    iconSize: 10,
+                    helpText: "Previous Match",
+                    shortcutText: "⇧⌘G"
+                ) {
+                    findPrev()
                 }
-                .buttonStyle(.plain)
                 .disabled(matchCount == 0)
-                .help("Previous Match (⇧⌘G)")
-                .keyboardShortcut("g", modifiers: [.command, .shift])
 
-                Button(action: findNext) {
-                    Image(systemName: "chevron.down")
+                LucidIconButton(
+                    icon: "chevron.down",
+                    size: 22,
+                    iconSize: 10,
+                    helpText: "Next Match",
+                    shortcutText: "⌘G"
+                ) {
+                    findNext()
                 }
-                .buttonStyle(.plain)
                 .disabled(matchCount == 0)
-                .help("Next Match (⌘G)")
-                .keyboardShortcut("g", modifiers: .command)
             }
 
-            Button(action: closeFind) {
-                Image(systemName: "xmark.circle.fill")
-                    .foregroundColor(.secondary)
+            LucidIconButton(
+                icon: "xmark",
+                size: 22,
+                iconSize: 10,
+                helpText: "Close",
+                shortcutText: "Esc"
+            ) {
+                closeFind()
             }
-            .buttonStyle(.plain)
-            .help("Close (Esc)")
-            .keyboardShortcut(.cancelAction)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(.ultraThinMaterial)
-        .cornerRadius(8)
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(Color(NSColor.separatorColor), lineWidth: 0.5)
+        .padding(.horizontal, LucidSpacing.medium)
+        .padding(.vertical, LucidSpacing.xSmall)
+        .background(
+            LucidVisualEffectView(material: .menu, blendingMode: .withinWindow)
         )
-        .shadow(color: Color.black.opacity(0.12), radius: 8, x: 0, y: 4)
+        .clipShape(RoundedRectangle(cornerRadius: LucidRadius.medium))
+        .overlay(
+            RoundedRectangle(cornerRadius: LucidRadius.medium)
+                .stroke(LucidColors.subtleBorder, lineWidth: 0.5)
+        )
+        .shadow(color: Color.black.opacity(0.12), radius: 10, x: 0, y: 4)
         .onAppear {
             isFieldFocused = true
         }

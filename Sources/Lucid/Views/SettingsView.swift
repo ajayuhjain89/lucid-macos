@@ -10,39 +10,104 @@ public struct SettingsView: View {
 
     public var body: some View {
         TabView {
-            GeneralSettingsView(preferences: preferences)
-                .tabItem {
-                    Label("Appearance", systemImage: "paintpalette")
-                }
+            GeneralSettingsTab(preferences: preferences)
+                .tabItem { Label("General", systemImage: "gearshape") }
 
-            TypographySettingsView(preferences: preferences)
-                .tabItem {
-                    Label("Typography", systemImage: "textformat")
-                }
+            AppearanceSettingsTab(preferences: preferences)
+                .tabItem { Label("Appearance", systemImage: "paintpalette") }
 
-            InteractionSettingsView(preferences: preferences)
-                .tabItem {
-                    Label("Writing & Modes", systemImage: "pencil.and.outline")
-                }
+            EditorSettingsTab(preferences: preferences)
+                .tabItem { Label("Editor", systemImage: "pencil") }
 
-            CustomCSSSettingsView(preferences: preferences)
-                .tabItem {
-                    Label("Custom CSS", systemImage: "chevron.left.forwardslash.chevron.right")
-                }
+            PreviewSettingsTab(preferences: preferences)
+                .tabItem { Label("Preview", systemImage: "book") }
 
-            STEMSettingsView()
-                .tabItem {
-                    Label("STEM & Science", systemImage: "atom")
-                }
+            STEMSettingsTab(preferences: preferences)
+                .tabItem { Label("STEM & Math", systemImage: "atom") }
+
+            ShortcutsSettingsTab()
+                .tabItem { Label("Shortcuts", systemImage: "command") }
+
+            AdvancedSettingsTab(preferences: preferences)
+                .tabItem { Label("Advanced", systemImage: "wrench.and.screwdriver") }
         }
-        .frame(width: 560, height: 460)
-        .padding(20)
+        .padding(LucidSpacing.xLarge)
+        .frame(width: 680, height: 600)
     }
 }
 
-// MARK: - General Settings
-struct GeneralSettingsView: View {
+// MARK: - 1. General Settings Tab
+struct GeneralSettingsTab: View {
     @ObservedObject var preferences: LucidPreferences
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: LucidSpacing.sectionSpacing) {
+                // Presets Section
+                VStack(alignment: .leading, spacing: LucidSpacing.medium) {
+                    LucidSectionHeader(
+                        title: "Workflow Presets",
+                        subtitle: "Curated starting configurations tailored for focused writing styles."
+                    )
+
+                    LazyVGrid(columns: [GridItem(.flexible(), spacing: LucidSpacing.small), GridItem(.flexible(), spacing: LucidSpacing.small)], spacing: LucidSpacing.small) {
+                        ForEach(LucidPreset.allCases) { preset in
+                            LucidSelectableCard(action: {
+                                withAnimation(LucidMotion.state) { preferences.applyPreset(preset) }
+                            }) {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(preset.displayName)
+                                        .font(LucidTypography.labelMedium)
+                                        .foregroundColor(LucidColors.textPrimary)
+
+                                    Text(preset.description)
+                                        .font(LucidTypography.caption)
+                                        .foregroundColor(LucidColors.textSecondary)
+                                        .lineLimit(2)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                LucidDivider()
+
+                // Default View Mode
+                VStack(alignment: .leading, spacing: LucidSpacing.medium) {
+                    LucidSectionHeader(title: "Default Canvas")
+
+                    LucidSettingRow(
+                        title: "Startup View Mode",
+                        description: "The default presentation mode when opening a document."
+                    ) {
+                        Picker("", selection: $preferences.viewMode) {
+                            ForEach(ViewMode.allCases) { mode in
+                                Text(mode.displayName).tag(mode)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .fixedSize()
+                    }
+
+                }
+            }
+            .padding(LucidSpacing.small)
+        }
+    }
+}
+
+// MARK: - 2. Appearance Settings Tab
+struct AppearanceSettingsTab: View {
+    @ObservedObject var preferences: LucidPreferences
+
+    let curatedThemes: [(ThemeMode, String, Color, Color)] = [
+        (.dark, "Studio Dark", Color(hex: "#171717"), Color(hex: "#ffffff")),
+        (.light, "Editorial Light", Color(hex: "#ffffff"), Color(hex: "#171717")),
+        (.sepia, "Warm Book Sepia", Color(hex: "#fcf8f2"), Color(hex: "#382d22")),
+        (.system, "System Dynamic", Color(nsColor: NSColor.windowBackgroundColor), Color(nsColor: NSColor.labelColor))
+    ]
 
     let accentPresets = [
         ("#2f81f7", "Lucid Blue"),
@@ -51,235 +116,436 @@ struct GeneralSettingsView: View {
         ("#bf8700", "Gold"),
         ("#cf222e", "Red"),
         ("#0891b2", "Teal"),
-        ("#d946ef", "Pink")
+        ("#8b949e", "Graphite")
     ]
 
     var body: some View {
-        Form {
-            Section {
-                Picker("Theme:", selection: $preferences.theme) {
-                    ForEach(ThemeMode.allCases) { mode in
-                        Text(mode.displayName).tag(mode)
+        ScrollView {
+            VStack(alignment: .leading, spacing: LucidSpacing.sectionSpacing) {
+                // Theme Selection
+                VStack(alignment: .leading, spacing: LucidSpacing.medium) {
+                    LucidSectionHeader(
+                        title: "Themes",
+                        subtitle: "Calibrated color appearances designed for extended writing."
+                    )
+
+                    LazyVGrid(columns: [GridItem(.flexible(), spacing: LucidSpacing.small), GridItem(.flexible(), spacing: LucidSpacing.small)], spacing: LucidSpacing.small) {
+                        ForEach(curatedThemes, id: \.0) { mode, name, bg, fg in
+                            let isSelected = preferences.theme == mode
+                            LucidSelectableCard(isSelected: isSelected, action: {
+                                withAnimation(LucidMotion.state) { preferences.theme = mode }
+                            }) {
+                                HStack(spacing: LucidSpacing.medium) {
+                                    ZStack {
+                                        RoundedRectangle(cornerRadius: LucidRadius.micro)
+                                            .fill(bg)
+                                            .frame(width: 32, height: 22)
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: LucidRadius.micro)
+                                                    .stroke(Color.white.opacity(0.18), lineWidth: 0.8)
+                                            )
+                                        Circle()
+                                            .fill(fg)
+                                            .frame(width: 6, height: 6)
+                                    }
+
+                                    Text(name)
+                                        .font(LucidTypography.labelMedium)
+                                        .foregroundColor(LucidColors.textPrimary)
+                                        .lineLimit(1)
+
+                                    Spacer(minLength: LucidSpacing.small)
+
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundColor(.accentColor)
+                                        .font(.system(size: 13))
+                                        .opacity(isSelected ? 1 : 0)
+                                        .scaleEffect(isSelected ? 1 : 0.6)
+                                }
+                            }
+                        }
                     }
                 }
-                .pickerStyle(.menu)
+
+                LucidDivider()
+
+                // Accent Color
+                VStack(alignment: .leading, spacing: LucidSpacing.medium) {
+                    LucidSectionHeader(title: "Accent Color")
+
+                    HStack(spacing: LucidSpacing.large) {
+                        ForEach(accentPresets, id: \.0) { hex, name in
+                            LucidAccentSwatch(
+                                hex: hex,
+                                name: name,
+                                isSelected: preferences.accentColor == hex
+                            ) {
+                                withAnimation(LucidMotion.state) { preferences.accentColor = hex }
+                            }
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+
+                LucidDivider()
+
+                // Interface Density
+                VStack(alignment: .leading, spacing: LucidSpacing.medium) {
+                    LucidSectionHeader(title: "Interface Density")
+
+                    LucidSettingRow(
+                        title: "Spacing & Density",
+                        description: "Adjust padding and row heights across sidebar, toolbar, and status bar."
+                    ) {
+                        Picker("", selection: $preferences.density) {
+                            ForEach(InterfaceDensity.allCases) { d in
+                                Text(d.displayName).tag(d)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .fixedSize()
+                    }
+                }
+
+                LucidDivider()
 
                 HStack {
-                    Text("Accent Color:")
                     Spacer()
-                    HStack(spacing: 8) {
-                        ForEach(accentPresets, id: \.0) { hex, name in
-                            Circle()
-                                .fill(Color(hex: hex))
-                                .frame(width: 20, height: 20)
-                                .overlay(
-                                    Circle()
-                                        .stroke(Color.primary, lineWidth: preferences.accentColor == hex ? 2 : 0)
-                                        .padding(-2)
-                                )
-                                .onTapGesture {
-                                    preferences.accentColor = hex
-                                }
-                                .help(name)
+                    LucidTextButton("Reset Appearance to Defaults", systemImage: "arrow.counterclockwise") {
+                        withAnimation(LucidMotion.state) { preferences.resetAppearance() }
+                    }
+                }
+            }
+            .padding(LucidSpacing.small)
+        }
+    }
+}
+
+// MARK: - 3. Editor Settings Tab
+struct EditorSettingsTab: View {
+    @ObservedObject var preferences: LucidPreferences
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: LucidSpacing.sectionSpacing) {
+                // Typography
+                VStack(alignment: .leading, spacing: LucidSpacing.medium) {
+                    LucidSectionHeader(
+                        title: "Typography",
+                        subtitle: "Editor font family, sizing, and line height."
+                    )
+
+                    LucidSettingRow(title: "Font Family") {
+                        Picker("", selection: $preferences.fontFamily) {
+                            ForEach(FontFamily.allCases) { font in
+                                Text(font.displayName).tag(font)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .frame(width: 220)
+                    }
+
+                    LucidSettingRow(title: "Font Size") {
+                        HStack(spacing: LucidSpacing.small) {
+                            Slider(value: $preferences.fontSize, in: 12...28, step: 1)
+                                .frame(width: 160)
+                            Text("\(Int(preferences.fontSize)) pt")
+                                .font(LucidTypography.metadata)
+                                .foregroundColor(LucidColors.textSecondary)
+                                .frame(width: 44, alignment: .trailing)
+                        }
+                    }
+
+                    LucidSettingRow(title: "Line Height") {
+                        HStack(spacing: LucidSpacing.small) {
+                            Slider(value: $preferences.lineHeight, in: 1.3...2.4, step: 0.05)
+                                .frame(width: 160)
+                            Text(String(format: "%.2f", preferences.lineHeight))
+                                .font(LucidTypography.metadata)
+                                .foregroundColor(LucidColors.textSecondary)
+                                .frame(width: 44, alignment: .trailing)
                         }
                     }
                 }
 
-                Picker("Column Width:", selection: $preferences.contentWidth) {
-                    ForEach(ContentWidth.allCases) { width in
-                        Text(width.displayName).tag(width)
+                LucidDivider()
+
+                // Editing Behavior
+                VStack(alignment: .leading, spacing: LucidSpacing.medium) {
+                    LucidSectionHeader(title: "Behavior & Visuals")
+
+                    LucidSettingRow(title: "Line Numbers Gutter", description: "Display line numbers along the left edge.") {
+                        Toggle("", isOn: $preferences.lineNumbers)
+                            .toggleStyle(.switch)
+                    }
+
+                    LucidSettingRow(title: "Highlight Active Line", description: "Apply a subtle luminance lift to the current cursor line.") {
+                        Toggle("", isOn: $preferences.highlightCurrentLine)
+                            .toggleStyle(.switch)
+                    }
+
+                    LucidSettingRow(title: "Auto-Pair Delimiters", description: "Automatically insert closing brackets, quotes, and backticks.") {
+                        Toggle("", isOn: $preferences.autoPairDelimiters)
+                            .toggleStyle(.switch)
+                    }
+
+                    LucidSettingRow(title: "Auto-Indent on Return", description: "Maintain leading indentation and list markers when pressing Return.") {
+                        Toggle("", isOn: $preferences.autoIndent)
+                            .toggleStyle(.switch)
+                    }
+
+                    LucidSettingRow(title: "Soft Word Wrap", description: "Wrap long lines at the editor viewport edge.") {
+                        Toggle("", isOn: $preferences.wordWrap)
+                            .toggleStyle(.switch)
                     }
                 }
-                .pickerStyle(.menu)
 
-                Toggle("Signature Breakout Layout", isOn: $preferences.breakoutEnabled)
-                    .help("Allows tables, code blocks, and diagrams to expand gracefully 32px beyond the reading column.")
+                LucidDivider()
+
+                HStack {
+                    Spacer()
+                    LucidTextButton("Reset Editor to Defaults", systemImage: "arrow.counterclockwise") {
+                        withAnimation(LucidMotion.state) { preferences.resetEditor() }
+                    }
+                }
             }
+            .padding(LucidSpacing.small)
         }
-        .padding(20)
     }
 }
 
-// MARK: - Typography Settings with All System Fonts
-struct TypographySettingsView: View {
+// MARK: - 4. Preview Settings Tab
+struct PreviewSettingsTab: View {
     @ObservedObject var preferences: LucidPreferences
 
-    private var availableSystemFonts: [String] {
-        NSFontManager.shared.availableFontFamilies.sorted()
-    }
-
     var body: some View {
-        Form {
-            Section {
-                Picker("Font Family:", selection: $preferences.fontFamily) {
-                    ForEach(FontFamily.allCases) { font in
-                        Text(font.displayName).tag(font)
+        ScrollView {
+            VStack(alignment: .leading, spacing: LucidSpacing.sectionSpacing) {
+                // Layout & Reading Width
+                VStack(alignment: .leading, spacing: LucidSpacing.medium) {
+                    LucidSectionHeader(
+                        title: "Reading Canvas",
+                        subtitle: "Comfortable prose measure and breakout behavior."
+                    )
+
+                    LucidSettingRow(title: "Column Width") {
+                        Picker("", selection: $preferences.contentWidth) {
+                            ForEach(ContentWidth.allCases) { w in
+                                Text(w.displayName).tag(w)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .frame(width: 260)
+                    }
+
+                    LucidSettingRow(
+                        title: "Signature Breakout Layout",
+                        description: "Prose remains centered at 720px while wide code blocks, tables, and diagrams expand to the full canvas."
+                    ) {
+                        Toggle("", isOn: $preferences.breakoutEnabled)
+                            .toggleStyle(.switch)
+                    }
+
+                    LucidSettingRow(title: "Table Density") {
+                        Picker("", selection: $preferences.tableDensity) {
+                            ForEach(TableDensity.allCases) { d in
+                                Text(d.displayName).tag(d)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .fixedSize()
                     }
                 }
-                .pickerStyle(.segmented)
 
-                if preferences.fontFamily == .custom {
-                    Picker("Select System Font:", selection: $preferences.customFontName) {
-                        ForEach(availableSystemFonts, id: \.self) { fontName in
-                            Text(fontName).tag(fontName)
+                LucidDivider()
+
+                // Diagram & Math Scaling
+                VStack(alignment: .leading, spacing: LucidSpacing.medium) {
+                    LucidSectionHeader(title: "Visual Scales")
+
+                    LucidSettingRow(title: "Math Scale") {
+                        HStack(spacing: LucidSpacing.small) {
+                            Slider(value: $preferences.mathScale, in: 0.8...1.5, step: 0.1)
+                                .frame(width: 160)
+                            Text(String(format: "%.1f×", preferences.mathScale))
+                                .font(LucidTypography.metadata)
+                                .foregroundColor(LucidColors.textSecondary)
+                                .frame(width: 44, alignment: .trailing)
                         }
                     }
-                    .pickerStyle(.menu)
+
+                    LucidSettingRow(title: "Mermaid Scale") {
+                        HStack(spacing: LucidSpacing.small) {
+                            Slider(value: $preferences.mermaidScale, in: 0.8...1.5, step: 0.1)
+                                .frame(width: 160)
+                            Text(String(format: "%.1f×", preferences.mermaidScale))
+                                .font(LucidTypography.metadata)
+                                .foregroundColor(LucidColors.textSecondary)
+                                .frame(width: 44, alignment: .trailing)
+                        }
+                    }
                 }
 
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Text("Font Size:")
-                        Spacer()
-                        Text("\(Int(preferences.fontSize)) px")
-                            .font(.caption.monospacedDigit())
-                            .foregroundColor(.secondary)
-                    }
-                    Slider(value: $preferences.fontSize, in: 13...28, step: 1)
-                }
+                LucidDivider()
 
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Text("Line Height:")
-                        Spacer()
-                        Text(String(format: "%.2f", preferences.lineHeight))
-                            .font(.caption.monospacedDigit())
-                            .foregroundColor(.secondary)
+                HStack {
+                    Spacer()
+                    LucidTextButton("Reset Preview to Defaults", systemImage: "arrow.counterclockwise") {
+                        withAnimation(LucidMotion.state) { preferences.resetPreview() }
                     }
-                    Slider(value: $preferences.lineHeight, in: 1.3...2.4, step: 0.05)
                 }
             }
-
-            Section("Preview Sample") {
-                Text("Lucid Studio Typography: The quick brown fox jumps over the lazy dog. 1234567890.")
-                    .font(previewFont)
-                    .lineSpacing(CGFloat((preferences.lineHeight - 1.0) * preferences.fontSize))
-                    .padding(12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(NSColor.textBackgroundColor))
-                    .cornerRadius(6)
-            }
-        }
-        .padding(20)
-    }
-
-    private var previewFont: Font {
-        switch preferences.fontFamily {
-        case .sans: return .system(size: CGFloat(preferences.fontSize))
-        case .serif: return .custom("New York", size: CGFloat(preferences.fontSize))
-        case .mono: return .system(size: CGFloat(preferences.fontSize), design: .monospaced)
-        case .custom: return .custom(preferences.customFontName, size: CGFloat(preferences.fontSize))
+            .padding(LucidSpacing.small)
         }
     }
 }
 
-// MARK: - Interaction Settings (Focus & Typewriter)
-struct InteractionSettingsView: View {
+// MARK: - 5. STEM & Science Tab
+struct STEMSettingsTab: View {
     @ObservedObject var preferences: LucidPreferences
 
     var body: some View {
-        Form {
-            Section("Editing Modes") {
-                Toggle("Click-to-Edit in Reading View", isOn: $preferences.clickToEdit)
-                    .help("Allows clicking directly on text, headings, paragraphs, and tables while reading to edit them on the go.")
-
-                Toggle("Focus Mode (⌘⇧D)", isOn: $preferences.focusMode)
-                    .help("Dims non-active paragraphs to 25% opacity so you can concentrate exclusively on the current paragraph.")
-
-                Toggle("Typewriter Mode (⌘⇧T)", isOn: $preferences.typewriterMode)
-                    .help("Keeps the line you are currently typing on vertically centered on the screen.")
-            }
-
-            Section("File & Clipboard") {
-                Toggle("Live External File Watching", isOn: .constant(true))
-                    .disabled(true)
-                Text("Automatically refreshes when modified by external editors (VS Code, Neovim, Obsidian).")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-
-                Toggle("Direct Clipboard Image Pasting (⌘V)", isOn: .constant(true))
-                    .disabled(true)
-                Text("Paste screenshots directly from clipboard as inline images.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-        }
-        .padding(20)
-    }
-}
-
-// MARK: - Custom CSS Settings
-struct CustomCSSSettingsView: View {
-    @ObservedObject var preferences: LucidPreferences
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Inject Custom CSS")
-                .font(.headline)
-
-            Text("Write custom CSS rules to fine-tune every aspect of the typography, layout, or colors. Applied live instantly.")
-                .font(.caption)
-                .foregroundColor(.secondary)
-
-            TextEditor(text: $preferences.customCSS)
-                .font(.system(.body, design: .monospaced))
-                .padding(8)
-                .background(Color(NSColor.textBackgroundColor))
-                .cornerRadius(8)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color(NSColor.separatorColor), lineWidth: 0.5)
+        ScrollView {
+            VStack(alignment: .leading, spacing: LucidSpacing.sectionSpacing) {
+                LucidSectionHeader(
+                    title: "Technical Rendering Engines",
+                    subtitle: "Built-in KaTeX, chemical notation, and Mermaid diagram engines."
                 )
 
+                LucidSettingRow(
+                    title: "KaTeX Mathematics & Physics",
+                    description: "Renders differential equations, Dirac bra-ket notation, and matrices."
+                ) {
+                    Toggle("", isOn: $preferences.enableKaTeX)
+                        .toggleStyle(.switch)
+                }
+
+                LucidSettingRow(
+                    title: "Chemistry Notation (mhchem)",
+                    description: "Chemical stoichiometry, reaction equilibrium arrows, and electrochemistry."
+                ) {
+                    Toggle("", isOn: $preferences.enableMhchem)
+                        .toggleStyle(.switch)
+                        .disabled(!preferences.enableKaTeX)
+                }
+
+                LucidSettingRow(
+                    title: "Mermaid Diagrams",
+                    description: "Hardware architectures, control feedback loops, sequence and state diagrams."
+                ) {
+                    Toggle("", isOn: $preferences.enableMermaid)
+                        .toggleStyle(.switch)
+                }
+
+                LucidSettingRow(
+                    title: "Syntax Highlighting",
+                    description: "Software and hardware language highlighting (Python, C++, Rust, MATLAB, Verilog)."
+                ) {
+                    Toggle("", isOn: $preferences.enableSyntaxHighlighting)
+                        .toggleStyle(.switch)
+                }
+            }
+            .padding(LucidSpacing.small)
+        }
+    }
+}
+
+// MARK: - 6. Shortcuts Settings Tab
+struct ShortcutsSettingsTab: View {
+    @State private var filter: String = ""
+    let commands = LucidCommandRegistry.shared.commands.values.sorted { $0.title < $1.title }
+
+    private var filteredCommands: [LucidCommandMetadata] {
+        if filter.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return commands
+        }
+        let q = filter.lowercased()
+        return commands.filter { $0.title.lowercased().contains(q) || $0.subtitle.lowercased().contains(q) }
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: LucidSpacing.medium) {
+                LucidSectionHeader(
+                    title: "Keyboard Shortcuts",
+                    subtitle: "Standard macOS shortcuts configured across the application."
+                )
+
+                LucidSearchField(placeholder: "Filter shortcuts…", text: $filter, height: 28, fontSize: 12)
+
+                LazyVStack(spacing: 2) {
+                    ForEach(filteredCommands) { cmd in
+                        HStack(spacing: LucidSpacing.medium) {
+                            Image(systemName: cmd.icon)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(LucidColors.textSecondary)
+                                .frame(width: 20)
+
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(cmd.title)
+                                    .font(LucidTypography.label)
+                                    .foregroundColor(LucidColors.textPrimary)
+                                Text(cmd.subtitle)
+                                    .font(LucidTypography.caption)
+                                    .foregroundColor(LucidColors.textSecondary)
+                            }
+
+                            Spacer()
+
+                            if let shortcutStr = cmd.shortcutDisplayString {
+                                LucidShortcutBadge(shortcutStr)
+                            }
+                        }
+                        .padding(.vertical, 5)
+                        .padding(.horizontal, LucidSpacing.small)
+                    }
+                }
+            }
+            .padding(LucidSpacing.small)
+        }
+    }
+}
+
+// MARK: - 7. Advanced Settings Tab
+struct AdvancedSettingsTab: View {
+    @ObservedObject var preferences: LucidPreferences
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: LucidSpacing.medium) {
             HStack {
-                Button("Insert Sample: Gradient Headings") {
-                    preferences.customCSS += "\nh1 { background: linear-gradient(90deg, #2f81f7, #a371f7); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }\n"
-                }
-                .font(.caption)
-
-                Button("Insert Sample: Rounded Images") {
-                    preferences.customCSS += "\nimg { border-radius: 16px; border: 2px solid rgba(255,255,255,0.1); }\n"
-                }
-                .font(.caption)
-
+                LucidSectionHeader(
+                    title: "Custom CSS Injection",
+                    subtitle: "Scoped exclusively to the rendered preview document."
+                )
                 Spacer()
 
                 if !preferences.customCSS.isEmpty {
-                    Button("Clear") {
+                    LucidTextButton("Clear CSS", systemImage: "xmark") {
                         preferences.customCSS = ""
                     }
-                    .font(.caption)
                 }
             }
-        }
-        .padding(20)
-    }
-}
 
-// MARK: - STEM Settings
-struct STEMSettingsView: View {
-    var body: some View {
-        Form {
-            Section {
-                Toggle("Chemistry Formulas (\\ce{...} via mhchem)", isOn: .constant(true))
-                    .disabled(true)
-                Text("Renders stoichiometry, reaction equilibrium arrows (<=>), oxidation numbers, and battery electrochemistry.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+            TextEditor(text: $preferences.customCSS)
+                .font(LucidTypography.monoCode)
+                .padding(LucidSpacing.small)
+                .background(Color(nsColor: NSColor.textBackgroundColor))
+                .cornerRadius(LucidRadius.small)
+                .overlay(
+                    RoundedRectangle(cornerRadius: LucidRadius.small)
+                        .stroke(LucidColors.subtleBorder, lineWidth: 0.5)
+                )
 
-                Toggle("KaTeX Advanced Mathematics & Physics", isOn: .constant(true))
-                    .disabled(true)
-                Text("Supports AMS environments (align*, bmatrix, cases), Dirac notation, and vector calculus.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+            LucidDivider()
 
-                Toggle("Mermaid Architecture & Control Diagrams", isOn: .constant(true))
-                    .disabled(true)
-                Text("Interactive block diagrams, sequence timing charts, state machines, and flowcharts.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+            HStack {
+                LucidTextButton("Reset All Preferences…", systemImage: "arrow.counterclockwise", role: .destructive) {
+                    withAnimation(LucidMotion.state) { preferences.resetAll() }
+                }
+
+                Spacer()
             }
         }
-        .padding(20)
+        .padding(LucidSpacing.small)
     }
 }

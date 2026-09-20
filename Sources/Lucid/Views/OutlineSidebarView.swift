@@ -4,11 +4,35 @@ public struct OutlineSidebarView: View {
     let headings: [HeadingItem]
     let activeHeadingId: String?
     let onSelectHeading: (String) -> Void
+    @ObservedObject var preferences: LucidPreferences
     @State private var searchText = ""
+    @State private var isStatsPopoverPresented = false
 
-    public init(headings: [HeadingItem], activeHeadingId: String? = nil, onSelectHeading: @escaping (String) -> Void) {
+    // Contextual stats
+    var wordCount: Int = 0
+    var charCount: Int = 0
+    var readingTimeMinutes: Int = 1
+    /// Space reserved above the sidebar header so its search field clears the
+    /// floating glass toolbar, while the sidebar material runs continuously behind it.
+    var topInset: CGFloat = 0
+
+    public init(
+        headings: [HeadingItem],
+        activeHeadingId: String? = nil,
+        preferences: LucidPreferences = .shared,
+        wordCount: Int = 0,
+        charCount: Int = 0,
+        readingTimeMinutes: Int = 1,
+        topInset: CGFloat = 0,
+        onSelectHeading: @escaping (String) -> Void
+    ) {
         self.headings = headings
         self.activeHeadingId = activeHeadingId
+        self.preferences = preferences
+        self.wordCount = wordCount
+        self.charCount = charCount
+        self.readingTimeMinutes = readingTimeMinutes
+        self.topInset = topInset
         self.onSelectHeading = onSelectHeading
     }
 
@@ -21,79 +45,102 @@ public struct OutlineSidebarView: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Search Bar
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(.secondary)
-                TextField("Filter outline…", text: $searchText)
-                    .textFieldStyle(.plain)
-                if !searchText.isEmpty {
-                    Button(action: { searchText = "" }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.secondary)
+            // Clearance for the floating glass toolbar; the recessed sidebar
+            // material continues behind it for a single, layered surface.
+            if topInset > 0 {
+                Color.clear.frame(height: topInset)
+            }
+
+            // Search Bar & Contextual Stats Button
+            HStack(spacing: LucidSpacing.xSmall) {
+                LucidSearchField(
+                    placeholder: "Filter outline…",
+                    text: $searchText,
+                    height: 26,
+                    fontSize: 11
+                )
+
+                // Subtle contextual stats affordance
+                LucidIconButton(
+                    icon: "chart.bar",
+                    size: 26,
+                    iconSize: 11,
+                    helpText: "Document Statistics"
+                ) {
+                    isStatsPopoverPresented.toggle()
+                }
+                .popover(isPresented: $isStatsPopoverPresented, arrowEdge: .bottom) {
+                    LucidPopoverContainer {
+                        VStack(alignment: .leading, spacing: LucidSpacing.small) {
+                            Text("Document Statistics")
+                                .font(LucidTypography.labelMedium)
+                                .foregroundColor(LucidColors.textPrimary)
+
+                            LucidDivider()
+
+                            VStack(spacing: 5) {
+                                HStack {
+                                    Text("Words:").foregroundColor(LucidColors.textSecondary)
+                                    Spacer()
+                                    Text("\(wordCount.formatted())").monospacedDigit()
+                                        .foregroundColor(LucidColors.textPrimary)
+                                }
+                                HStack {
+                                    Text("Characters:").foregroundColor(LucidColors.textSecondary)
+                                    Spacer()
+                                    Text("\(charCount.formatted())").monospacedDigit()
+                                        .foregroundColor(LucidColors.textPrimary)
+                                }
+                                HStack {
+                                    Text("Reading Time:").foregroundColor(LucidColors.textSecondary)
+                                    Spacer()
+                                    Text("\(readingTimeMinutes) min")
+                                        .foregroundColor(LucidColors.textPrimary)
+                                }
+                                HStack {
+                                    Text("Headings:").foregroundColor(LucidColors.textSecondary)
+                                    Spacer()
+                                    Text("\(headings.count)").monospacedDigit()
+                                        .foregroundColor(LucidColors.textPrimary)
+                                }
+                            }
+                            .font(LucidTypography.metadata)
+                        }
+                        .frame(width: 190)
                     }
-                    .buttonStyle(.plain)
                 }
             }
-            .padding(10)
-            .background(Color(NSColor.controlBackgroundColor).opacity(0.6))
-            .cornerRadius(8)
-            .padding([.horizontal, .top], 12)
-            .padding(.bottom, 8)
+            .padding(.horizontal, LucidSpacing.medium)
+            .padding(.vertical, LucidSpacing.small)
 
-            Divider()
+            LucidDivider()
 
+            // Outline list
             if filteredHeadings.isEmpty {
-                VStack(spacing: 8) {
-                    Spacer()
-                    Image(systemName: "list.bullet.indent")
-                        .font(.system(size: 32))
-                        .foregroundColor(.secondary)
-                    Text(headings.isEmpty ? "No Headings Found" : "No Matches")
-                        .font(.headline)
-                        .foregroundColor(.secondary)
-                    Text(headings.isEmpty ? "Headings will appear here as you write." : "Try a different search term.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity)
+                LucidEmptyState(
+                    icon: "list.bullet.indent",
+                    title: headings.isEmpty ? "No Headings" : "No Matches",
+                    subtitle: headings.isEmpty ? "Headings will appear here as you write." : "Try a different search query."
+                )
+                .frame(maxHeight: .infinity)
             } else {
                 ScrollViewReader { proxy in
                     List(filteredHeadings) { heading in
                         let isActive = heading.id == activeHeadingId
-                        Button(action: {
+                        LucidSidebarRow(
+                            title: heading.text,
+                            level: heading.level,
+                            isActive: isActive
+                        ) {
                             onSelectHeading(heading.id)
-                        }) {
-                            HStack(spacing: 6) {
-                                Text("H\(heading.level)")
-                                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                    .padding(.horizontal, 4)
-                                    .padding(.vertical, 2)
-                                    .background(isActive ? Color.accentColor : Color.accentColor.opacity(0.15))
-                                    .foregroundColor(isActive ? .white : .accentColor)
-                                    .cornerRadius(4)
-
-                                Text(heading.text)
-                                    .font(.system(size: 13, weight: isActive ? .semibold : (heading.level <= 2 ? .medium : .regular)))
-                                    .foregroundColor(isActive ? .accentColor : .primary)
-                                    .lineLimit(1)
-                                    .truncationMode(.tail)
-                            }
-                            .padding(.leading, CGFloat((heading.level - 1) * 12))
-                            .padding(.vertical, 3)
-                            .padding(.horizontal, 4)
-                            .background(isActive ? Color.accentColor.opacity(0.1) : Color.clear)
-                            .cornerRadius(6)
-                            .contentShape(Rectangle())
                         }
-                        .buttonStyle(.plain)
+                        .frame(height: preferences.density.sidebarRowHeight)
                         .id(heading.id)
                     }
                     .listStyle(.sidebar)
                     .onChange(of: activeHeadingId) { _, newId in
                         if let id = newId {
-                            withAnimation {
+                            withAnimation(.easeInOut(duration: 0.18)) {
                                 proxy.scrollTo(id, anchor: .center)
                             }
                         }
@@ -101,6 +148,10 @@ public struct OutlineSidebarView: View {
                 }
             }
         }
-        .frame(minWidth: 200, idealWidth: 240)
+        .frame(minWidth: 180, idealWidth: 220, maxWidth: 300)
+        .background(
+            LucidVisualEffectView(material: .sidebar, blendingMode: .behindWindow)
+                .ignoresSafeArea()
+        )
     }
 }

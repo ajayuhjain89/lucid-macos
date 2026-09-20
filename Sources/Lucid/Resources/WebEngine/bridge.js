@@ -15,48 +15,9 @@
     failure: '<svg viewBox="0 0 16 16"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path></svg>'
   };
 
-  // Initialize Turndown Service
-  let turndownService = null;
-  if (typeof TurndownService !== 'undefined') {
-    turndownService = new TurndownService({
-      headingStyle: 'atx',
-      codeBlockStyle: 'fenced',
-      bulletListMarker: '-'
-    });
-
-    turndownService.addRule('katexDisplay', {
-      filter: function(node) {
-        return node.classList && node.classList.contains('lucid-math-block');
-      },
-      replacement: function(content, node) {
-        const raw = node.getAttribute('data-raw-latex');
-        return raw ? '\n\n$$\n' + decodeURIComponent(raw) + '\n$$\n\n' : content;
-      }
-    });
-
-    turndownService.addRule('mermaidBlock', {
-      filter: function(node) {
-        return node.classList && node.classList.contains('mermaid-wrapper');
-      },
-      replacement: function(content, node) {
-        const raw = node.getAttribute('data-raw-mermaid');
-        return raw ? '\n\n```mermaid\n' + decodeURIComponent(raw) + '\n```\n\n' : content;
-      }
-    });
-
-    turndownService.addRule('codeBlock', {
-      filter: function(node) {
-        return node.classList && node.classList.contains('lucid-code-block');
-      },
-      replacement: function(content, node) {
-        const langEl = node.querySelector('.lucid-code-lang');
-        const lang = langEl ? langEl.textContent.trim().toLowerCase() : '';
-        const codeEl = node.querySelector('pre code');
-        const code = codeEl ? codeEl.innerText : '';
-        return '\n\n```' + lang + '\n' + code + '\n```\n\n';
-      }
-    });
-  }
+  // The preview is a strictly read-only rendering surface. All editing happens
+  // in the native Markdown source editor (VS Code-style separation of concerns),
+  // so there is no HTML->Markdown (Turndown) round-trip here.
 
   // Initialize Markdown-it
   const md = window.markdownit({
@@ -68,6 +29,9 @@
         const escapedRaw = encodeURIComponent(str);
         return '<div class="mermaid-wrapper" data-raw-mermaid="' + escapedRaw + '">' +
                '<div class="mermaid-toolbar">' +
+               '<button class="lucid-btn-zoom" title="Zoom In" onclick="window.lucid.zoomDiagram(this, 1.15)">+</button>' +
+               '<button class="lucid-btn-zoom" title="Zoom Out" onclick="window.lucid.zoomDiagram(this, 0.85)">−</button>' +
+               '<button class="lucid-btn-zoom" title="Reset Zoom" onclick="window.lucid.resetZoom(this)">↺</button>' +
                '<button class="lucid-btn-copy-svg" onclick="window.lucid.copySvg(this)">Copy SVG</button>' +
                '<button class="lucid-btn-save-svg" onclick="window.lucid.saveSvg(this)">Download SVG</button>' +
                '</div>' +
@@ -86,14 +50,26 @@
         highlighted = md.utils.escapeHtml(str);
       }
 
-      const langLabel = (lang || 'TEXT').toUpperCase();
-      return '<div class="lucid-code-block">' +
-             '<div class="lucid-code-header">' +
-             '<span class="lucid-code-lang">' + langLabel + '</span>' +
-             '<button class="lucid-btn-copy-code" onclick="window.lucid.copyCode(this)">Copy</button>' +
+      const isPlainText = !lang || lang.toLowerCase() === 'text' || lang.toLowerCase() === 'plain';
+      const langLabel = isPlainText ? '' : lang.toUpperCase();
+
+      // ASCII Diagram detection
+      const isAsciiDiagram = isPlainText && /[\u2500-\u257F\u2580-\u259F\u2190-\u2193\+\-\|]{4,}/.test(str);
+      const lines = str.split('\n');
+      const maxLineLen = lines.reduce((max, l) => Math.max(max, l.length), 0);
+      const isWide = maxLineLen > 68;
+
+      let classes = ['lucid-enhanced'];
+      if (isAsciiDiagram) classes.push('lucid-ascii-diagram');
+      if (isWide) classes.push('lucid-wide');
+
+      return '<pre class="' + classes.join(' ') + '">' +
+             '<div class="lucid-codebar">' +
+             (langLabel ? '<span class="lucid-lang">' + langLabel + '</span>' : '<span></span>') +
+             '<button class="lucid-copy" type="button" onclick="window.lucid.copyCode(this)">Copy</button>' +
              '</div>' +
-             '<pre><code class="hljs language-' + md.utils.escapeHtml(lang || '') + '">' + highlighted + '</code></pre>' +
-             '</div>';
+             '<code class="hljs language-' + md.utils.escapeHtml(lang || '') + '">' + highlighted + '</code>' +
+             '</pre>';
     }
   });
 
@@ -131,40 +107,79 @@
       const icon = ALERT_ICONS[alertType] || ALERT_ICONS.note;
       const titleText = customTitle && customTitle.trim() ? customTitle.trim() : alertType;
       const content = (firstLine && firstLine.trim() ? '<p>' + firstLine.trim() + '</p>' : '') + rest;
-      const titleHtml = '<div class="lucid-alert-title"><span class="lucid-alert-icon">' + icon + '</span>' + titleText + '</div>';
+      const titleHtml = '<div class="markdown-alert-title"><span class="markdown-alert-icon">' + icon + '</span>' + titleText + '</div>';
 
       if (collapseFlag === '-' || collapseFlag === '+') {
         const isOpen = collapseFlag === '+' ? ' open' : '';
-        return '<details class="lucid-alert lucid-alert-' + alertType + '"' + isOpen + '>' +
+        return '<details class="markdown-alert markdown-alert-' + alertType + '"' + isOpen + '>' +
                '<summary>' + titleHtml + '</summary>' +
-               '<div class="lucid-alert-content">' + content + '</div>' +
+               '<div class="markdown-alert-content">' + content + '</div>' +
                '</details>';
       }
 
-      return '<div class="lucid-alert lucid-alert-' + alertType + '">' +
+      return '<blockquote class="markdown-alert markdown-alert-' + alertType + '">' +
              titleHtml +
-             '<div class="lucid-alert-content">' + content + '</div>' +
-             '</div>';
+             '<div class="markdown-alert-content">' + content + '</div>' +
+             '</blockquote>';
     });
   }
+
+  // Simple Bounded LRU Cache
+  function SimpleLRU(maxEntries) {
+    this.max = maxEntries || 60;
+    this.cache = new Map();
+  }
+  SimpleLRU.prototype.get = function(key) {
+    if (!this.cache.has(key)) return null;
+    const val = this.cache.get(key);
+    this.cache.delete(key);
+    this.cache.set(key, val);
+    return val;
+  };
+  SimpleLRU.prototype.set = function(key, val) {
+    if (this.cache.has(key)) this.cache.delete(key);
+    else if (this.cache.size >= this.max) {
+      const firstKey = this.cache.keys().next().value;
+      this.cache.delete(firstKey);
+    }
+    this.cache.set(key, val);
+  };
+  SimpleLRU.prototype.clear = function() {
+    this.cache.clear();
+  };
+
+  const katexLRU = new SimpleLRU(150);
+  const mermaidLRU = new SimpleLRU(50);
 
   function parseKaTeX(text) {
     if (typeof katex === 'undefined') return text;
     text = text.replace(/\$\$([\s\S]+?)\$\$/g, function(match, math) {
+      const trimmed = math.trim();
+      const cacheKey = 'disp:' + trimmed;
+      const cached = katexLRU.get(cacheKey);
+      if (cached) return cached;
       try {
-        const rendered = katex.renderToString(math.trim(), { displayMode: true, throwOnError: false });
-        const escapedRaw = encodeURIComponent(math.trim());
-        return '<div class="lucid-math-block" data-raw-latex="' + escapedRaw + '">' +
+        const rendered = katex.renderToString(trimmed, { displayMode: true, throwOnError: false });
+        const escapedRaw = encodeURIComponent(trimmed);
+        const res = '<div class="lucid-math-block" data-raw-latex="' + escapedRaw + '">' +
                rendered +
                '<button class="lucid-btn-copy-latex" onclick="window.lucid.copyLatex(this)">Copy LaTeX</button>' +
                '</div>';
+        katexLRU.set(cacheKey, res);
+        return res;
       } catch (e) {
-        return match;
+        return '<div class="lucid-math-error"><span class="lucid-error-msg">Formula render warning: ' + md.utils.escapeHtml(e.message || 'Syntax error') + '</span><pre>' + md.utils.escapeHtml(trimmed) + '</pre></div>';
       }
     });
     text = text.replace(/(^|[^\\])\$([^\$\n]+?)\$/g, function(match, prefix, math) {
+      const trimmed = math.trim();
+      const cacheKey = 'inline:' + trimmed;
+      const cached = katexLRU.get(cacheKey);
+      if (cached) return prefix + cached;
       try {
-        return prefix + katex.renderToString(math.trim(), { displayMode: false, throwOnError: false });
+        const rendered = katex.renderToString(trimmed, { displayMode: false, throwOnError: false });
+        katexLRU.set(cacheKey, rendered);
+        return prefix + rendered;
       } catch (e) {
         return match;
       }
@@ -176,92 +191,28 @@
     const headings = [];
     const elements = document.querySelectorAll('h1, h2, h3, h4, h5, h6');
     elements.forEach(function(el) {
+      let text = '';
+      const anchor = el.querySelector('.lucid-anchor');
+      if (anchor) {
+        const clone = el.cloneNode(true);
+        const cloneAnchor = clone.querySelector('.lucid-anchor');
+        if (cloneAnchor) cloneAnchor.remove();
+        text = clone.textContent.trim();
+      } else {
+        text = el.textContent.trim();
+      }
       headings.push({
         id: el.id,
         level: parseInt(el.tagName.substring(1), 10),
-        text: el.textContent.trim()
+        text: text
       });
     });
     return headings;
   }
 
-  // Floating Selection Bubble Toolbar
-  let selectionBubble = null;
-  function createSelectionBubble() {
-    if (selectionBubble) return selectionBubble;
-    selectionBubble = document.createElement('div');
-    selectionBubble.className = 'lucid-selection-bubble';
-    selectionBubble.style.display = 'none';
-
-    const tools = [
-      { label: 'B', tag: '**', help: 'Bold' },
-      { label: 'I', tag: '*', help: 'Italic' },
-      { label: 'S', tag: '~~', help: 'Strikethrough' },
-      { label: 'Code', tag: '`', help: 'Inline Code' },
-      { label: '$', tag: '$', help: 'Inline Math' },
-      { label: '==', tag: '==', help: 'Highlight' }
-    ];
-
-    tools.forEach(function(tool) {
-      const btn = document.createElement('button');
-      btn.className = 'lucid-bubble-btn';
-      btn.textContent = tool.label;
-      btn.title = tool.help;
-      btn.onmousedown = function(e) {
-        e.preventDefault();
-        applyWrapFormatting(tool.tag, tool.tag);
-      };
-      selectionBubble.appendChild(btn);
-    });
-
-    document.body.appendChild(selectionBubble);
-    return selectionBubble;
-  }
-
-  function applyWrapFormatting(prefix, suffix) {
-    const selection = window.getSelection();
-    if (!selection.rangeCount) return;
-    const range = selection.getRangeAt(0);
-    const selectedText = range.toString();
-    if (!selectedText) return;
-
-    const span = document.createElement('span');
-    span.textContent = prefix + selectedText + suffix;
-    range.deleteContents();
-    range.insertNode(span);
-
-    hideSelectionBubble();
-    triggerInPlaceEdit();
-  }
-
-  function showSelectionBubble(rect) {
-    const bubble = createSelectionBubble();
-    bubble.style.display = 'flex';
-    const bubbleWidth = bubble.offsetWidth || 220;
-    const left = Math.max(10, Math.min(window.innerWidth - bubbleWidth - 10, rect.left + window.scrollX + (rect.width / 2) - (bubbleWidth / 2)));
-    const top = Math.max(10, rect.top + window.scrollY - 44);
-    bubble.style.left = left + 'px';
-    bubble.style.top = top + 'px';
-  }
-
-  function hideSelectionBubble() {
-    if (selectionBubble) selectionBubble.style.display = 'none';
-  }
-
-  document.addEventListener('selectionchange', function() {
-    const selection = window.getSelection();
-    if (!selection.isCollapsed && selection.toString().trim().length > 0) {
-      const range = selection.getRangeAt(0);
-      const rect = range.getBoundingClientRect();
-      if (rect.width > 0 && rect.height > 0) {
-        showSelectionBubble(rect);
-        return;
-      }
-    }
-    hideSelectionBubble();
-  });
-
-  // Focus Mode & Typewriter Mode Handler
+  // Focus Mode & Typewriter Mode Handler.
+  // These react to the reader's text selection/caret within the read-only
+  // preview to gently emphasize or center the block being looked at.
   let isFocusModeEnabled = false;
   let isTypewriterModeEnabled = false;
 
@@ -297,68 +248,34 @@
   document.addEventListener('keyup', updateCaretPosition);
   document.addEventListener('mouseup', updateCaretPosition);
 
-  // Clipboard Image Paste Handler
-  function setupClipboardImagePaste(container) {
-    container.addEventListener('paste', function(e) {
-      const items = (e.clipboardData || e.originalEvent.clipboardData).items;
-      for (let i = 0; i < items.length; i++) {
-        if (items[i].type.indexOf('image') !== -1) {
-          e.preventDefault();
-          const file = items[i].getAsFile();
-          const reader = new FileReader();
-          reader.onload = function(event) {
-            const base64 = event.target.result;
-            const img = document.createElement('img');
-            img.src = base64;
-            img.alt = 'Pasted Screenshot';
-            const selection = window.getSelection();
-            if (selection.rangeCount) {
-              const range = selection.getRangeAt(0);
-              range.deleteContents();
-              range.insertNode(img);
-              triggerInPlaceEdit();
-            }
-          };
-          reader.readAsDataURL(file);
-          break;
-        }
-      }
-    });
-  }
-
-  // Live in-place editing listener
-  let isEditingByUser = false;
-  let editDebounceTimer = null;
-
-  function triggerInPlaceEdit() {
-    if (!turndownService) return;
+  // Link handling: keep in-page anchors smooth, and hand every other link
+  // (external URLs and relative references to sibling documents) to the native
+  // app so the webview never navigates away from the render surface.
+  document.addEventListener('click', function(e) {
+    const a = e.target && e.target.closest ? e.target.closest('a') : null;
+    if (!a) return;
     const container = document.getElementById('lucid-content');
-    if (!container) return;
+    if (!container || !container.contains(a)) return;
+    const href = a.getAttribute('href');
+    if (!href) return;
 
-    isEditingByUser = true;
-    clearTimeout(editDebounceTimer);
-    editDebounceTimer = setTimeout(function() {
-      try {
-        const newMarkdown = turndownService.turndown(container.innerHTML);
-        if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.lucidContentEdited) {
-          window.webkit.messageHandlers.lucidContentEdited.postMessage(newMarkdown);
-        }
-      } catch (e) {
-        console.warn('Turndown error:', e);
+    if (href.charAt(0) === '#') {
+      e.preventDefault();
+      const id = decodeURIComponent(href.slice(1));
+      const el = document.getElementById(id) || document.querySelector('[name="' + CSS.escape(id) + '"]');
+      if (el) {
+        isProgrammaticScroll = true;
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        setTimeout(function() { isProgrammaticScroll = false; }, 400);
       }
-      setTimeout(function() { isEditingByUser = false; }, 200);
-    }, 350);
-  }
+      return;
+    }
 
-  function setupInPlaceEditing() {
-    const container = document.getElementById('lucid-content');
-    if (!container) return;
-
-    container.setAttribute('contenteditable', 'true');
-    container.setAttribute('spellcheck', 'false');
-    container.addEventListener('input', triggerInPlaceEdit);
-    setupClipboardImagePaste(container);
-  }
+    e.preventDefault();
+    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.lucidLinkClicked) {
+      window.webkit.messageHandlers.lucidLinkClicked.postMessage(href);
+    }
+  });
 
   // Scroll Spy
   let isProgrammaticScroll = false;
@@ -368,8 +285,11 @@
 
     const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
     const fraction = maxScroll > 0 ? window.scrollY / maxScroll : 0;
+    // Graduated 0..1 intensity so the chrome can fade its glass in almost
+    // subconsciously over the first ~22px of travel (spec: scroll-responsive glass).
+    const intensity = Math.max(0, Math.min(1, window.scrollY / 22));
     if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.lucidScroll) {
-      window.webkit.messageHandlers.lucidScroll.postMessage({ fraction: fraction });
+      window.webkit.messageHandlers.lucidScroll.postMessage({ fraction: fraction, scrolled: window.scrollY > 6, intensity: intensity });
     }
 
     clearTimeout(activeHeadingTimer);
@@ -397,8 +317,6 @@
   // Public API
   window.lucid = {
     updateContent: function(rawMarkdown) {
-      if (isEditingByUser) return;
-
       const container = document.getElementById('lucid-content');
       if (!container) return;
 
@@ -418,7 +336,81 @@
         }
       }
 
-      setupInPlaceEditing();
+      // Heading Anchors (Quiet hover reveal)
+      const hs = container.querySelectorAll('h1, h2, h3, h4, h5, h6');
+      hs.forEach(function(h) {
+        if (!h.querySelector('.lucid-anchor') && h.id) {
+          const a = document.createElement('a');
+          a.className = 'lucid-anchor';
+          a.href = '#' + h.id;
+          a.textContent = '#';
+          a.title = 'Link to this section';
+          a.setAttribute('aria-hidden', 'true');
+          h.appendChild(a);
+        }
+      });
+
+      // Dynamic Content-Aware Table Layout & TOC Detection
+      const tables = container.querySelectorAll('table');
+      tables.forEach(function(table) {
+        // 1. Wrap table in responsive wrapper if not yet wrapped
+        let wrapper = table.parentElement;
+        if (!wrapper || !wrapper.classList.contains('lucid-table-wrapper')) {
+          wrapper = document.createElement('div');
+          wrapper.className = 'lucid-table-wrapper';
+          table.parentNode.insertBefore(wrapper, table);
+          wrapper.appendChild(table);
+        }
+
+        // 2. Detect Table of Contents
+        let isToc = false;
+        let prev = wrapper.previousElementSibling;
+        while (prev && prev.tagName !== 'H1' && prev.tagName !== 'H2' && prev.tagName !== 'H3') {
+          prev = prev.previousElementSibling;
+        }
+        if (prev && /contents|toc|index/i.test(prev.textContent)) {
+          isToc = true;
+        } else {
+          const ths = table.querySelectorAll('th');
+          if (ths.length >= 2) {
+            const h0 = ths[0].textContent.trim().toLowerCase();
+            const h1 = ths[1].textContent.trim().toLowerCase();
+            if ((h0 === '#' || h0 === 'no' || h0 === 'index' || h0 === 'no.') &&
+                (h1 === 'section' || h1 === 'topic' || h1 === 'title' || h1 === 'chapter')) {
+              isToc = true;
+            }
+          }
+        }
+        if (isToc) {
+          table.classList.add('lucid-toc-table');
+        }
+
+        // 3. Prevent awkward wrapping of short identifier cells (<= 16 chars)
+        table.querySelectorAll('th, td').forEach(function(cell) {
+          const text = cell.textContent.trim();
+          if (text.length > 0 && text.length <= 16 && !text.includes('\n')) {
+            cell.style.whiteSpace = 'nowrap';
+          }
+        });
+
+        // 4. Content-aware breakout measurement
+        wrapper.classList.remove('lucid-wide', 'lucid-overflows');
+        table.style.width = 'max-content';
+        const naturalWidth = table.scrollWidth;
+        table.style.width = '';
+
+        // Mirror the responsive CSS widths so breakout decisions match the layout.
+        const readerWidth = Math.min(1024, window.innerWidth * 0.86);
+        const maxBreakoutWidth = Math.min(1600, window.innerWidth * 0.95);
+
+        if (naturalWidth > readerWidth + 15) {
+          if (naturalWidth <= maxBreakoutWidth) {
+            wrapper.classList.add('lucid-wide');
+          } else {
+            wrapper.classList.add('lucid-wide', 'lucid-overflows');
+          }
+        }
+      });
 
       const headings = extractHeadings();
       if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.lucidHeadings) {
@@ -426,18 +418,14 @@
       }
     },
 
-    setEditable: function(enabled) {
-      const container = document.getElementById('lucid-content');
-      if (container) {
-        container.setAttribute('contenteditable', enabled ? 'true' : 'false');
-      }
-    },
-
     updatePreferences: function(prefs) {
       const root = document.documentElement;
       const body = document.body;
 
-      if (prefs.theme) body.setAttribute('data-theme', prefs.theme);
+      if (prefs.theme) {
+        body.setAttribute('data-theme', prefs.theme);
+        body.className = 'vscode-body ' + (prefs.theme === 'dark' ? 'vscode-dark' : '');
+      }
       if (prefs.fontFamily) root.style.setProperty('--lucid-font-family', prefs.fontFamily);
       if (prefs.fontSize) root.style.setProperty('--lucid-font-size', prefs.fontSize + 'px');
       if (prefs.lineHeight) root.style.setProperty('--lucid-line-height', prefs.lineHeight);
@@ -447,10 +435,6 @@
         if (prefs.breakout) body.classList.remove('no-breakout');
         else body.classList.add('no-breakout');
       }
-      if (typeof prefs.clickToEdit !== 'undefined') {
-        window.lucid.setEditable(prefs.clickToEdit);
-      }
-
       // Focus Mode
       if (typeof prefs.focusMode !== 'undefined') {
         isFocusModeEnabled = prefs.focusMode;
@@ -475,6 +459,39 @@
         }
         styleTag.textContent = prefs.customCSS;
       }
+
+      // Math & Mermaid Scaling & Table Density
+      if (prefs.mathScale) root.style.setProperty('--lucid-math-scale', prefs.mathScale);
+      if (prefs.mermaidScale) root.style.setProperty('--lucid-mermaid-scale', prefs.mermaidScale);
+      if (prefs.tableDensity) body.setAttribute('data-table-density', prefs.tableDensity);
+    },
+
+    handleMessage: function(msg) {
+      if (!msg || !msg.type) return;
+      if (msg.type === 'updateContent' && typeof msg.markdown === 'string') {
+        window.lucid.updateContent(msg.markdown);
+      } else if (msg.type === 'updatePreferences' && msg.preferences) {
+        window.lucid.updatePreferences(msg.preferences);
+      }
+    },
+
+    zoomDiagram: function(btn, factor) {
+      const wrapper = btn.closest('.mermaid-wrapper');
+      const svg = wrapper ? wrapper.querySelector('svg') : null;
+      if (!svg) return;
+      let currentScale = parseFloat(svg.dataset.scale || '1.0');
+      currentScale = Math.max(0.4, Math.min(3.0, currentScale * factor));
+      svg.dataset.scale = currentScale;
+      svg.style.transform = 'scale(' + currentScale + ')';
+      svg.style.transformOrigin = 'center center';
+    },
+
+    resetZoom: function(btn) {
+      const wrapper = btn.closest('.mermaid-wrapper');
+      const svg = wrapper ? wrapper.querySelector('svg') : null;
+      if (!svg) return;
+      svg.dataset.scale = '1.0';
+      svg.style.transform = 'scale(1.0)';
     },
 
     scrollToHeading: function(id) {
@@ -495,38 +512,19 @@
       }
     },
 
-    // Insert templates
-    insertTemplate: function(type) {
-      const selection = window.getSelection();
-      let template = '';
-      switch (type) {
-        case 'table':
-          template = '\n\n| Column 1 | Column 2 | Column 3 |\n| :--- | :---: | ---: |\n| Item 1 | Value 1 | $10.00 |\n| Item 2 | Value 2 | $20.00 |\n\n';
-          break;
-        case 'math':
-          template = '\n\n$$\n\\int_{0}^{\\infty} e^{-x^2} dx = \\frac{\\sqrt{\\pi}}{2}\n$$\n\n';
-          break;
-        case 'chemistry':
-          template = '\n\n$$\n\\ce{2H2 + O2 -> 2H2O}\n$$\n\n';
-          break;
-        case 'mermaid':
-          template = '\n\n```mermaid\nflowchart TD\n    A["Input"] --> B["Processing"]\n    B --> C["Output"]\n```\n\n';
-          break;
-      }
-
-      if (template) {
-        document.execCommand('insertText', false, template);
-        triggerInPlaceEdit();
-      }
-    },
 
     copyCode: function(btn) {
-      const pre = btn.closest('.lucid-code-block').querySelector('pre code');
-      if (pre) {
-        navigator.clipboard.writeText(pre.innerText).then(function() {
+      const pre = btn.closest('pre.lucid-enhanced');
+      const code = pre ? pre.querySelector('code') : null;
+      if (code) {
+        navigator.clipboard.writeText(code.innerText).then(function() {
           const original = btn.innerText;
           btn.innerText = 'Copied!';
-          setTimeout(function() { btn.innerText = original; }, 1800);
+          btn.classList.add('lucid-copied');
+          setTimeout(function() {
+            btn.innerText = original;
+            btn.classList.remove('lucid-copied');
+          }, 1800);
         });
       }
     },
@@ -569,6 +567,111 @@
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
       }
+    },
+
+    // In-Page Find Implementation
+    findMatches: [],
+    findCurrentIndex: 0,
+
+    find: function(query) {
+      window.lucid.clearFind();
+      if (!query || !query.trim()) return;
+
+      const container = document.getElementById('lucid-content');
+      if (!container) return;
+
+      const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null, false);
+      const textNodes = [];
+      let node;
+      while (node = walker.nextNode()) {
+        if (node.parentElement && !['SCRIPT', 'STYLE', 'BUTTON'].includes(node.parentElement.tagName)) {
+          textNodes.push(node);
+        }
+      }
+
+      const regex = new RegExp('(' + query.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&') + ')', 'gi');
+      window.lucid.findMatches = [];
+
+      textNodes.forEach(function(textNode) {
+        const val = textNode.nodeValue;
+        if (regex.test(val)) {
+          const frag = document.createDocumentFragment();
+          let lastIdx = 0;
+          val.replace(regex, function(match, p1, offset) {
+            if (offset > lastIdx) {
+              frag.appendChild(document.createTextNode(val.substring(lastIdx, offset)));
+            }
+            const mark = document.createElement('mark');
+            mark.className = 'lucid-find-match';
+            mark.textContent = match;
+            frag.appendChild(mark);
+            window.lucid.findMatches.push(mark);
+            lastIdx = offset + match.length;
+          });
+          if (lastIdx < val.length) {
+            frag.appendChild(document.createTextNode(val.substring(lastIdx)));
+          }
+          textNode.parentNode.replaceChild(frag, textNode);
+        }
+      });
+
+      window.lucid.findCurrentIndex = 0;
+      if (window.lucid.findMatches.length > 0) {
+        window.lucid.highlightActiveFindMatch();
+      }
+
+      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.lucidFindMatches) {
+        window.webkit.messageHandlers.lucidFindMatches.postMessage({
+          count: window.lucid.findMatches.length,
+          index: window.lucid.findMatches.length > 0 ? 1 : 0
+        });
+      }
+    },
+
+    highlightActiveFindMatch: function() {
+      window.lucid.findMatches.forEach(function(m) { m.classList.remove('lucid-find-active'); });
+      if (window.lucid.findMatches.length === 0) return;
+      const idx = window.lucid.findCurrentIndex;
+      const active = window.lucid.findMatches[idx];
+      if (active) {
+        active.classList.add('lucid-find-active');
+        active.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    },
+
+    findNext: function() {
+      if (window.lucid.findMatches.length === 0) return;
+      window.lucid.findCurrentIndex = (window.lucid.findCurrentIndex + 1) % window.lucid.findMatches.length;
+      window.lucid.highlightActiveFindMatch();
+      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.lucidFindMatches) {
+        window.webkit.messageHandlers.lucidFindMatches.postMessage({
+          count: window.lucid.findMatches.length,
+          index: window.lucid.findCurrentIndex + 1
+        });
+      }
+    },
+
+    findPrev: function() {
+      if (window.lucid.findMatches.length === 0) return;
+      window.lucid.findCurrentIndex = (window.lucid.findCurrentIndex - 1 + window.lucid.findMatches.length) % window.lucid.findMatches.length;
+      window.lucid.highlightActiveFindMatch();
+      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.lucidFindMatches) {
+        window.webkit.messageHandlers.lucidFindMatches.postMessage({
+          count: window.lucid.findMatches.length,
+          index: window.lucid.findCurrentIndex + 1
+        });
+      }
+    },
+
+    clearFind: function() {
+      const marks = document.querySelectorAll('mark.lucid-find-match');
+      marks.forEach(function(mark) {
+        const parent = mark.parentNode;
+        parent.replaceChild(document.createTextNode(mark.textContent), mark);
+        parent.normalize();
+      });
+      window.lucid.findMatches = [];
+      window.lucid.findCurrentIndex = 0;
     },
 
     getStandaloneHTML: function() {
