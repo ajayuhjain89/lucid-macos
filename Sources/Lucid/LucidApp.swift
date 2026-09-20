@@ -7,10 +7,11 @@ struct LucidApp: App {
     var body: some Scene {
         DocumentGroup(newDocument: LucidDocument()) { file in
             MainWindowView(document: file.$document, fileURL: file.fileURL)
-                .frame(minWidth: 750, minHeight: 550)
+                .frame(minWidth: 780, minHeight: 560)
         }
-        .windowStyle(.hiddenTitleBar)
         .commands {
+            SidebarCommands()
+
             CommandGroup(replacing: .appSettings) {
                 Button("Settings…") {
                     SettingsWindowManager.shared.showSettings(preferences: preferences)
@@ -53,10 +54,19 @@ struct LucidApp: App {
                 }
                 .keyboardShortcut("t", modifiers: [.command, .option])
 
-                Button(preferences.showInspector ? "Hide Inspector" : "Show Inspector") {
-                    preferences.showInspector.toggle()
+                Button(preferences.showStatusBar ? "Hide Status Bar" : "Show Status Bar") {
+                    preferences.showStatusBar.toggle()
                 }
-                .keyboardShortcut("i", modifiers: .command)
+
+                Divider()
+
+                Menu("Presets") {
+                    ForEach(LucidPreset.allCases) { preset in
+                        Button(preset.displayName) {
+                            preferences.applyPreset(preset)
+                        }
+                    }
+                }
 
                 Divider()
 
@@ -77,7 +87,7 @@ struct LucidApp: App {
             }
 
             CommandMenu("Theme") {
-                ForEach(ThemeMode.allCases) { mode in
+                ForEach(ThemeMode.curatedThemes) { mode in
                     Button(mode.displayName) {
                         preferences.theme = mode
                     }

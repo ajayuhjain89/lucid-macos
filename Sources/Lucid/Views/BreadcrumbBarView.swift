@@ -12,26 +12,26 @@ public struct BreadcrumbBarView: View {
     }
 
     public var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: LucidSpacing.xSmall) {
             Image(systemName: "doc.text")
-                .foregroundColor(.secondary)
-                .font(.caption)
+                .foregroundColor(LucidColors.textSecondary)
+                .font(.system(size: 11, weight: .regular))
 
             Text(documentName)
-                .font(.caption)
-                .foregroundColor(.secondary)
+                .font(LucidTypography.caption)
+                .foregroundColor(LucidColors.textSecondary)
 
             if let heading = activeHeading, !heading.text.isEmpty {
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundColor(.secondary.opacity(0.6))
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundColor(LucidColors.textTertiary)
 
                 Button(action: {
                     onSelectHeading(heading.id)
                 }) {
                     Text(heading.text)
-                        .font(.caption.weight(.medium))
-                        .foregroundColor(.primary)
+                        .font(LucidTypography.labelMedium)
+                        .foregroundColor(LucidColors.textPrimary)
                         .lineLimit(1)
                         .truncationMode(.tail)
                 }
@@ -40,13 +40,11 @@ public struct BreadcrumbBarView: View {
 
             Spacer()
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 6)
-        .background(Color(NSColor.windowBackgroundColor).opacity(0.85))
+        .padding(.horizontal, LucidSpacing.large)
+        .padding(.vertical, LucidSpacing.controlInnerPadding)
+        .background(.ultraThinMaterial)
         .overlay(
-            Rectangle()
-                .frame(height: 0.5)
-                .foregroundColor(Color(NSColor.separatorColor)),
+            LucidDivider(),
             alignment: .bottom
         )
     }

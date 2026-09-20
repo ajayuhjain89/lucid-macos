@@ -9,7 +9,9 @@ MACOS="$CONTENTS/MacOS"
 RESOURCES="$CONTENTS/Resources"
 
 echo "==> Compiling $APP_NAME for macOS (arm64)..."
+mkdir -p "$DIR/scratch/ModuleCache"
 swiftc -parse-as-library -target arm64-apple-macosx14.0 -O \
+  -module-cache-path "$DIR/scratch/ModuleCache" \
   -o "$DIR/$APP_NAME" \
   $(find "$DIR/Sources/Lucid" -name "*.swift")
 

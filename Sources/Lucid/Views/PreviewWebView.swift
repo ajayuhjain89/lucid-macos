@@ -1,5 +1,6 @@
 import SwiftUI
 import WebKit
+import AppKit
 
 public struct PreviewWebView: NSViewRepresentable {
     @ObservedObject var preferences: LucidPreferences
@@ -8,10 +9,15 @@ public struct PreviewWebView: NSViewRepresentable {
     @Binding var activeHeading: HeadingItem?
     var onScrollFractionChanged: ((Double) -> Void)?
     var onFindMatchesChanged: ((Int, Int) -> Void)?
-    var onContentEdited: ((String) -> Void)?
     var scrollToHeadingId: String?
     var targetScrollFraction: Double?
     @Binding var webViewInstance: WKWebView?
+    /// The on-disk location of the document being previewed, used to resolve
+    /// relative links to sibling files when the reader clicks a cross-file link.
+    var documentFileURL: URL? = nil
+    /// Reports a graduated 0…1 intensity of how far the content has scrolled away
+    /// from the top, so the chrome can raise its glass depth almost subconsciously.
+    var onScrollIntensityChanged: ((Double) -> Void)? = nil
     @Environment(\.colorScheme) var colorScheme
 
     public func makeCoordinator() -> Coordinator {
@@ -26,12 +32,14 @@ public struct PreviewWebView: NSViewRepresentable {
         userContent.add(context.coordinator, name: "lucidHeadings")
         userContent.add(context.coordinator, name: "lucidActiveHeading")
         userContent.add(context.coordinator, name: "lucidFindMatches")
-        userContent.add(context.coordinator, name: "lucidContentEdited")
+        userContent.add(context.coordinator, name: "lucidLinkClicked")
         config.userContentController = userContent
 
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = context.coordinator
         webView.setValue(false, forKey: "drawsBackground")
+
+        context.coordinator.renderCoordinator.setWebView(webView)
 
         DispatchQueue.main.async {
             self.webViewInstance = webView
@@ -68,14 +76,8 @@ public struct PreviewWebView: NSViewRepresentable {
         let prefsJSON = preferences.jsonPayload(systemColorScheme: colorScheme)
         webView.evaluateJavaScript("if (window.lucid) { window.lucid.updatePreferences(\(prefsJSON)); }")
 
-        // Update content if changed externally
-        if context.coordinator.lastRenderedMarkdown != markdown {
-            context.coordinator.lastRenderedMarkdown = markdown
-            if let data = try? JSONEncoder().encode(markdown),
-               let jsonString = String(data: data, encoding: .utf8) {
-                webView.evaluateJavaScript("if (window.lucid) { window.lucid.updateContent(\(jsonString)); }")
-            }
-        }
+        // Schedule debounced render through the coordinator
+        context.coordinator.renderCoordinator.scheduleRender(markdown: markdown)
 
         // Scroll to heading if requested
         if let headingId = scrollToHeadingId, headingId != context.coordinator.lastScrolledHeadingId {
@@ -93,9 +95,9 @@ public struct PreviewWebView: NSViewRepresentable {
     public final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         var parent: PreviewWebView
         var isPageLoaded = false
-        var lastRenderedMarkdown = ""
         var lastScrolledHeadingId: String?
         var lastAppliedFraction: Double = -1
+        let renderCoordinator = PreviewRenderCoordinator()
 
         init(_ parent: PreviewWebView) {
             self.parent = parent
@@ -103,19 +105,24 @@ public struct PreviewWebView: NSViewRepresentable {
 
         public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             isPageLoaded = true
+            renderCoordinator.setWebView(webView)
 
             let prefsJSON = parent.preferences.jsonPayload(systemColorScheme: .dark)
             webView.evaluateJavaScript("if (window.lucid) { window.lucid.updatePreferences(\(prefsJSON)); }")
 
-            if let data = try? JSONEncoder().encode(parent.markdown),
-               let jsonString = String(data: data, encoding: .utf8) {
-                webView.evaluateJavaScript("if (window.lucid) { window.lucid.updateContent(\(jsonString)); }")
-            }
+            renderCoordinator.scheduleRender(markdown: parent.markdown, immediate: true)
         }
 
         public func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-            if message.name == "lucidScroll", let body = message.body as? [String: Any], let fraction = body["fraction"] as? Double {
-                parent.onScrollFractionChanged?(fraction)
+            if message.name == "lucidScroll", let body = message.body as? [String: Any] {
+                if let fraction = body["fraction"] as? Double {
+                    parent.onScrollFractionChanged?(fraction)
+                }
+                if let intensity = body["intensity"] as? Double {
+                    parent.onScrollIntensityChanged?(intensity)
+                } else if let scrolled = body["scrolled"] as? Bool {
+                    parent.onScrollIntensityChanged?(scrolled ? 1 : 0)
+                }
             } else if message.name == "lucidHeadings", let body = message.body as? [[String: Any]] {
                 var parsed: [HeadingItem] = []
                 for item in body {
@@ -141,9 +148,51 @@ public struct PreviewWebView: NSViewRepresentable {
                    let index = body["index"] as? Int {
                     parent.onFindMatchesChanged?(count, index)
                 }
-            } else if message.name == "lucidContentEdited", let newMarkdown = message.body as? String {
-                lastRenderedMarkdown = newMarkdown
-                parent.onContentEdited?(newMarkdown)
+            } else if message.name == "lucidLinkClicked", let href = message.body as? String {
+                handleLinkClick(href)
+            }
+        }
+
+        /// Resolves a clicked link. External URLs open in the default browser;
+        /// relative references to sibling documents open in a Lucid window.
+        private func handleLinkClick(_ href: String) {
+            let trimmed = href.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return }
+
+            // External schemes → hand off to the system browser / handler.
+            if let scheme = URL(string: trimmed)?.scheme?.lowercased(),
+               ["http", "https", "mailto", "tel", "ftp"].contains(scheme) {
+                if let url = URL(string: trimmed) {
+                    NSWorkspace.shared.open(url)
+                }
+                return
+            }
+
+            // Local / relative reference: strip any fragment and resolve against
+            // the current document's directory.
+            let pathPart = trimmed.components(separatedBy: "#").first ?? trimmed
+            let decoded = pathPart.removingPercentEncoding ?? pathPart
+            guard !decoded.isEmpty else { return }
+
+            let target: URL
+            if decoded.hasPrefix("/") {
+                target = URL(fileURLWithPath: decoded).standardizedFileURL
+            } else if let baseDir = parent.documentFileURL?.deletingLastPathComponent() {
+                target = URL(fileURLWithPath: decoded, relativeTo: baseDir).standardizedFileURL
+            } else {
+                return
+            }
+
+            guard FileManager.default.fileExists(atPath: target.path) else {
+                NSSound.beep()
+                return
+            }
+
+            let markdownExtensions: Set<String> = ["md", "markdown", "mdown", "mkd", "mdx", "txt"]
+            if markdownExtensions.contains(target.pathExtension.lowercased()) {
+                NSDocumentController.shared.openDocument(withContentsOf: target, display: true) { _, _, _ in }
+            } else {
+                NSWorkspace.shared.open(target)
             }
         }
     }
