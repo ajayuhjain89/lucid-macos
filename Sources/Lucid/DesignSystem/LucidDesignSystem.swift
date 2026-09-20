@@ -32,11 +32,11 @@ public enum LucidSpacing {
 /// web/editor content insets are derived from, so the floating glass toolbar
 /// and the content scrolling beneath it always agree on where the top edge is.
 public enum LucidChrome {
-    /// Height of the floating glass top bar (spec target: 44–52pt).
-    public static let toolbarHeight: CGFloat = 46
-    /// Comfortable breathing room between the toolbar and the first block of
+    /// Height of the compact titlebar/toolbar row (optically aligned with traffic lights).
+    public static let toolbarHeight: CGFloat = 36
+    /// Breathing room between the toolbar and the first block of
     /// content when the document is scrolled to the very top.
-    public static let readerTopBreathingRoom: CGFloat = 26
+    public static let readerTopBreathingRoom: CGFloat = 12
     /// Combined top inset applied to scrollable content so the first line sits
     /// clear of the toolbar at rest, then travels beneath it as the reader scrolls.
     public static var contentTopInset: CGFloat { toolbarHeight + readerTopBreathingRoom }
@@ -285,6 +285,7 @@ public struct LucidIconButton: View {
         .buttonStyle(LucidPressableButtonStyle(pressedScale: 0.86))
         .onHover { isHovered = $0 }
         .help(tooltipString)
+        .accessibilityLabel(helpText ?? "")
     }
 
     private var tooltipString: String {
@@ -345,11 +346,11 @@ public struct LucidSearchField: View {
         .frame(height: height)
         .background(
             RoundedRectangle(cornerRadius: LucidRadius.small)
-                .fill(Color(nsColor: NSColor.controlBackgroundColor).opacity(0.55))
+                .fill(isFocused ? Color.accentColor.opacity(0.05) : Color(nsColor: NSColor.controlBackgroundColor).opacity(0.55))
         )
         .overlay(
             RoundedRectangle(cornerRadius: LucidRadius.small)
-                .stroke(isFocused ? Color.accentColor.opacity(0.6) : LucidColors.subtleBorder, lineWidth: isFocused ? 1 : 0.5)
+                .stroke(isFocused ? Color.accentColor.opacity(0.45) : LucidColors.subtleBorder, lineWidth: 1)
         )
     }
 }
@@ -772,5 +773,69 @@ public struct LucidAccentSwatch: View {
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
         .help(name)
+    }
+}
+
+// MARK: - Window Drag Area
+/// Transparent drag region that forwards mouse drag to window performDrag and
+/// handles titlebar double-click (zoom or minimize according to AppleActionOnDoubleClick).
+public struct LucidWindowDragArea: NSViewRepresentable {
+    public init() {}
+
+    public func makeNSView(context: Context) -> NSView { DragView() }
+    public func updateNSView(_ nsView: NSView, context: Context) {}
+
+    final class DragView: NSView {
+        override var mouseDownCanMoveWindow: Bool { true }
+
+        override func mouseDown(with event: NSEvent) {
+            if event.clickCount == 2 {
+                let action = UserDefaults.standard.string(forKey: "AppleActionOnDoubleClick")
+                if action == "Minimize" {
+                    window?.miniaturize(nil)
+                } else if action == "Maximize" || action == "Fill" || action == "Zoom" {
+                    window?.performZoom(nil)
+                } else if action == "None" {
+                    // System preference is None: do nothing
+                } else if action == nil {
+                    // System default is Zoom if unset
+                    window?.performZoom(nil)
+                }
+                // Unrecognized action: fail safely, do nothing
+                return
+            }
+            window?.performDrag(with: event)
+        }
+
+        override func mouseDragged(with event: NSEvent) {
+            window?.performDrag(with: event)
+        }
+    }
+}
+
+
+extension Color {
+    init(hex: String) {
+        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        var int: UInt64 = 0
+        Scanner(string: hex).scanHexInt64(&int)
+        let a, r, g, b: UInt64
+        switch hex.count {
+        case 3:
+            (a, r, g, b) = (255, (int >> 8) * 17, (int >> 4 & 0xF) * 17, (int & 0xF) * 17)
+        case 6:
+            (a, r, g, b) = (255, int >> 16, int >> 8 & 0xFF, int & 0xFF)
+        case 8:
+            (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
+        default:
+            (a, r, g, b) = (255, 0, 0, 0)
+        }
+        self.init(
+            .sRGB,
+            red: Double(r) / 255,
+            green: Double(g) / 255,
+            blue:  Double(b) / 255,
+            opacity: Double(a) / 255
+        )
     }
 }

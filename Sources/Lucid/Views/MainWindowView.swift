@@ -17,15 +17,27 @@ public struct MainWindowView: View {
     /// Graduated 0…1 depth of the content beneath the toolbar, driving the
     /// scroll-responsive glass almost subconsciously.
     @State private var scrollIntensity: Double = 0
+    /// Dynamic clearance for the native traffic-light cluster, derived from NSWindow geometry.
+    @State private var trafficLightReservedWidth: CGFloat = 77
     @Namespace private var modeSelectorNamespace
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
 
+    enum ActiveSurface {
+        case reader
+        case editor
+    }
+
     // Find & Command Palette
     @State private var isFindBarPresented: Bool = false
     @State private var isCommandPalettePresented: Bool = false
+    @State private var findQuery: String = ""
     @State private var findMatchCount: Int = 0
     @State private var findCurrentIndex: Int = 0
+    @State private var editorMatches: [NSRange] = []
+    @State private var editorMatchIndex: Int = 0
+    @State private var lastActiveSurface: ActiveSurface = .reader
+    @State private var previousFirstResponder: NSResponder? = nil
 
     // Cursor position for status bar
     @State private var cursorLine: Int = 1
@@ -52,6 +64,17 @@ public struct MainWindowView: View {
         fileURL?.deletingPathExtension().lastPathComponent ?? "Untitled"
     }
 
+    private var colorSchemeForTheme: ColorScheme? {
+        switch preferences.theme {
+        case .light, .sepia:
+            return .light
+        case .dark, .oled, .dracula, .nord:
+            return .dark
+        case .system:
+            return nil
+        }
+    }
+
     public init(document: Binding<LucidDocument>, fileURL: URL? = nil) {
         self._document = document
         self.fileURL = fileURL
@@ -63,9 +86,9 @@ public struct MainWindowView: View {
             // scrolls beneath the floating glass toolbar rather than starting below
             // a reserved opaque band.
             VStack(spacing: 0) {
-                HSplitView {
-                    // Outline Sidebar — recessed material, content inset below the toolbar.
-                    if preferences.showOutline {
+                if preferences.showOutline {
+                    HSplitView {
+                        // Outline Sidebar — owns its own compact top row with traffic light clearance and toggle
                         OutlineSidebarView(
                             headings: headings,
                             activeHeadingId: activeHeading?.id,
@@ -73,99 +96,24 @@ public struct MainWindowView: View {
                             wordCount: wordCount,
                             charCount: charCount,
                             readingTimeMinutes: readingTimeMinutes,
-                            topInset: LucidChrome.toolbarHeight
+                            trafficLightWidth: trafficLightReservedWidth,
+                            onToggleSidebar: {
+                                withAnimation(LucidMotion.respecting(reduceMotion, LucidMotion.panel)) {
+                                    preferences.showOutline = false
+                                }
+                            }
                         ) { id in
                             scrollToHeadingId = id
                         }
                         .frame(minWidth: 180, idealWidth: 220, maxWidth: 320)
                         .transition(.move(edge: .leading).combined(with: .opacity))
+
+                        // Document Canvas — owns its own document top row (strictly right of divider)
+                        documentCanvas(sidebarOpen: true)
                     }
-
-                    // Content Canvas
-                    ZStack(alignment: .topTrailing) {
-                        Group {
-                            switch preferences.viewMode {
-                            case .reader:
-                                PreviewWebView(
-                                    preferences: preferences,
-                                    markdown: document.text,
-                                    headings: $headings,
-                                    activeHeading: $activeHeading,
-                                    onScrollFractionChanged: nil,
-                                    onFindMatchesChanged: { count, index in
-                                        findMatchCount = count
-                                        findCurrentIndex = index
-                                    },
-                                    scrollToHeadingId: scrollToHeadingId,
-                                    webViewInstance: $webViewInstance,
-                                    documentFileURL: fileURL,
-                                    onScrollIntensityChanged: { scrollIntensity = $0 }
-                                )
-                                .transition(.opacity)
-                            case .split:
-                                HSplitView {
-                                    EditorView(
-                                        text: $document.text,
-                                        preferences: preferences,
-                                        onScrollFractionChanged: { fraction in
-                                            previewTargetFraction = fraction
-                                        },
-                                        onCursorPositionChanged: { line, col in
-                                            cursorLine = line
-                                            cursorCol = col
-                                        },
-                                        onTextViewCreated: { editorTextView = $0 },
-                                        onScrollIntensityChanged: { scrollIntensity = $0 }
-                                    )
-                                    .frame(minWidth: 260)
-
-                                    PreviewWebView(
-                                        preferences: preferences,
-                                        markdown: document.text,
-                                        headings: $headings,
-                                        activeHeading: $activeHeading,
-                                        onScrollFractionChanged: nil,
-                                        onFindMatchesChanged: { count, index in
-                                            findMatchCount = count
-                                            findCurrentIndex = index
-                                        },
-                                        scrollToHeadingId: scrollToHeadingId,
-                                        targetScrollFraction: previewTargetFraction,
-                                        webViewInstance: $webViewInstance,
-                                        documentFileURL: fileURL,
-                                        onScrollIntensityChanged: { scrollIntensity = $0 }
-                                    )
-                                    .frame(minWidth: 260)
-                                }
-                                .transition(.opacity)
-                            case .editor:
-                                EditorView(
-                                    text: $document.text,
-                                    preferences: preferences,
-                                    onCursorPositionChanged: { line, col in
-                                        cursorLine = line
-                                        cursorCol = col
-                                    },
-                                    onTextViewCreated: { editorTextView = $0 },
-                                    onScrollIntensityChanged: { scrollIntensity = $0 }
-                                )
-                                .transition(.opacity)
-                            }
-                        }
-                        .frame(minWidth: 400, maxWidth: .infinity, maxHeight: .infinity)
-                        .animation(LucidMotion.respecting(reduceMotion, LucidMotion.panel), value: preferences.viewMode)
-
-                        // Floating Find Bar — aligned just below the glass toolbar.
-                        if isFindBarPresented {
-                            FindBarView(
-                                isPresented: $isFindBarPresented,
-                                webView: webViewInstance
-                            )
-                            .padding(.top, LucidChrome.toolbarHeight + LucidSpacing.small)
-                            .padding(.trailing, LucidSpacing.large)
-                            .transition(.move(edge: .top).combined(with: .opacity))
-                        }
-                    }
+                } else {
+                    // Sidebar closed: Document Canvas fills the entire window edge-to-edge
+                    documentCanvas(sidebarOpen: false)
                 }
 
                 // Minimal, Serene Status Bar
@@ -184,9 +132,7 @@ public struct MainWindowView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
-
-            // Floating glass top chrome, layered above the scrolling content.
-            topBar
+            .ignoresSafeArea()
 
             // Command Palette Modal Overlay — a barely-there dim, not a heavy scrim.
             if isCommandPalettePresented {
@@ -234,11 +180,19 @@ public struct MainWindowView: View {
                 )
             }
         }
+        .preferredColorScheme(colorSchemeForTheme)
         .animation(LucidMotion.respecting(reduceMotion, LucidMotion.panel), value: preferences.showOutline)
         .animation(LucidMotion.respecting(reduceMotion, LucidMotion.panel), value: preferences.showStatusBar)
+        .ignoresSafeArea()
         // Configure the window: hide the native title bar so our custom top bar
         // sits flush at the top, and keep it draggable.
-        .background(WindowConfigurator())
+        .background(WindowConfigurator(preferences: preferences, trafficLightWidth: $trafficLightReservedWidth))
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEnterFullScreenNotification)) { _ in
+            trafficLightReservedWidth = LucidSpacing.medium
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didExitFullScreenNotification)) { _ in
+            trafficLightReservedWidth = 77
+        }
         // Keyboard Shortcuts
         .background(
             Group {
@@ -248,18 +202,184 @@ public struct MainWindowView: View {
                 }
                 .keyboardShortcut("k", modifiers: .command)
                 .opacity(0)
-
-                Button("") {
-                    withAnimation(LucidMotion.respecting(reduceMotion, LucidMotion.modal)) {
-                        isFindBarPresented.toggle()
-                    }
-                }
-                .keyboardShortcut("f", modifiers: .command)
-                .opacity(0)
             }
         )
         .onAppear {
             setupFileWatcher()
+            headings = MarkdownOutlineParser.parse(markdown: document.text)
+        }
+        .onChange(of: document.text) { _, newText in
+            let parsed = MarkdownOutlineParser.parse(markdown: newText)
+            if !parsed.isEmpty || headings.isEmpty {
+                headings = parsed
+            }
+            if isFindBarPresented && !findQuery.isEmpty {
+                performFind(findQuery)
+            }
+        }
+        .onChange(of: preferences.viewMode) { _, _ in
+            if isFindBarPresented && !findQuery.isEmpty {
+                performFind(findQuery)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("LucidToggleFind"))) { _ in
+            toggleFind()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("LucidFindNext"))) { _ in
+            findNext()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("LucidFindPrevious"))) { _ in
+            findPrev()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("LucidToggleCommandPalette"))) { _ in
+            withAnimation(LucidMotion.respecting(reduceMotion, LucidMotion.modal)) {
+                isCommandPalettePresented.toggle()
+            }
+        }
+    }
+
+    private var currentActiveSurface: ActiveSurface {
+        switch preferences.viewMode {
+        case .reader:
+            return .reader
+        case .editor:
+            return .editor
+        case .split:
+            return lastActiveSurface
+        }
+    }
+
+    private func toggleFind() {
+        if isFindBarPresented {
+            closeFind()
+        } else {
+            previousFirstResponder = NSApp.keyWindow?.firstResponder
+            if preferences.viewMode == .split {
+                if let responder = previousFirstResponder as? NSView, (responder is NSTextView || (editorTextView != nil && responder.isDescendant(of: editorTextView!))) {
+                    lastActiveSurface = .editor
+                } else {
+                    lastActiveSurface = .reader
+                }
+            }
+            withAnimation(LucidMotion.respecting(reduceMotion, LucidMotion.modal)) {
+                isFindBarPresented = true
+            }
+            if !findQuery.isEmpty {
+                performFind(findQuery)
+            }
+        }
+    }
+
+    private func performFind(_ query: String) {
+        findQuery = query
+        let surface = currentActiveSurface
+        if surface == .reader {
+            let escaped = query.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "'", with: "\\'")
+            webViewInstance?.evaluateJavaScript("if (window.lucid) { window.lucid.find('\(escaped)'); }")
+        } else {
+            if query.isEmpty {
+                editorMatches = []
+                editorMatchIndex = 0
+                findMatchCount = 0
+                findCurrentIndex = 0
+            } else {
+                let text = document.text as NSString
+                var matches: [NSRange] = []
+                var searchRange = NSRange(location: 0, length: text.length)
+                while searchRange.location < text.length {
+                    let found = text.range(of: query, options: .caseInsensitive, range: searchRange)
+                    if found.location == NSNotFound { break }
+                    matches.append(found)
+                    let nextLoc = found.location + max(1, found.length)
+                    if nextLoc >= text.length { break }
+                    searchRange = NSRange(location: nextLoc, length: text.length - nextLoc)
+                }
+                editorMatches = matches
+                findMatchCount = matches.count
+                if !matches.isEmpty {
+                    editorMatchIndex = 0
+                    findCurrentIndex = 1
+                    editorTextView?.setSelectedRange(matches[0])
+                    editorTextView?.scrollRangeToVisible(matches[0])
+                } else {
+                    editorMatchIndex = 0
+                    findCurrentIndex = 0
+                }
+            }
+        }
+    }
+
+    private func findNext() {
+        let surface = currentActiveSurface
+        if surface == .reader {
+            webViewInstance?.evaluateJavaScript("if (window.lucid) { window.lucid.findNext(); }")
+        } else {
+            guard !editorMatches.isEmpty else { return }
+            editorMatchIndex = (editorMatchIndex + 1) % editorMatches.count
+            findCurrentIndex = editorMatchIndex + 1
+            let range = editorMatches[editorMatchIndex]
+            editorTextView?.setSelectedRange(range)
+            editorTextView?.scrollRangeToVisible(range)
+        }
+    }
+
+    private func findPrev() {
+        let surface = currentActiveSurface
+        if surface == .reader {
+            webViewInstance?.evaluateJavaScript("if (window.lucid) { window.lucid.findPrev(); }")
+        } else {
+            guard !editorMatches.isEmpty else { return }
+            editorMatchIndex = (editorMatchIndex - 1 + editorMatches.count) % editorMatches.count
+            findCurrentIndex = editorMatchIndex + 1
+            let range = editorMatches[editorMatchIndex]
+            editorTextView?.setSelectedRange(range)
+            editorTextView?.scrollRangeToVisible(range)
+        }
+    }
+
+    private func closeFind() {
+        withAnimation(LucidMotion.respecting(reduceMotion, LucidMotion.modal)) {
+            isFindBarPresented = false
+        }
+        if currentActiveSurface == .reader {
+            webViewInstance?.evaluateJavaScript("if (window.lucid) { window.lucid.clearFind(); }")
+        }
+        restoreFocusAfterFind()
+    }
+
+    private func restoreFocusAfterFind() {
+        if let target = previousFirstResponder {
+            let targetWindow: NSWindow? = {
+                if let view = target as? NSView { return view.window }
+                if let window = target as? NSWindow { return window }
+                return nil
+            }()
+            let isHidden: Bool = {
+                if let view = target as? NSView { return view.isHiddenOrHasHiddenAncestor }
+                return false
+            }()
+
+            if let window = targetWindow, window == NSApp.keyWindow, !isHidden {
+                window.makeFirstResponder(target)
+                return
+            }
+        }
+
+        switch preferences.viewMode {
+        case .editor:
+            if let tv = editorTextView, tv.window != nil {
+                tv.window?.makeFirstResponder(tv)
+            }
+        case .reader:
+            if let wv = webViewInstance, wv.window != nil {
+                wv.window?.makeFirstResponder(wv)
+            }
+        case .split:
+            if lastActiveSurface == .editor, let tv = editorTextView, tv.window != nil {
+                tv.window?.makeFirstResponder(tv)
+            } else if let wv = webViewInstance, wv.window != nil {
+                wv.window?.makeFirstResponder(wv)
+            }
         }
     }
 
@@ -275,55 +395,193 @@ public struct MainWindowView: View {
         }
     }
 
-    // MARK: - Custom Top Bar
+    // MARK: - Structural Document Canvas & Top Chrome
 
-    private var topBar: some View {
-        ZStack {
-            // Glass layer sits behind everything.
-            topBarBackground
+    private func documentCanvas(sidebarOpen: Bool) -> some View {
+        ZStack(alignment: .topTrailing) {
+            documentContent
+                .frame(minWidth: 400, maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(hex: preferences.theme.themeTokens.windowBackground))
+                .animation(LucidMotion.respecting(reduceMotion, LucidMotion.panel), value: preferences.viewMode)
 
-            // Empty regions of the bar drag the window.
-            WindowDragArea()
+            // Floating glass top chrome, structurally contained in the Document Canvas
+            documentTopBar(sidebarOpen: sidebarOpen)
 
-            HStack(spacing: LucidSpacing.small) {
-                // Leave room for the traffic lights.
-                Color.clear.frame(width: 68, height: 1)
-
-                LucidIconButton(
-                    icon: "sidebar.leading",
-                    size: 28,
-                    iconSize: 13,
-                    isActive: preferences.showOutline,
-                    helpText: "Toggle Outline Sidebar",
-                    shortcutText: "⌃⌘S"
-                ) {
-                    withAnimation(LucidMotion.respecting(reduceMotion, LucidMotion.panel)) {
-                        preferences.showOutline.toggle()
-                    }
-                }
-
-                Text(documentTitle)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(LucidColors.textSecondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .padding(.leading, LucidSpacing.xxSmall)
-                    .allowsHitTesting(false)
-
-                Spacer(minLength: LucidSpacing.medium)
-
-                modeSelector
-
-                moreMenu
+            // Floating Find Bar — aligned just below the glass toolbar.
+            if isFindBarPresented {
+                FindBarView(
+                    isPresented: $isFindBarPresented,
+                    query: $findQuery,
+                    matchCount: $findMatchCount,
+                    currentIndex: $findCurrentIndex,
+                    onPerformFind: { performFind($0) },
+                    onFindNext: { findNext() },
+                    onFindPrev: { findPrev() },
+                    onDismiss: { closeFind() }
+                )
+                .padding(.top, LucidChrome.toolbarHeight + LucidSpacing.small)
+                .padding(.trailing, LucidSpacing.large)
+                .transition(.move(edge: .top).combined(with: .opacity))
             }
-            .padding(.horizontal, LucidSpacing.medium)
-            .opacity(toolbarControlsOpacity)
-            .animation(LucidMotion.respecting(reduceMotion, LucidMotion.panel), value: isToolbarHovered)
-            .animation(LucidMotion.respecting(reduceMotion, LucidMotion.panel), value: preferences.focusMode)
+        }
+        .ignoresSafeArea()
+    }
+
+    private var documentContent: some View {
+        Group {
+            switch preferences.viewMode {
+            case .reader:
+                PreviewWebView(
+                    preferences: preferences,
+                    markdown: document.text,
+                    headings: $headings,
+                    activeHeading: $activeHeading,
+                    onScrollFractionChanged: nil,
+                    onFindMatchesChanged: { count, index in
+                        findMatchCount = count
+                        findCurrentIndex = index
+                    },
+                    scrollToHeadingId: scrollToHeadingId,
+                    webViewInstance: $webViewInstance,
+                    documentFileURL: fileURL,
+                    onScrollIntensityChanged: { scrollIntensity = $0 }
+                )
+                .transition(.opacity)
+            case .split:
+                HSplitView {
+                    EditorView(
+                        text: $document.text,
+                        preferences: preferences,
+                        onScrollFractionChanged: { fraction in
+                            previewTargetFraction = fraction
+                        },
+                        onCursorPositionChanged: { line, col in
+                            cursorLine = line
+                            cursorCol = col
+                        },
+                        onTextViewCreated: { editorTextView = $0 },
+                        onScrollIntensityChanged: { scrollIntensity = $0 }
+                    )
+                    .frame(minWidth: 260)
+
+                    PreviewWebView(
+                        preferences: preferences,
+                        markdown: document.text,
+                        headings: $headings,
+                        activeHeading: $activeHeading,
+                        onScrollFractionChanged: nil,
+                        onFindMatchesChanged: { count, index in
+                            findMatchCount = count
+                            findCurrentIndex = index
+                        },
+                        scrollToHeadingId: scrollToHeadingId,
+                        targetScrollFraction: previewTargetFraction,
+                        webViewInstance: $webViewInstance,
+                        documentFileURL: fileURL,
+                        onScrollIntensityChanged: { scrollIntensity = $0 }
+                    )
+                    .frame(minWidth: 260)
+                }
+                .transition(.opacity)
+            case .editor:
+                EditorView(
+                    text: $document.text,
+                    preferences: preferences,
+                    onCursorPositionChanged: { line, col in
+                        cursorLine = line
+                        cursorCol = col
+                    },
+                    onTextViewCreated: { editorTextView = $0 },
+                    onScrollIntensityChanged: { scrollIntensity = $0 }
+                )
+                .transition(.opacity)
+            }
+        }
+    }
+
+    private func documentTopBar(sidebarOpen: Bool) -> some View {
+        VStack(spacing: 0) {
+            ZStack {
+                // Soft, subtle downward fade only when scrolled — no full-width titlebar slab
+                topBarBackground
+
+                // Empty regions of the bar drag the window.
+                LucidWindowDragArea()
+
+                HStack(spacing: LucidSpacing.small) {
+                    if !sidebarOpen {
+                        // Reserved clearance for native traffic lights
+                        Color.clear
+                            .frame(width: trafficLightReservedWidth, height: 1)
+                            .allowsHitTesting(false)
+
+                        LucidIconButton(
+                            icon: "sidebar.leading",
+                            size: 26,
+                            iconSize: 13,
+                            isActive: false,
+                            helpText: "Toggle Outline Sidebar",
+                            shortcutText: "⌃⌘S"
+                        ) {
+                            withAnimation(LucidMotion.respecting(reduceMotion, LucidMotion.panel)) {
+                                preferences.showOutline = true
+                            }
+                        }
+                        .background(controlGlassBackground(cornerRadius: 6))
+                    }
+
+                    documentTitleBadge
+                        .layoutPriority(0)
+
+                    Spacer(minLength: LucidSpacing.medium)
+
+                    rightControlsCluster
+                }
+                .padding(.leading, sidebarOpen ? LucidSpacing.large : 0)
+                .padding(.trailing, LucidSpacing.medium)
+                .opacity(toolbarControlsOpacity)
+                .animation(LucidMotion.respecting(reduceMotion, LucidMotion.panel), value: isToolbarHovered)
+                .animation(LucidMotion.respecting(reduceMotion, LucidMotion.panel), value: preferences.focusMode)
+            }
+            .frame(height: LucidChrome.toolbarHeight)
+            .frame(maxWidth: .infinity)
+            .onHover { isToolbarHovered = $0 }
         }
         .frame(height: LucidChrome.toolbarHeight)
-        .frame(maxWidth: .infinity)
-        .onHover { isToolbarHovered = $0 }
+    }
+
+    private func controlGlassBackground(cornerRadius: CGFloat) -> some View {
+        Group {
+            if scrollIntensity > 0.05 {
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .fill(.ultraThinMaterial)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: cornerRadius)
+                            .fill(Color(hex: preferences.theme.themeTokens.windowBackground).opacity(0.35))
+                    )
+            }
+        }
+        .animation(.easeOut(duration: 0.15), value: scrollIntensity > 0.05)
+    }
+
+    private var titleVisibility: Double {
+        let progress = min(1.0, max(0.0, scrollIntensity))
+        // Smooth continuous cosine curve: 1.0 at rest, 0.95 at ~4px, 0.61 at ~12px, 0.20 at ~20px, 0.0 at 28px
+        return (1.0 + cos(progress * .pi)) / 2.0
+    }
+
+    private var documentTitleBadge: some View {
+        Text(documentTitle)
+            .font(.system(size: 11, weight: .regular))
+            .foregroundColor(Color(hex: preferences.theme.themeTokens.textTertiary))
+            .lineLimit(1)
+            .truncationMode(.middle)
+            .padding(.horizontal, 4)
+            .frame(height: 24)
+            .opacity(titleVisibility)
+            .allowsHitTesting(titleVisibility > 0.05)
+            .help(titleVisibility > 0.05 ? documentTitle : "")
+            .accessibilityLabel(documentTitle)
     }
 
     /// In Focus Mode the toolbar controls recede to keep the document dominant,
@@ -333,25 +591,30 @@ public struct MainWindowView: View {
         return isToolbarHovered ? 1 : 0.4
     }
 
-    /// Near-transparent at the top of the document; as content travels beneath the
-    /// controls a native vibrancy layer, a faint hairline, and a soft shadow fade
-    /// in together for depth — the effect is meant to be felt, not noticed.
+    /// Soft, subtle gradient fade only when scrolled — no full-width titlebar slab.
+    /// The document continues physically underneath, with content remaining clearly perceptible.
     private var topBarBackground: some View {
-        ZStack(alignment: .bottom) {
-            // `.withinWindow` so the glass frosts the document scrolling beneath it
-            // (this same window), not the desktop behind the window.
-            LucidVisualEffectView(material: .headerView, blendingMode: .withinWindow)
-                .opacity(0.12 + 0.88 * scrollIntensity)
-
-            Rectangle()
-                .fill(LucidColors.subtleSeparator)
-                .frame(height: 0.5)
-                .opacity(scrollIntensity)
-        }
-        .compositingGroup()
-        .shadow(color: Color.black.opacity(0.10 * scrollIntensity), radius: 7, x: 0, y: 2)
+        LinearGradient(
+            colors: [
+                Color(hex: preferences.theme.themeTokens.windowBackground).opacity(0.42 * scrollIntensity),
+                Color(hex: preferences.theme.themeTokens.windowBackground).opacity(0.0)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
         .allowsHitTesting(false)
-        .animation(.easeOut(duration: 0.08), value: scrollIntensity)
+        .animation(.easeOut(duration: 0.15), value: scrollIntensity)
+    }
+
+    private var rightControlsCluster: some View {
+        HStack(spacing: 2) {
+            modeSelector
+            moreMenu
+        }
+        .padding(2)
+        .background(controlGlassBackground(cornerRadius: 6))
+        .layoutPriority(1)
+        .fixedSize()
     }
 
     private var modeSelector: some View {
@@ -364,22 +627,18 @@ public struct MainWindowView: View {
                     }
                 }) {
                     Image(systemName: modeIcon(mode))
-                        .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
-                        .foregroundColor(isSelected ? .accentColor : LucidColors.textSecondary)
-                        .frame(width: 34, height: 24)
+                        .font(.system(size: 12, weight: isSelected ? .medium : .regular))
+                        .foregroundColor(isSelected ? Color(hex: preferences.theme.themeTokens.textPrimary) : Color(hex: preferences.theme.themeTokens.textSecondary))
+                        .frame(width: 28, height: 22)
                         .background(
-                            ZStack {
-                                if isSelected {
-                                    RoundedRectangle(cornerRadius: 6)
-                                        .fill(Color.accentColor.opacity(0.16))
-                                        .matchedGeometryEffect(id: "modePill", in: modeSelectorNamespace)
-                                }
-                            }
+                            RoundedRectangle(cornerRadius: 5)
+                                .fill(isSelected ? Color(hex: preferences.theme.themeTokens.textPrimary).opacity(0.12) : Color.clear)
                         )
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(LucidPressableButtonStyle(pressedScale: 0.9))
+                .buttonStyle(LucidPressableButtonStyle(pressedScale: 0.94))
                 .help(modeHelp(mode))
+                .accessibilityLabel(modeHelp(mode))
             }
         }
     }
@@ -428,14 +687,15 @@ public struct MainWindowView: View {
         } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: 13, weight: .medium))
-                .foregroundColor(LucidColors.textSecondary)
-                .frame(width: 28, height: 28)
+                .foregroundColor(Color(hex: preferences.theme.themeTokens.textSecondary))
+                .frame(width: 26, height: 26)
                 .contentShape(Rectangle())
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
         .fixedSize()
         .help("More Actions")
+        .accessibilityLabel("More Actions")
     }
 
     private func modeIcon(_ mode: ViewMode) -> String {
@@ -515,40 +775,83 @@ public struct MainWindowView: View {
 /// Hides the native title bar so the custom top bar sits flush at the top,
 /// while keeping the traffic lights, resizing, and standard window behavior.
 private struct WindowConfigurator: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView()
-        DispatchQueue.main.async {
-            guard let window = view.window else { return }
-            window.titlebarAppearsTransparent = true
-            window.titleVisibility = .hidden
-            window.styleMask.insert(.fullSizeContentView)
-            window.isMovableByWindowBackground = false
-            if let toolbar = window.toolbar {
-                toolbar.isVisible = false
-            }
-            // Keep the traffic lights vertically centered in the custom bar.
-            window.standardWindowButton(.closeButton)?.superview?.superview?.needsLayout = true
+    @ObservedObject var preferences: LucidPreferences
+    @Binding var trafficLightWidth: CGFloat
+
+    func makeNSView(context: Context) -> ConfiguratorView {
+        let view = ConfiguratorView()
+        view.onWindowAttached = { window in
+            self.applyWindowSettings(to: window)
         }
         return view
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {}
-}
+    func updateNSView(_ nsView: ConfiguratorView, context: Context) {
+        nsView.onWindowAttached = { window in
+            self.applyWindowSettings(to: window)
+        }
+        if let window = nsView.window {
+            applyWindowSettings(to: window)
+        }
+    }
 
-/// A transparent drag region: dragging empty areas of the top bar moves the window.
-private struct WindowDragArea: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView { DragView() }
-    func updateNSView(_ nsView: NSView, context: Context) {}
+    private func applyWindowSettings(to window: NSWindow) {
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.title = ""
+        window.styleMask.insert(.fullSizeContentView)
+        window.isMovableByWindowBackground = false
+        if let toolbar = window.toolbar {
+            toolbar.isVisible = false
+        }
+        window.standardWindowButton(.documentIconButton)?.isHidden = true
+        window.standardWindowButton(.documentVersionsButton)?.isHidden = true
 
-    final class DragView: NSView {
-        override var mouseDownCanMoveWindow: Bool { true }
-
-        override func mouseDown(with event: NSEvent) {
-            window?.performDrag(with: event)
+        switch preferences.theme {
+        case .light, .sepia:
+            window.appearance = NSAppearance(named: .aqua)
+        case .dark, .oled, .dracula, .nord:
+            window.appearance = NSAppearance(named: .darkAqua)
+        case .system:
+            window.appearance = nil
         }
 
-        override func mouseDragged(with event: NSEvent) {
-            window?.performDrag(with: event)
+        let computed = computeTrafficLightWidth(for: window)
+        if abs(trafficLightWidth - computed) > 0.5 {
+            DispatchQueue.main.async {
+                self.trafficLightWidth = computed
+            }
+        }
+    }
+
+    private func computeTrafficLightWidth(for window: NSWindow) -> CGFloat {
+        if window.styleMask.contains(.fullScreen) {
+            return LucidSpacing.medium
+        }
+        let buttons: [NSWindow.ButtonType] = [.closeButton, .miniaturizeButton, .zoomButton]
+        var maxX: CGFloat = 0
+        var found = false
+        for bType in buttons {
+            if let btn = window.standardWindowButton(bType), !btn.isHidden, let cv = window.contentView {
+                let rect = btn.convert(btn.bounds, to: cv)
+                maxX = max(maxX, rect.maxX)
+                found = true
+            }
+        }
+        if found && maxX > 0 {
+            return maxX + LucidSpacing.small
+        }
+        return 77
+    }
+
+    final class ConfiguratorView: NSView {
+        var onWindowAttached: ((NSWindow) -> Void)?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if let window = window {
+                onWindowAttached?(window)
+            }
         }
     }
 }
