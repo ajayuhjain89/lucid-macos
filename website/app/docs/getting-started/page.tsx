@@ -9,7 +9,6 @@ export const metadata: Metadata = {
 };
 
 export default function GettingStartedPage() {
-  const quarantineCommand = `xattr -d com.apple.quarantine /Applications/Lucid.app`;
   const cliOpenCommand = `open -a Lucid path/to/document.md`;
 
   return (
@@ -57,13 +56,9 @@ export default function GettingStartedPage() {
               <li>Right-click (or Control-click) <strong className="text-text-primary">Lucid.app</strong> and select <strong className="text-text-primary">Open</strong>.</li>
               <li>Click <strong className="text-text-primary">Open</strong> in the confirmation dialog.</li>
             </ol>
-            <div className="pt-2 border-t border-border-subtle flex items-center justify-between">
-              <span className="text-xs font-mono text-text-tertiary">Or remove quarantine via Terminal:</span>
-              <CopyButton text={quarantineCommand} label="Copy Command" />
-            </div>
-            <pre className="p-2.5 rounded bg-code-bg border border-code-border font-mono text-xs text-code-fg overflow-x-auto">
-              {quarantineCommand}
-            </pre>
+            <p className="text-xs text-text-secondary pt-2 border-t border-border-subtle">
+              Still blocked? Open <strong className="text-text-primary">System Settings → Privacy &amp; Security</strong>, scroll to the Security section, and click <strong className="text-text-primary">Open Anyway</strong> next to the message about Lucid.
+            </p>
           </div>
         </div>
       </section>
