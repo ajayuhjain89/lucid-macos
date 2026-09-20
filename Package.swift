@@ -1,8 +1,11 @@
-// swift-tools-version: 6.3
+// swift-tools-version: 5.9
 import PackageDescription
 
 let package = Package(
     name: "Lucid",
+    platforms: [
+        .macOS(.v14)
+    ],
     targets: [
         .executableTarget(
             name: "Lucid",
@@ -11,6 +14,5 @@ let package = Package(
                 .copy("Resources/WebEngine")
             ]
         )
-    ],
-    swiftLanguageModes: [.v6]
+    ]
 )

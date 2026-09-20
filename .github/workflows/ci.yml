@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop, design, logic, docs]
+  pull_request:
+    branches: [main, develop, design, logic, docs]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build (macOS, Apple Silicon)
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          swift --version
+          xcodebuild -version
+
+      - name: Compile optimized arm64 binary
+        run: |
+          set -euo pipefail
+          mkdir -p scratch/ModuleCache
+          swiftc -parse-as-library -target arm64-apple-macosx14.0 -O -swift-version 5 \
+            -module-cache-path scratch/ModuleCache \
+            -o /tmp/Lucid \
+            $(find Sources/Lucid -name "*.swift")
+          test -x /tmp/Lucid && echo "Lucid binary built successfully"
+
+      - name: Assemble & sign app bundle
+        run: |
+          set -euo pipefail
+          APP="/tmp/Lucid.app"; C="$APP/Contents"
+          mkdir -p "$C/MacOS" "$C/Resources"
+          cp /tmp/Lucid "$C/MacOS/Lucid"
+          cp Info.plist "$C/Info.plist"
+          echo "APPL????" > "$C/PkgInfo"
+          [ -f AppIcon.icns ] && cp AppIcon.icns "$C/Resources/AppIcon.icns" || true
+          cp -R Sources/Lucid/Resources/WebEngine "$C/Resources/WebEngine"
+          codesign --force --deep -s - "$APP"
+          codesign --verify --deep --strict "$APP" && echo "App bundle signed and verified"
