@@ -1,75 +1,108 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ajayuhjain89/lucid/main/icon.png" width="128" height="128" alt="Lucid Logo" style="border-radius: 28px; box-shadow: 0 10px 30px rgba(0,0,0,0.25);" />
+  <img src="assets/icon.png" width="128" height="128" alt="Lucid" />
 </p>
 
 <h1 align="center">Lucid for macOS</h1>
 
 <p align="center">
-  <strong>A high-performance, distraction-free native Markdown reader and editor for macOS.</strong><br>
-  Built with Swift, SwiftUI, and Apple Silicon native optimization.
+  <strong>A quiet, premium, native Markdown reader &amp; editor for macOS.</strong><br>
+  Built with Swift &amp; SwiftUI. No Electron. Apple-Silicon native.
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/platform-macOS%2014.0%2B-black?style=flat-square&logo=apple" alt="macOS 14+">
   <img src="https://img.shields.io/badge/arch-Apple%20Silicon%20(arm64)-orange?style=flat-square" alt="arm64">
-  <img src="https://img.shields.io/badge/binary-645%20KB-blue?style=flat-square" alt="Binary Size">
-  <img src="https://img.shields.io/badge/bundle-8.9%20MB-emerald?style=flat-square" alt="Bundle Size">
-  <img src="https://img.shields.io/badge/license-MIT-purple?style=flat-square" alt="MIT License">
+  <img src="https://img.shields.io/badge/Swift-5.9%2B-F05138?style=flat-square&logo=swift&logoColor=white" alt="Swift 5.9+">
+  <img src="https://img.shields.io/badge/UI-SwiftUI%20%2B%20AppKit-1575F9?style=flat-square" alt="SwiftUI + AppKit">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-purple?style=flat-square" alt="MIT License"></a>
 </p>
 
 ---
 
+Lucid renders Markdown with an editorial identity and wraps it in a genuinely native macOS shell: a floating glass toolbar that content scrolls *beneath*, scroll-responsive depth, and motion tuned to feel deliberate and quiet. The document is always the star.
+
 ## Highlights
 
-- ⚡️ **Instant Launch (< 50ms)**: Pure native Mach-O binary without Electron runtime overhead. Consumes ~25 MB RAM.
-- 📖 **Reader Mode (`⌘1`)**: Zero-chrome, centered reading canvas with optical margin alignment and ProMotion 120Hz smooth scrolling.
-- ✍️ **Split Editor Mode (`⌘2`)**: Side-by-side Markdown editor with bidirectional synchronized scrolling and smart-substitutions disabled.
-- 🎨 **Inspector Panel (`⌘I`)**: Live control over font family (SF Pro, New York Serif, SF Mono), font size, line height, reading width, accent color, and themes.
-- 🌓 **Themes**: System Auto, Light, Dark, Sepia, OLED True Black, Nord, and Dracula.
-- 🔔 **GitHub Alerts**: Full support for `[!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`, and `[!CAUTION]` with custom iconography.
-- 📐 **KaTeX Equations**: Instant offline rendering of inline math (`$...$`) and block math (`$$...$$`).
-- 📊 **Mermaid Diagrams**: Interactive flowcharts, sequence diagrams, and architecture maps rendered directly.
-- 📑 **Table of Contents (`⌘⌥T`)**: Live outline extracted from headings with smooth jump-to-section navigation.
-- 👁 **Live External File Watcher**: Edit in Neovim, VS Code, or Obsidian and watch Lucid update live on save without losing your scroll position.
-- 🖨 **Pro Export**: Pixel-perfect vector PDF, self-contained standalone HTML (offline assets embedded), and formatted Rich Text copy to clipboard.
-
----
+- ⚡️ **Native &amp; instant** — a pure Swift/AppKit/WebKit binary. No Electron runtime, no bundled Chromium; launches immediately and stays light on memory.
+- 🪟 **Floating glass chrome** — a translucent `NSVisualEffectView` toolbar that content scrolls underneath. The glass is near-transparent at the top of a document and frosts subtly as content passes beneath it.
+- 📖 **Reader / Split / Editor** — three modes (`⌘1` / `⌘2` / `⌘3`) with a distraction-free reading canvas, a live side-by-side editor with synchronized scrolling, and a focused source editor.
+- 🎯 **Focus &amp; Typewriter modes** — dim inactive blocks (`⌘⇧D`) and keep the active line centered (`⌘⇧T`).
+- 🎨 **Curated themes** — System Dynamic, Lucid Studio Dark, Editorial Light, and Warm Book Sepia, each tuned separately (not just inverted) with a user-customizable accent color.
+- 🔔 **GitHub / Obsidian alerts** — `[!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`, `[!CAUTION]`, and more, with iconography and collapsible variants.
+- 📐 **KaTeX math** — offline inline (`$…$`) and block (`$$…$$`) rendering, with `mhchem` for chemistry.
+- 📊 **Mermaid diagrams** — flowcharts and diagrams rendered inline with zoom and SVG copy/export.
+- 🧭 **Live outline &amp; command palette** — a heading outline sidebar (`⌘⌥T`) with scroll-spy, and a fuzzy command palette (`⌘K`).
+- 🔎 **In-document find** — a floating find bar (`⌘F`) with match navigation.
+- 👁 **Live file watching** — edit in Neovim, VS Code, or Obsidian and Lucid updates on save without losing your place.
+- 🖨 **Pro export** — vector PDF, self-contained standalone HTML (assets embedded), and formatted rich-text copy.
+- ♿️ **Accessibility-aware** — honors Reduce Transparency, Reduce Motion, and Increased Contrast.
 
 ## Keyboard Shortcuts
 
 | Shortcut | Action |
 | :--- | :--- |
-| `⌘1` | Switch to **Reader Mode** |
-| `⌘2` | Switch to **Split Editor Mode** |
-| `⌘3` | Switch to **Editor Mode** |
-| `⌘I` | Toggle **Inspector Panel** |
-| `⌘⌥T` | Toggle **Table of Contents Outline** |
-| `⌘+` / `⌘-` | Increase / Decrease Font Size |
-| `⌘0` | Reset Font Size (16px) |
-| `⌘P` | Export as Vector PDF |
-| `⌘E` | Export as Standalone HTML |
-| `⌥⌘C` | Copy Formatted Rich Text |
+| `⌘1` / `⌘2` / `⌘3` | Reader / Split / Editor mode |
+| `⌘K` | Command palette |
+| `⌘F` | Find in document |
+| `⌘⌥T` | Toggle table-of-contents sidebar |
+| `⌃⌘S` | Toggle outline sidebar |
+| `⌘⇧D` | Toggle Focus mode |
+| `⌘⇧T` | Toggle Typewriter mode |
+| `⌘+` / `⌘-` / `⌘0` | Increase / decrease / reset font size |
+| `⌥⌘C` | Copy formatted rich text |
+| `⌘E` | Export as standalone HTML |
+| `⌘,` | Settings |
 
----
+> Export as PDF and the full theme/preset list are available from the command palette (`⌘K`) and the toolbar's overflow menu.
+
+## Requirements
+
+- macOS 14.0 (Sonoma) or later
+- Apple Silicon (arm64)
+- Xcode Command Line Tools (`xcode-select --install`) — provides the Swift toolchain
 
 ## Building from Source
 
-Requirements: macOS 14.0+ and Swift 6+ (Apple Command Line Tools).
-
 ```bash
-# Clone the repository
 git clone https://github.com/ajayuhjain89/lucid-macos.git
 cd lucid-macos
 
-# Compile and package Lucid.app
+# Compile, bundle, sign Lucid.app, and produce the DMG
 ./build.sh
 
-# Launch the app
+# Run it
 open Lucid.app
 ```
 
----
+The build script compiles an optimized arm64 binary, assembles `Lucid.app`, ad-hoc code-signs it, and creates `Lucid-1.0.0.dmg`.
+
+> A `Package.swift` is included for editor/tooling integration. `swift build`
+> requires a full Xcode toolchain; the supported build path is `./build.sh`.
+
+## Architecture
+
+Lucid is a document-based SwiftUI app with a WebKit rendering surface for Markdown.
+
+```
+Sources/Lucid/
+├── LucidApp.swift            # App entry, DocumentGroup, menu commands
+├── DesignSystem/             # Spacing, radius, motion, materials, reusable controls
+├── Models/                   # Preferences, document, commands, heading outline
+├── Views/                    # Main window, toolbar, editor, preview, sidebar,
+│                             #   status bar, command palette, find, settings
+├── Services/                 # Render coordination, file watching, export, metrics
+└── Resources/WebEngine/      # HTML/CSS/JS reader (markdown-it, KaTeX, Mermaid,
+                              #   highlight.js) — the visual source of truth
+```
+
+**How rendering works:** editing happens only in the native Markdown source editor (`NSTextView`). The rendered preview is a strictly read-only `WKWebView` running a bundled, fully offline engine (`markdown-it` + plugins, KaTeX/mhchem, Mermaid, highlight.js). A `PreviewRenderCoordinator` debounces updates and enforces revision equality so renders never race. Native chrome (the floating glass toolbar) is layered over the full-height content so the document scrolls beneath it; the toolbar height and the content's top inset are coupled through `LucidChrome` in the design system.
+
+The `Resources/WebEngine` reader is ported from the companion **Lucid** VS Code extension, which remains the visual source of truth for rendered Markdown content.
+
+## Contributing
+
+Issues and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Please keep changes aligned with the app's design principles: quiet, native, and document-first.
 
 ## License
 
-MIT © [Ayush Jain](https://github.com/ajayuhjain89)
+MIT © [Ayush Jain](https://github.com/ajayuhjain89) — see [LICENSE](LICENSE).
