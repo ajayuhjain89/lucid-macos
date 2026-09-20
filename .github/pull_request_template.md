@@ -3,7 +3,7 @@
     [Design] <task>   [Logic] <task>   [Docs] <task>
     [Integration] Merge verified <category> into develop
     [Release] Promote develop to main
-  See github_workflow.md for the full workflow.
+  See docs/github_workflow.md for the full workflow.
   Add labels: one type: + one or more area: + one status:.
 -->
 
@@ -67,7 +67,7 @@
 ## Checklist
 
 - [ ] Correct task branch used (`design-*` / `logic-*` / `docs-*`)
-- [ ] PR direction is allowed (see github_workflow.md §7)
+- [ ] PR direction is allowed (see docs/github_workflow.md §7)
 - [ ] Relevant verification completed
 - [ ] No unrelated changes included
 - [ ] Labels applied (type + area + status)

@@ -19,6 +19,9 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Command palette and find bar moved to the native glass material with a lighter,
   less intrusive entrance.
 - Status bar softened from a hard band to a barely-there hairline.
+- Moved application/project documentation into `docs/` (workflow guide, engineering
+  showcase, sample), keeping README/LICENSE/CHANGELOG/CONTRIBUTING/THIRD-PARTY-NOTICES
+  in the repository root.
 
 ## [1.0.0]
 
