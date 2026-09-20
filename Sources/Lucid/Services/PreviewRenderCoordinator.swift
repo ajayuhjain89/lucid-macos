@@ -88,6 +88,7 @@ public final class PreviewRenderCoordinator: ObservableObject {
         let payload: [String: Any] = [
             "type": "updateContent",
             "revision": revision,
+            "renderId": "\(revision)",
             "markdown": markdown
         ]
 

@@ -1,8 +1,9 @@
 name: Branch Flow Policy
 
 # Validates that every pull request uses an allowed source -> target direction,
-# per docs/github_workflow.md. Maintainers can bypass by adding the "workflow:override"
-# label to the PR (e.g. for repository-maintenance merges).
+# per docs/github_workflow.md §7. The workflow is direct-to-category, so most work
+# needs no PR at all; this only guards the PRs that are opened. Maintainers can
+# bypass by adding the "workflow:override" label (e.g. for maintenance merges).
 
 on:
   pull_request:
@@ -31,13 +32,26 @@ jobs:
             exit 0
           fi
 
+          # Temporary branches that may be taken into a category branch.
+          is_temp=0
+          case "$HEAD_REF" in
+            experiment/*|prototype/*|migration/*|refactor/*) is_temp=1 ;;
+          esac
+
           allowed=0
           case "$BASE_REF" in
-            design)  [[ "$HEAD_REF" == design-* ]] && allowed=1 ;;
-            logic)   [[ "$HEAD_REF" == logic-*  ]] && allowed=1 ;;
-            docs)    [[ "$HEAD_REF" == docs-*   ]] && allowed=1 ;;
-            develop) [[ "$HEAD_REF" == "design" || "$HEAD_REF" == "logic" || "$HEAD_REF" == "docs" ]] && allowed=1 ;;
-            main)    [[ "$HEAD_REF" == "develop" || "$HEAD_REF" == hotfix-* ]] && allowed=1 ;;
+            develop)
+              # Verified category work integrates into develop.
+              [[ "$HEAD_REF" == "logic" || "$HEAD_REF" == "design" || "$HEAD_REF" == "docs" ]] && allowed=1
+              ;;
+            main)
+              # Only develop (or an emergency hotfix) promotes to main.
+              [[ "$HEAD_REF" == "develop" || "$HEAD_REF" == hotfix/* ]] && allowed=1
+              ;;
+            logic|design|docs)
+              # Accepted temporary branches fold into a category branch.
+              [ "$is_temp" = "1" ] && allowed=1
+              ;;
           esac
 
           if [ "$allowed" = "1" ]; then
@@ -48,17 +62,15 @@ jobs:
           echo "::error::Disallowed PR direction: '$HEAD_REF' -> '$BASE_REF'."
           cat <<'EOF'
           Allowed directions (see docs/github_workflow.md §7):
-            design-*  -> design
-            logic-*   -> logic
-            docs-*    -> docs
-            design    -> develop
             logic     -> develop
+            design    -> develop
             docs      -> develop
             develop   -> main
-            hotfix-*  -> main   (emergency)
+            experiment/… | prototype/… | migration/… | refactor/…  -> logic | design | docs
+            hotfix/…  -> main   (emergency)
 
-          Task branches must go through their category branch, and only
-          'develop' may merge into 'main'. Maintainers may add the
-          'workflow:override' label to bypass this check when necessary.
+          Normal work is committed directly on logic/design/docs (no task branch,
+          no PR required). Only 'develop' may merge into 'main'. Maintainers may
+          add the 'workflow:override' label to bypass this check when necessary.
           EOF
           exit 1

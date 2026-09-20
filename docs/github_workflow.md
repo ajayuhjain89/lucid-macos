@@ -1,452 +1,236 @@
 # Lucid — Git & GitHub Workflow
 
 This is the canonical, authoritative description of how work flows through the
-Lucid repository. Every contributor should be able to read this file and
-understand the complete process without asking anyone.
+Lucid repository. Every contributor — human or coding agent — should be able to
+read this file and understand the complete process without asking anyone.
 
 If the workflow itself changes, **update this file in the same change.**
 
 ---
 
-## 1. Purpose
+## 1. Mental model
 
-Lucid separates work into three categories — **design**, **logic**, and
-**docs** — and moves every change through a strict, verifiable path:
+Lucid separates work into three **categories** — **logic**, **design**, and
+**docs** — but does **not** create a new branch for every task. Ordinary work
+happens **directly on the category branch**, then flows through integration:
 
 ```
-WORK → CATEGORY → VERIFY → TAG → DEVELOP → INTEGRATION VERIFY → MAIN
+logic  ┐
+design ├─→ develop ─→ main
+docs   ┘
 ```
 
 The goals:
 
 - `main` is always a stable, verified, releasable state.
-- Every category of work is verified in isolation before it is integrated.
-- `develop` catches interactions between individually-verified changes.
-- Every accepted piece of work leaves an immutable, taggable checkpoint.
-- History stays clean and auditable.
+- `develop` is an integration gate that catches interactions between categories.
+- Each category branch is a clean, always-usable line of its kind of work.
+- **No branch proliferation.** Category separation without a branch per task.
 
 ---
 
-## 2. Permanent Branches
+## 2. Permanent branches
 
-Five long-lived branches. **Never do task work directly on any of them.**
+Exactly five long-lived branches:
 
 | Branch    | Role | Receives from | Promotes to |
 | :-------- | :--- | :------------ | :---------- |
-| `main`    | Stable, verified, releasable state | `develop` (and `hotfix-*` in emergencies) | — |
-| `develop` | Integration of already-verified work | `design`, `logic`, `docs` | `main` |
-| `design`  | Verified visual / UI / UX work | `design-*` task branches | `develop` |
-| `logic`   | Verified non-design implementation | `logic-*` task branches | `develop` |
-| `docs`    | Verified documentation | `docs-*` task branches | `develop` |
+| `main`    | Stable, verified, releasable product | `develop` | — |
+| `develop` | Integration gate for verified category work | `logic`, `design`, `docs` | `main` |
+| `logic`   | All engineering / functionality work | worked on directly (+ accepted temporary branches) | `develop` |
+| `design`  | All UI / UX / visual work | worked on directly (+ accepted temporary branches) | `develop` |
+| `docs`    | All documentation work | worked on directly (+ accepted temporary branches) | `develop` |
 
 **What belongs where**
 
-- **design** — UI refinement, visual polish, glass/window chrome, reader styling,
-  typography, spacing, themes, animations, micro-interactions, layout, Mermaid
-  visual presentation, settings/sidebar visual design, design-system changes.
-- **logic** — application/rendering logic, Mermaid interaction (pan/zoom),
-  bug fixes, performance, caching, parsing, state, file handling, commands,
-  keyboard shortcuts, build scripts, tests, refactors, WebKit/NSTextView behavior.
-- **docs** — README, architecture/developer/workflow docs, contributing guide,
-  release notes, setup/user guides, doc screenshots, documentation corrections.
+- **logic** — Swift, AppKit, SwiftUI, architecture, Editor/Reader behavior,
+  Markdown rendering, WebEngine, Mermaid, KaTeX, performance, concurrency,
+  commands, shortcuts, file handling, bugs, refactors, tests, build/release
+  engineering, technical infrastructure, engineering-oriented website work.
+- **design** — toolbar/sidebar visuals, typography, spacing, themes, icons,
+  Reader/Settings appearance, interaction polish, branding, website visual
+  design, screenshots/assets.
+- **docs** — README, user/architecture/contributor docs, this workflow doc,
+  release notes, changelog, website documentation content.
 
 ---
 
-## 3. Task Branches
+## 3. Normal workflow — no task branches
 
-All real work happens on a short-lived **task branch** created from its category
-branch. One scoped task per branch.
+For ordinary work, **do not create a new branch.** Determine whether the task is
+logic, design, or docs, and work directly on that category branch.
 
+```bash
+# engineering example
+git checkout logic
+git pull origin logic
+# …implement + verify…
+git add <reviewed files>
+git commit -m "perf: optimize large-document rendering"
+git push origin logic
+
+# integrate
+git checkout develop && git pull origin develop
+git merge logic          # integration verification
+git push origin develop
+
+# promote when stable
+git checkout main && git pull origin main
+git merge develop        # final verification
+git push origin main
 ```
-design-<task>     # e.g. design-glass-toolbar
-logic-<task>      # e.g. logic-mermaid-pan-zoom
-docs-<task>       # e.g. docs-github-workflow
-```
 
-> **Why a hyphen, not a slash?** Git cannot have a branch named `design` *and* a
-> branch named `design/<task>` at the same time — a ref may not be both a branch
-> and the path-prefix of another branch (a "directory/file" conflict). Because the
-> permanent category branches are named `design`, `logic`, and `docs`, task
-> branches use a hyphen separator (`design-<task>`). Verification **tags** use
-> slashes (`design/<task>/verified-vN`) because tags live in a separate ref
-> namespace and do not conflict.
+Design and docs follow the identical shape on the `design` and `docs` branches.
 
-### Naming rules
-
-- lowercase
-- hyphen-separated
-- describe exactly one scoped task
-- **never** vague: `fix`, `test`, `new`, `changes`, `work`, `temp`, `final`, `misc`
-
-| Good | Bad |
-| :--- | :-- |
-| `logic-mermaid-pan-zoom` | `logic-fix` |
-| `design-reader-polish` | `design-changes` |
-| `docs-architecture-guide` | `docs-final` |
+**Do not** create branches like `logic/large-document-performance`,
+`design/top-bar`, `docs/getting-started`, `feature/foo`, `fix/bar`, `perf/foo`
+for normal work.
 
 ---
 
-## 4. Full Merge Flow
+## 4. Temporary branches — the exception, not the default
 
-The same shape for all three categories:
+A separate temporary branch is allowed **only when isolation is genuinely
+useful**, e.g. a risky architecture experiment, a prototype that may be
+abandoned, a major/destructive refactor, a dependency/runtime migration, an
+experimental renderer, a proof of concept, or parallel investigation that should
+not touch `logic`/`design`/`docs` yet.
+
+Use a clear, purpose-based name:
 
 ```
-design-<task> → design → verify → tag → develop → integration verify → main
-logic-<task>  → logic  → verify → tag → develop → integration verify → main
-docs-<task>   → docs   → verify → tag → develop → integration verify → main
+experiment/textkit2-renderer
+prototype/multi-document
+migration/swift-6
+refactor/document-state-model
+hotfix/preview-crash        # only for a genuine, urgent production issue
 ```
 
-1. Branch from the category branch.
-2. Do the work; self-review.
-3. Category-appropriate verification (design/logic/docs — see §6).
-4. PR: `task → category`. Merge after verification.
-5. Category-branch verification.
-6. **Annotated verified tag** on the accepted commit (see §11).
-7. PR: `category → develop` (**Integration**). Merge.
-8. Integration verification on `develop` (see §6).
-9. PR: `develop → main` (**Release**). Merge.
-10. Push; tag a semantic release on `main` when appropriate (see §12).
+Never: `test`, `temp`, `new`, `branch1`, `feature123`, `ayush-work`.
 
-Task branches must **not** bypass their category branch and merge straight into
-`develop` or `main`.
+### Lifecycle
+
+```
+temporary branch → implement / evaluate → verify
+  rejected  → delete it (record any useful findings first)
+  accepted  → clean history if messy → merge/cherry-pick into logic|design|docs
+            → verify → develop → integration verify → main
+```
+
+Temporary branches must never become permanent category branches, and are
+**never merged directly into `main`**.
 
 ---
 
-## 5. Branch Diagram
+## 5. Rules for coding agents (Codex / Claude / others)
 
-```
-                              main
-                                ▲
-                                │
-                   final integration verification
-                                │
-                             develop
-                     ▲           ▲           ▲
-                     │           │           │
-                  design       logic        docs
-                  ▲             ▲            ▲
-                  │             │            │
-             design-*       logic-*       docs-*
-```
-
-Per-category detail:
-
-```
-design-<task>            logic-<task>            docs-<task>
-    ↓                        ↓                       ↓
- design                   logic                    docs
-    ↓ verify                ↓ verify                 ↓ verify
-    ↓ tag                   ↓ tag                    ↓ tag
- develop  ← integration ← develop  ← integration ← develop
-    ↓ integration verify
-   main
-```
+- **Never create a new branch for ordinary work.** Engineering → `logic`,
+  design → `design`, documentation → `docs`; work directly there.
+- Only create a branch when (1) the user explicitly asks, or (2) the work is a
+  genuine experiment / prototype / migration / major-refactor where isolation
+  has a concrete benefit. Name it for its purpose.
+- Verified category work → `develop`; verified integrated work → `main`.
+- Accepted temporary work goes into a category branch first, never straight to
+  `main`.
+- Rejected temporary branches are deleted.
+- Never discard uncommitted user work.
+- Never force-push casually; use `--force-with-lease` and only on a branch you
+  intentionally rewrote.
 
 ---
 
-## 6. Verification Rules
+## 6. Verification gates
 
-Work may only advance when the relevant gate passes.
-
-### Design verification (design-* → design, and before develop)
-Applicable visual checks — Dark / Light / Sepia; Reader / Editor / Split;
-narrow / normal / fullscreen windows; hover & keyboard-focus states; animations;
-layout, typography, spacing. **Attach screenshots.** Design work must not reach
-`develop` before visual verification.
-
-### Logic verification (logic-* → logic, and before develop)
-Applicable technical checks — build succeeds; relevant tests pass; runtime /
-manual interaction verified; no regression; error paths checked; performance /
-memory checked when relevant. Logic must not reach `develop` before technical
-verification.
-
-### Docs verification (docs-* → docs, and before develop)
-Markdown renders; links, commands, and paths are correct; screenshots current;
-examples match current code; no stale instructions; spelling/grammar; headings/TOC.
-
-### Integration verification (on `develop`, before `main`)
-App builds; no regression; UI/rendering works; tests pass; docs still accurate;
-themes load; Reader/Editor/Split work; no merge conflicts; no broken resources.
-`develop` exists to catch interactions between individually-verified changes.
-
-### `main` stability
-`main` only ever receives verified work through `develop` (or a verified
-`hotfix-*` — see §15). It must always be releasable.
+- **Category (`logic`/`design`/`docs`)** — before pushing: builds succeed
+  (`./build.sh` for logic; visual checks across Dark/Light/Sepia and
+  Reader/Editor/Split for design; links/commands/paths for docs); relevant tests
+  pass; no regression.
+- **Integration (`develop`)** — app builds, no regression, tests pass, docs still
+  accurate, themes load, Reader/Editor/Split work, no broken resources. `develop`
+  exists to catch interactions between individually-verified categories.
+- **`main`** — only ever receives verified work through `develop`. Always
+  releasable.
 
 ---
 
-## 7. Pull Request Rules
+## 7. Pull request directions
 
-Promotion happens via PRs. Allowed directions:
+The workflow is direct-to-category, so **most work needs no PR**. When PRs are
+used (e.g. for review or protected branches), only these directions are allowed
+(the `branch-flow` check enforces them; add the `workflow:override` label to
+bypass for maintenance):
 
 | PR type | Source → Target |
 | :------ | :-------------- |
-| Task | `design-*` → `design`, `logic-*` → `logic`, `docs-*` → `docs` |
-| Integration | `design` → `develop`, `logic` → `develop`, `docs` → `develop` |
+| Integration | `logic` → `develop`, `design` → `develop`, `docs` → `develop` |
 | Release | `develop` → `main` |
-| Hotfix (emergency) | `hotfix-*` → `main` (then back-merge to `develop`) |
+| Temporary intake | `experiment/*` \| `prototype/*` \| `migration/*` \| `refactor/*` → `logic` \| `design` \| `docs` |
+| Hotfix (emergency) | `hotfix/*` → `main` (then back-merge to `develop`) |
 
-Disallowed (flagged by the branch-flow check, see §13): task branches straight to
-`develop`/`main`, `design`/`logic`/`docs` straight to `main`, etc.
-
-### PR titles
-
-```
-[Design] <task description>
-[Logic]  <task description>
-[Docs]   <task description>
-[Integration] Merge verified <category> into develop
-[Release] Promote develop to main
-```
-
-Every PR should carry **one `type:` label + at least one `area:` label + one
-`status:` label** (see §10) and complete the PR template checklist (see §26 in the
-task spec / `.github/pull_request_template.md`).
+Disallowed: anything into `main` other than `develop`/`hotfix/*`; ad-hoc
+`feature/*`/`fix/*` task branches for normal work.
 
 ---
 
-## 8. Branch Naming Convention (summary)
+## 8. Commit convention
+
+Conventional-style, imperative, scoped:
 
 ```
-design-<task>   design-glass-toolbar   design-reader-polish
-logic-<task>    logic-mermaid-pan-zoom logic-rendering-fix
-docs-<task>     docs-github-workflow   docs-architecture-guide
-hotfix-<task>   hotfix-preview-crash
+feat: add Mermaid pan mode
+fix: guard heading echoes by current render revision
+perf: move document analysis off the typing path
+refactor: simplify diagram interaction state
+design: refine glass toolbar
+docs: document the category-branch workflow
+build: update macOS build script
+test: add Mermaid transform tests
 ```
+
+Never: `update`, `changes`, `done`, `final`, `fixed stuff`, `wip`.
 
 ---
 
-## 9. Commit Convention
+## 9. Tags
 
-Conventional-style, imperative, scoped. Examples:
+Use **annotated** tags only for meaningful milestones/releases. Do **not** use
+branch-path-style tags such as `logic/performance/verified-v1`.
 
 ```
-design:   design: refine glass toolbar
-feat:     feat: add Mermaid pan mode
-fix:      fix: preserve diagram zoom state
-perf:     perf: reduce preview update work
-refactor: refactor: simplify diagram interaction state
-test:     test: add Mermaid transform tests
-docs:     docs: document GitHub workflow
-build:    build: update macOS build script
+foundation-v1   functional-integrity-v1   performance-v1     # milestones
+v1.0.0-beta.1   v1.0.0                                        # releases
 ```
 
-Never: `update`, `changes`, `done`, `final`, `fixed stuff`.
+Tags are not required for every commit.
 
 ---
 
-## 10. Labels
+## 10. Branch protection (recommendation)
 
-Every PR: **one type + one (or more) area + one current status.**
+Optimized for a small team / owner + coding agents — **not** mandatory
+PR-per-task, because the workflow intentionally uses direct category branches.
 
-**Type** — `type:design`, `type:logic`, `type:docs`
+- **`main`** — protect from accidental force-push/delete; require the build check;
+  only `develop` (or a verified `hotfix/*`) lands here.
+- **`develop`** — integration branch; require the build check.
+- **`logic` / `design` / `docs`** — working category branches; direct pushes by
+  the owner/agents are expected.
 
-**Status** — `status:planned`, `status:in-progress`, `status:verification`,
-`status:verified`, `status:blocked`
-
-**Area** — `area:reader`, `area:editor`, `area:mermaid`, `area:toolbar`,
-`area:sidebar`, `area:settings`, `area:themes`, `area:rendering`,
-`area:performance`, `area:build`, `area:docs`, `area:accessibility`, `area:window`
-
-Example: `type:design` + `area:toolbar` + `status:verification`.
-
----
-
-## 11. Work (Verification) Tags
-
-Every completed, **genuinely verified** task gets an **annotated** tag that
-pins the exact accepted commit.
-
-```
-design/<task>/verified-vN
-logic/<task>/verified-vN
-docs/<task>/verified-vN
-```
-
-Create it **only after** verification, on the accepted commit in the category
-branch:
-
-```bash
-git tag -a logic/mermaid-pan-zoom/verified-v1 \
-  -m "Verified Mermaid pan, zoom, fit and reset implementation"
-git push origin logic/mermaid-pan-zoom/verified-v1
-```
-
-Revised & re-verified work gets a new version (`…/verified-v2`).
-**Verification tags are immutable — never move or reuse one.**
+The `branch-flow` GitHub Action validates PR direction as an advisory guard;
+maintainers bypass it with the `workflow:override` label.
 
 ---
 
-## 12. Release Tags
-
-Releases on `main` use plain semantic versions, kept **separate** from work tags:
+## Quick reference
 
 ```
-v1.0.0   v1.1.0   v1.1.1   v2.0.0
-```
+main      stable, releasable            ← develop only
+develop   integration gate              ← logic | design | docs
+logic     engineering / functionality   ← direct work (+ accepted experiments)
+design    UI / UX / visual              ← direct work (+ accepted experiments)
+docs      documentation                 ← direct work (+ accepted experiments)
 
-`logic/mermaid-pan-zoom/verified-v1` (a work checkpoint) and `v1.2.0` (a release)
-serve different purposes and must not be conflated.
-
----
-
-## 13. Branch Protection
-
-Where the repository plan permits, protect `main`, `develop`, `design`, `logic`,
-`docs`:
-
-- **`main`** — require PR, passing checks, no direct push, resolved conversations,
-  up-to-date branch.
-- **`develop`** — require PR, passing checks, no direct push.
-- **`design` / `logic` / `docs`** — require task PR + relevant verification, no
-  direct push for normal work.
-
-A lightweight **branch-flow** GitHub Action (`.github/workflows/branch-flow.yml`)
-validates that each PR uses an allowed source→target direction and flags
-bypasses. Maintainers can override by adding the `workflow:override` label to a PR.
-
-### Configured protection (current state)
-
-| Branch | Require PR | Required check | No direct push (enforce admins) | Force-push / delete |
-| :----- | :-------- | :------------- | :------------------------------ | :------------------ |
-| `main`    | ✅ | `Build (macOS, Apple Silicon)` (strict) | ✅ | ❌ (blocked) |
-| `develop` | ✅ | `Build (macOS, Apple Silicon)` (strict) | ✅ | ❌ (blocked) |
-| `design`  | ✅ | — (verification is manual/advisory) | ❌ (maintainer may push for maintenance) | ❌ (blocked) |
-| `logic`   | ✅ | — (verification is manual/advisory) | ❌ (maintainer may push for maintenance) | ❌ (blocked) |
-| `docs`    | ✅ | — (verification is manual/advisory) | ❌ (maintainer may push for maintenance) | ❌ (blocked) |
-
-`main` and `develop` additionally require conversation resolution. The
-branch-flow check runs on every PR as an advisory guard (not a hard-required
-status) so legitimate maintenance is never deadlocked; add the
-`workflow:override` label to bypass it explicitly.
-
-To adjust protection: **Repo → Settings → Branches** (classic rules) or the REST
-`repos/{owner}/{repo}/branches/{branch}/protection` endpoint.
-
----
-
-## 14. Task Lifecycle Examples
-
-### Design
-
-```
-design-glass-toolbar
- → PR [Design] → design        (screenshots: dark/light/sepia, reader, windows)
- → design/glass-toolbar/verified-v1
- → PR [Integration] design → develop
- → integration verification
- → PR [Release] develop → main
-```
-
-### Logic
-
-```
-logic-mermaid-pan-zoom
- → PR [Logic] → logic          (build + tests + manual verification)
- → logic/mermaid-pan-zoom/verified-v1
- → PR [Integration] logic → develop
- → integration verification
- → PR [Release] develop → main
-```
-
-### Docs
-
-```
-docs-github-workflow
- → PR [Docs] → docs            (markdown/links/commands/paths verified)
- → docs/github-workflow/verified-v1
- → PR [Integration] docs → develop
- → content/integration verification
- → PR [Release] develop → main
-```
-
----
-
-## 15. Hotfix Process (emergency only)
-
-For serious, production-breaking bugs **only**:
-
-```
-hotfix-<task> → main   (after verification)
-             → then immediately back-merge into develop
-             → and the relevant category branch if needed
-```
-
-Never use `hotfix-*` for normal development.
-
----
-
-## 16. Starting New Work
-
-Always start from the latest category branch.
-
-```bash
-# design
-git checkout design && git pull origin design
-git checkout -b design-glass-toolbar
-
-# logic
-git checkout logic && git pull origin logic
-git checkout -b logic-mermaid-pan-zoom
-
-# docs
-git checkout docs && git pull origin docs
-git checkout -b docs-github-workflow
-```
-
-Before opening the PR, sync with the category branch to avoid stale conflicts:
-
-```bash
-git fetch origin
-git merge origin/<category>   # or rebase, per the chosen strategy
-```
-
----
-
-## 17. Completing Work
-
-```
-commit (clean, conventional messages)
-push task branch
-open task PR  →  category         (labels + checklist)
-verify
-merge task PR into category
-tag the verified commit           (design|logic|docs)/<task>/verified-vN
-open Integration PR  category  →  develop
-integration verify
-open Release PR       develop  →  main
-push; tag semantic release on main when appropriate
-delete the task branch (the verified tag preserves the checkpoint)
-```
-
-**Merge strategy:** squash-merge scoped task branches into their category branch
-(clean, one commit per task); use merge commits for Integration and Release PRs so
-category/integration history is preserved.
-
----
-
-## 18. Rules — Never Do This
-
-- Never work directly on `main`.
-- Never use `develop` as a task/sandbox branch.
-- Never bypass category verification.
-- Never merge a task branch straight into `develop` or `main`.
-- Never reuse or move a `verified-*` tag.
-- Never mix unrelated tasks into one branch.
-- Never force-push a protected/shared branch during normal work.
-
----
-
-## Quick Reference
-
-```
-main      stable, releasable           ← develop only
-develop   integration gate             ← design | logic | docs
-design    verified visual work         ← design-*
-logic     verified implementation      ← logic-*
-docs      verified documentation       ← docs-*
-
-task branch:   <category>-<task>        (design-…, logic-…, docs-…)
-verified tag:  <category>/<task>/verified-vN   (annotated, immutable)
-release tag:   vMAJOR.MINOR.PATCH
+normal work:     commit directly on logic | design | docs
+temporary branch: experiment/… prototype/… migration/… refactor/… (only when isolation helps)
+release tag:      vMAJOR.MINOR.PATCH
 ```
