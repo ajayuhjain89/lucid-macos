@@ -15,9 +15,23 @@
     failure: '<svg viewBox="0 0 16 16"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path></svg>'
   };
 
-  // The preview is a strictly read-only rendering surface. All editing happens
-  // in the native Markdown source editor (VS Code-style separation of concerns),
-  // so there is no HTML->Markdown (Turndown) round-trip here.
+  // Performance instrumentation
+  const LucidPerf = {
+    enabled: true,
+    mark: function(renderId, phase, data) {
+      if (!this.enabled) return;
+      const t = performance.now();
+      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.lucidPerf) {
+        window.webkit.messageHandlers.lucidPerf.postMessage({
+          renderId: String(renderId || '0'),
+          phase: phase,
+          t: t,
+          data: data || {}
+        });
+      }
+    }
+  };
+  window.LucidPerf = LucidPerf;
 
   // Initialize Markdown-it
   const md = window.markdownit({
@@ -156,44 +170,215 @@
     this.cache.clear();
   };
 
-  const katexLRU = new SimpleLRU(150);
+  let currentRenderRevision = '0';
+  const katexLRU = new SimpleLRU(500);
   const mermaidLRU = new SimpleLRU(50);
+  let currentMermaidTheme = 'neutral';
 
-  function parseKaTeX(text) {
-    if (typeof katex === 'undefined') return text;
+  function ensureMermaidInitialized() {
+    if (typeof mermaid !== 'undefined' && !mermaid._lucidInitialized) {
+      try {
+        mermaid.initialize({
+          startOnLoad: false,
+          theme: currentMermaidTheme || 'neutral',
+          securityLevel: 'loose',
+          layout: 'dagre',
+          flowchart: { defaultRenderer: 'dagre' }
+        });
+        mermaid._lucidInitialized = true;
+      } catch (e) {
+        console.warn('Failed to initialize Mermaid:', e);
+      }
+    }
+  }
+
+  function countMathExpressions(text) {
+    if (!text || typeof katex === 'undefined' || text.indexOf('$') === -1) return 0;
+    const codeRegex = /(```[\s\S]*?```|~~~[\s\S]*?~~~|`+[^`\n]+?`+)/g;
+    const stripped = text.replace(codeRegex, '');
+    const dispMatches = stripped.match(/\$\$[\s\S]+?\$\$/g);
+    const inlineMatches = stripped.match(/(^|[^\\])\$[^\$\n]+?\$/g);
+    return (dispMatches ? dispMatches.length : 0) + (inlineMatches ? inlineMatches.length : 0);
+  }
+
+  function renderKaTeXBlock(trimmed) {
+    const cacheKey = 'disp:' + trimmed;
+    const cached = katexLRU.get(cacheKey);
+    if (cached) return cached;
+    try {
+      const rendered = katex.renderToString(trimmed, { displayMode: true, throwOnError: false });
+      const escapedRaw = encodeURIComponent(trimmed);
+      const res = '<div class="lucid-math-block" data-raw-latex="' + escapedRaw + '">' +
+             rendered +
+             '<button class="lucid-btn-copy-latex" onclick="window.lucid.copyLatex(this)">Copy LaTeX</button>' +
+             '</div>';
+      katexLRU.set(cacheKey, res);
+      return res;
+    } catch (e) {
+      return '<div class="lucid-math-error"><span class="lucid-error-msg">Formula render warning: ' + md.utils.escapeHtml(e.message || 'Syntax error') + '</span><pre>' + md.utils.escapeHtml(trimmed) + '</pre></div>';
+    }
+  }
+
+  function renderKaTeXInline(trimmed) {
+    const cacheKey = 'inline:' + trimmed;
+    const cached = katexLRU.get(cacheKey);
+    if (cached) return cached;
+    try {
+      const rendered = katex.renderToString(trimmed, { displayMode: false, throwOnError: false });
+      katexLRU.set(cacheKey, rendered);
+      return rendered;
+    } catch (e) {
+      return '$' + md.utils.escapeHtml(trimmed) + '$';
+    }
+  }
+
+  function enhancePlaceholder(ph) {
+    if (!ph || !ph.parentNode) return;
+    const isDisplay = ph.classList.contains('lucid-math-display');
+    let rawLatex = '';
+    try {
+      const attr = ph.getAttribute('data-raw-latex') || (ph.dataset && ph.dataset.rawLatex) || '';
+      if (attr) {
+        try {
+          rawLatex = decodeURIComponent(attr);
+        } catch (_) {
+          rawLatex = attr;
+        }
+      }
+      if (rawLatex) {
+        if (isDisplay) {
+          ph.outerHTML = renderKaTeXBlock(rawLatex);
+        } else {
+          ph.outerHTML = renderKaTeXInline(rawLatex);
+        }
+      } else {
+        ph.remove();
+      }
+    } catch (e) {
+      console.warn('KaTeX placeholder enhance error:', e);
+      try { ph.remove(); } catch (_) {}
+    }
+  }
+
+  function parseKaTeX(text, isDeferred) {
+    if (typeof katex === 'undefined' || text.indexOf('$') === -1) return text;
+
+    const codeBlocks = [];
+    const codeRegex = /(```[\s\S]*?```|~~~[\s\S]*?~~~|`+[^`\n]+?`+)/g;
+    text = text.replace(codeRegex, function(match) {
+      codeBlocks.push(match);
+      return '@@LUCID_CODE_' + (codeBlocks.length - 1) + '@@';
+    });
+
     text = text.replace(/\$\$([\s\S]+?)\$\$/g, function(match, math) {
       const trimmed = math.trim();
-      const cacheKey = 'disp:' + trimmed;
-      const cached = katexLRU.get(cacheKey);
-      if (cached) return cached;
-      try {
-        const rendered = katex.renderToString(trimmed, { displayMode: true, throwOnError: false });
+      if (isDeferred) {
         const escapedRaw = encodeURIComponent(trimmed);
-        const res = '<div class="lucid-math-block" data-raw-latex="' + escapedRaw + '">' +
-               rendered +
-               '<button class="lucid-btn-copy-latex" onclick="window.lucid.copyLatex(this)">Copy LaTeX</button>' +
-               '</div>';
-        katexLRU.set(cacheKey, res);
-        return res;
-      } catch (e) {
-        return '<div class="lucid-math-error"><span class="lucid-error-msg">Formula render warning: ' + md.utils.escapeHtml(e.message || 'Syntax error') + '</span><pre>' + md.utils.escapeHtml(trimmed) + '</pre></div>';
+        return '<div class="lucid-math-placeholder lucid-math-display" data-raw-latex="' + escapedRaw + '"><div class="lucid-math-raw">' + md.utils.escapeHtml(trimmed) + '</div></div>';
       }
+      return renderKaTeXBlock(trimmed);
     });
     text = text.replace(/(^|[^\\])\$([^\$\n]+?)\$/g, function(match, prefix, math) {
       const trimmed = math.trim();
-      const cacheKey = 'inline:' + trimmed;
-      const cached = katexLRU.get(cacheKey);
-      if (cached) return prefix + cached;
-      try {
-        const rendered = katex.renderToString(trimmed, { displayMode: false, throwOnError: false });
-        katexLRU.set(cacheKey, rendered);
-        return prefix + rendered;
-      } catch (e) {
-        return match;
+      if (isDeferred) {
+        const escapedRaw = encodeURIComponent(trimmed);
+        return prefix + '<span class="lucid-math-placeholder lucid-math-inline" data-raw-latex="' + escapedRaw + '"><span class="lucid-math-raw">' + md.utils.escapeHtml(trimmed) + '</span></span>';
       }
+      return prefix + renderKaTeXInline(trimmed);
     });
+
+    text = text.replace(/@@LUCID_CODE_(\d+)@@/g, function(match, idx) {
+      return codeBlocks[parseInt(idx, 10)];
+    });
+
     return text;
   }
+
+  function formatMermaidContainer(c) {
+    if (!c) return;
+    const svg = c.querySelector('.mermaid-canvas svg') || c.querySelector('.mermaid svg');
+    if (!svg) return;
+    const viewBox = svg.viewBox && svg.viewBox.baseVal;
+    if (viewBox && viewBox.width > 0) {
+      svg.style.maxWidth = 'none';
+      svg.style.width = viewBox.width + 'px';
+      svg.style.height = viewBox.height + 'px';
+
+      const viewport = c.querySelector('.mermaid-viewport');
+      const canvas = c.querySelector('.mermaid-canvas');
+      if (viewport && canvas) {
+        const availWidth = Math.max(100, viewport.clientWidth - 48);
+
+        // 1. Inspect real SVG label typography geometry
+        let baseFontSize = 14;
+        const labelEl = svg.querySelector('.nodeLabel, .label, text, span');
+        if (labelEl) {
+          const fs = parseFloat(window.getComputedStyle(labelEl).fontSize);
+          if (!isNaN(fs) && fs > 0) baseFontSize = fs;
+        }
+
+        // 2. Readability-first scale: target ~13.5px effective label size
+        const readabilityFloor = Math.min(1.0, 13.5 / baseFontSize);
+        const widthFitScale = availWidth / viewBox.width;
+
+        let initialScale = 1.0;
+        if (viewBox.width > availWidth) {
+          // Diagram is wider than viewport: do NOT aggressively shrink to fit!
+          // Prioritize readability so labels are readable without immediate zooming
+          initialScale = Math.min(1.0, Math.max(widthFitScale, readabilityFloor));
+        } else {
+          // Small or medium diagram: keep at natural readable size (~1.0x)
+          initialScale = 1.0;
+        }
+
+        // 3. Dynamic bounded viewport height based on diagram aspect ratio
+        const scaledHeight = viewBox.height * initialScale;
+        const targetHeight = Math.round(Math.min(640, Math.max(180, scaledHeight + 64)));
+        viewport.style.height = targetHeight + 'px';
+
+        // 4. Meaningful centering translation
+        let contentOffsetX = 0;
+        let contentOffsetY = 0;
+        try {
+          const bbox = svg.getBBox();
+          if (bbox && bbox.width > 0) {
+            const contentCenterX = bbox.x + bbox.width / 2;
+            const contentCenterY = bbox.y + bbox.height / 2;
+            const vbCenterX = (viewBox.x || 0) + viewBox.width / 2;
+            const vbCenterY = (viewBox.y || 0) + viewBox.height / 2;
+            contentOffsetX = vbCenterX - contentCenterX;
+            contentOffsetY = vbCenterY - contentCenterY;
+          }
+        } catch (e) {}
+
+        const initialTx = Math.round(contentOffsetX * initialScale);
+        const initialTy = Math.round(contentOffsetY * initialScale);
+
+        // 5. Store initial transform & apply
+        canvas.dataset.initialScale = initialScale;
+        canvas.dataset.initialTx = initialTx;
+        canvas.dataset.initialTy = initialTy;
+        canvas.dataset.contentOffsetX = contentOffsetX;
+        canvas.dataset.contentOffsetY = contentOffsetY;
+        canvas.dataset.scale = initialScale;
+        canvas.dataset.tx = initialTx;
+        canvas.dataset.ty = initialTy;
+        canvas.style.transform = 'translate(' + initialTx + 'px, ' + initialTy + 'px) scale(' + initialScale + ')';
+
+        viewport.onwheel = function(e) { window.lucid.handleDiagramWheel(e, viewport); };
+        viewport.onmousemove = function(e) {
+          viewport._lastClientX = e.clientX;
+          viewport._lastClientY = e.clientY;
+        };
+        viewport.onmouseleave = function() {
+          viewport._lastClientX = null;
+          viewport._lastClientY = null;
+        };
+      }
+    }
+  }
+
+
 
   function extractHeadings() {
     const headings = [];
@@ -324,108 +509,50 @@
 
   // Public API
   window.lucid = {
-    updateContent: function(rawMarkdown) {
+    updateContent: function(rawMarkdown, renderId) {
+      renderId = String(renderId || '0');
+      currentRenderRevision = renderId;
+      LucidPerf.mark(renderId, 't4_js_received', { length: rawMarkdown ? rawMarkdown.length : 0 });
       const container = document.getElementById('lucid-content');
       if (!container) return;
 
-      const preprocessed = parseKaTeX(rawMarkdown);
+      LucidPerf.mark(renderId, 't5_katex_pre_begin');
+      const mathCount = countMathExpressions(rawMarkdown);
+      const isDeferredMath = (mathCount > 30);
+      const preprocessed = parseKaTeX(rawMarkdown, isDeferredMath);
+      LucidPerf.mark(renderId, 't5_katex_pre_end', { count: mathCount, deferred: isDeferredMath });
+
+      LucidPerf.mark(renderId, 't6_md_render_begin');
       let html = md.render(preprocessed);
+      LucidPerf.mark(renderId, 't6_md_render_end');
+
+      LucidPerf.mark(renderId, 't7_alerts_begin');
       html = parseAlerts(html);
+      LucidPerf.mark(renderId, 't7_alerts_end', { htmlLength: html.length });
+
+      LucidPerf.mark(renderId, 't8_dom_insert_begin');
       container.innerHTML = html;
+      const domNodeCount = container.querySelectorAll('*').length;
+      LucidPerf.mark(renderId, 't9_dom_insert_end', { nodeCount: domNodeCount });
 
-      if (typeof mermaid !== 'undefined') {
-        const mermaidNodes = container.querySelectorAll('.mermaid');
-        if (mermaidNodes.length > 0) {
-          try {
-            mermaid.run({ nodes: mermaidNodes }).then(function() {
-              container.querySelectorAll('.mermaid-container').forEach(function(c) {
-                const svg = c.querySelector('.mermaid-canvas svg') || c.querySelector('.mermaid svg');
-                if (!svg) return;
-                const viewBox = svg.viewBox && svg.viewBox.baseVal;
-                if (viewBox && viewBox.width > 0) {
-                  svg.style.maxWidth = 'none';
-                  svg.style.width = viewBox.width + 'px';
-                  svg.style.height = viewBox.height + 'px';
-
-                  const viewport = c.querySelector('.mermaid-viewport');
-                  const canvas = c.querySelector('.mermaid-canvas');
-                  if (viewport && canvas) {
-                    const availWidth = Math.max(100, viewport.clientWidth - 48);
-
-                    // 1. Inspect real SVG label typography geometry
-                    let baseFontSize = 14;
-                    const labelEl = svg.querySelector('.nodeLabel, .label, text, span');
-                    if (labelEl) {
-                      const fs = parseFloat(window.getComputedStyle(labelEl).fontSize);
-                      if (!isNaN(fs) && fs > 0) baseFontSize = fs;
-                    }
-
-                    // 2. Readability-first scale: target ~13.5px effective label size
-                    const readabilityFloor = Math.min(1.0, 13.5 / baseFontSize);
-                    const widthFitScale = availWidth / viewBox.width;
-
-                    let initialScale = 1.0;
-                    if (viewBox.width > availWidth) {
-                      // Diagram is wider than viewport: do NOT aggressively shrink to fit!
-                      // Prioritize readability so labels are readable without immediate zooming
-                      initialScale = Math.min(1.0, Math.max(widthFitScale, readabilityFloor));
-                    } else {
-                      // Small or medium diagram: keep at natural readable size (~1.0x)
-                      initialScale = 1.0;
-                    }
-
-                    // 3. Dynamic bounded viewport height based on diagram aspect ratio
-                    const scaledHeight = viewBox.height * initialScale;
-                    const targetHeight = Math.round(Math.min(640, Math.max(180, scaledHeight + 64)));
-                    viewport.style.height = targetHeight + 'px';
-
-                    // 4. Meaningful centering translation
-                    let contentOffsetX = 0;
-                    let contentOffsetY = 0;
-                    try {
-                      const bbox = svg.getBBox();
-                      if (bbox && bbox.width > 0) {
-                        const contentCenterX = bbox.x + bbox.width / 2;
-                        const contentCenterY = bbox.y + bbox.height / 2;
-                        const vbCenterX = (viewBox.x || 0) + viewBox.width / 2;
-                        const vbCenterY = (viewBox.y || 0) + viewBox.height / 2;
-                        contentOffsetX = vbCenterX - contentCenterX;
-                        contentOffsetY = vbCenterY - contentCenterY;
-                      }
-                    } catch (e) {}
-
-                    const initialTx = Math.round(contentOffsetX * initialScale);
-                    const initialTy = Math.round(contentOffsetY * initialScale);
-
-                    // 5. Store initial transform & apply
-                    canvas.dataset.initialScale = initialScale;
-                    canvas.dataset.initialTx = initialTx;
-                    canvas.dataset.initialTy = initialTy;
-                    canvas.dataset.contentOffsetX = contentOffsetX;
-                    canvas.dataset.contentOffsetY = contentOffsetY;
-                    canvas.dataset.scale = initialScale;
-                    canvas.dataset.tx = initialTx;
-                    canvas.dataset.ty = initialTy;
-                    canvas.style.transform = 'translate(' + initialTx + 'px, ' + initialTy + 'px) scale(' + initialScale + ')';
-
-                    viewport.onwheel = function(e) { window.lucid.handleDiagramWheel(e, viewport); };
-                    viewport.onmousemove = function(e) {
-                      viewport._lastClientX = e.clientX;
-                      viewport._lastClientY = e.clientY;
-                    };
-                    viewport.onmouseleave = function() {
-                      viewport._lastClientX = null;
-                      viewport._lastClientY = null;
-                    };
-                  }
-                }
-              });
-            });
-          } catch (e) {
-            console.warn('Mermaid render error:', e);
-          }
-        }
+      // First Readable Frame Proxy: 2 RAFs ensure layout & paint stabilization
+      let firstReadableFrameDone = false;
+      function markFrpDone() {
+        if (firstReadableFrameDone || currentRenderRevision !== renderId) return;
+        firstReadableFrameDone = true;
+        LucidPerf.mark(renderId, 't11_first_readable_frame_proxy');
+        checkFullEnhancement();
       }
+
+      requestAnimationFrame(function() {
+        LucidPerf.mark(renderId, 't10_first_raf_layout');
+        requestAnimationFrame(function() {
+          markFrpDone();
+        });
+      });
+      setTimeout(function() {
+        markFrpDone();
+      }, 50);
 
       // Heading Anchors (Quiet hover reveal)
       const hs = container.querySelectorAll('h1, h2, h3, h4, h5, h6');
@@ -441,72 +568,235 @@
         }
       });
 
-      // Dynamic Content-Aware Table Layout & TOC Detection
+      // Dynamic Content-Aware Table Layout & TOC Detection (Batched to prevent layout thrashing)
       const tables = container.querySelectorAll('table');
-      tables.forEach(function(table) {
-        // 1. Wrap table in responsive wrapper if not yet wrapped
-        let wrapper = table.parentElement;
-        if (!wrapper || !wrapper.classList.contains('lucid-table-wrapper')) {
-          wrapper = document.createElement('div');
-          wrapper.className = 'lucid-table-wrapper';
-          table.parentNode.insertBefore(wrapper, table);
-          wrapper.appendChild(table);
-        }
+      LucidPerf.mark(renderId, 't10_table_layout_begin', { tableCount: tables.length });
 
-        // 2. Detect Table of Contents
-        let isToc = false;
-        let prev = wrapper.previousElementSibling;
-        while (prev && prev.tagName !== 'H1' && prev.tagName !== 'H2' && prev.tagName !== 'H3') {
-          prev = prev.previousElementSibling;
-        }
-        if (prev && /contents|toc|index/i.test(prev.textContent)) {
-          isToc = true;
-        } else {
-          const ths = table.querySelectorAll('th');
-          if (ths.length >= 2) {
-            const h0 = ths[0].textContent.trim().toLowerCase();
-            const h1 = ths[1].textContent.trim().toLowerCase();
-            if ((h0 === '#' || h0 === 'no' || h0 === 'index' || h0 === 'no.') &&
-                (h1 === 'section' || h1 === 'topic' || h1 === 'title' || h1 === 'chapter')) {
-              isToc = true;
+      if (tables.length > 0) {
+        const readerWidth = Math.min(1024, window.innerWidth * 0.86);
+        const tableData = [];
+
+        // Phase 1: Structure & TOC detection (pure DOM, no geometry reads)
+        for (let i = 0; i < tables.length; i++) {
+          const table = tables[i];
+          let wrapper = table.parentElement;
+          if (!wrapper || !wrapper.classList.contains('lucid-table-wrapper')) {
+            wrapper = document.createElement('div');
+            wrapper.className = 'lucid-table-wrapper';
+            table.parentNode.insertBefore(wrapper, table);
+            wrapper.appendChild(table);
+          }
+
+          // Detect Table of Contents
+          let isToc = false;
+          let prev = wrapper.previousElementSibling;
+          while (prev && prev.tagName !== 'H1' && prev.tagName !== 'H2' && prev.tagName !== 'H3') {
+            prev = prev.previousElementSibling;
+          }
+          if (prev && /contents|toc|index/i.test(prev.textContent)) {
+            isToc = true;
+          } else {
+            const ths = table.querySelectorAll('th');
+            if (ths.length >= 2) {
+              const h0 = ths[0].textContent.trim().toLowerCase();
+              const h1 = ths[1].textContent.trim().toLowerCase();
+              if ((h0 === '#' || h0 === 'no' || h0 === 'index' || h0 === 'no.') &&
+                  (h1 === 'section' || h1 === 'topic' || h1 === 'title' || h1 === 'chapter')) {
+                isToc = true;
+              }
             }
           }
-        }
-        if (isToc) {
-          table.classList.add('lucid-toc-table');
-        }
-
-        // 3. Prevent awkward wrapping of short identifier cells (<= 16 chars)
-        table.querySelectorAll('th, td').forEach(function(cell) {
-          const text = cell.textContent.trim();
-          if (text.length > 0 && text.length <= 16 && !text.includes('\n')) {
-            cell.style.whiteSpace = 'nowrap';
+          if (isToc) {
+            table.classList.add('lucid-toc-table');
           }
-        });
 
-        // 4. Content-aware breakout measurement
-        wrapper.classList.remove('lucid-wide', 'lucid-overflows');
-        table.style.width = 'max-content';
-        const naturalWidth = table.scrollWidth;
-        table.style.width = '';
+          tableData.push({ table: table, wrapper: wrapper });
+        }
 
-        // Mirror the responsive CSS widths so breakout decisions match the layout.
-        const readerWidth = Math.min(1024, window.innerWidth * 0.86);
-        const maxBreakoutWidth = Math.min(1600, window.innerWidth * 0.95);
+        // Phase 2: Batch ALL writes before any geometry reads
+        for (let i = 0; i < tableData.length; i++) {
+          tableData[i].table.style.width = 'max-content';
+        }
 
-        if (naturalWidth > readerWidth + 15) {
-          if (naturalWidth <= maxBreakoutWidth) {
-            wrapper.classList.add('lucid-wide');
-          } else {
-            wrapper.classList.add('lucid-wide', 'lucid-overflows');
+        // Phase 3: Batch ALL geometry reads in a single browser layout pass
+        for (let i = 0; i < tableData.length; i++) {
+          tableData[i].naturalWidth = tableData[i].table.scrollWidth;
+        }
+
+        // Phase 4: Batch ALL final writes (clean up width & apply breakout classes)
+        for (let i = 0; i < tableData.length; i++) {
+          const item = tableData[i];
+          item.table.style.width = '';
+          if (item.naturalWidth > readerWidth + 15) {
+            item.wrapper.classList.add('lucid-wide');
           }
         }
-      });
+      }
+      LucidPerf.mark(renderId, 't10_table_layout_end');
 
       const headings = extractHeadings();
       if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.lucidHeadings) {
-        window.webkit.messageHandlers.lucidHeadings.postMessage(headings);
+        // Tag with the render revision so the native side can drop a stale echo
+        // from an older revision (dual-writer safety with DocumentAnalyzer).
+        window.webkit.messageHandlers.lucidHeadings.postMessage({ renderId: renderId, headings: headings });
       }
+
+      // Asynchronous Enhancements (Math & Mermaid)
+      let mathDone = !isDeferredMath;
+      const mermaidNodes = (typeof mermaid !== 'undefined') ? container.querySelectorAll('.mermaid') : [];
+      let mermaidDone = (mermaidNodes.length === 0);
+
+      function checkFullEnhancement() {
+        if (currentRenderRevision !== renderId) return;
+        if (firstReadableFrameDone && mathDone && mermaidDone) {
+          LucidPerf.mark(renderId, 't17_full_enhancement_complete');
+        }
+      }
+
+      // 1. Deferred Math Enhancement
+      if (isDeferredMath) {
+        const mathPlaceholders = container.querySelectorAll('.lucid-math-placeholder');
+        if (mathPlaceholders.length === 0) {
+          mathDone = true;
+          checkFullEnhancement();
+        } else {
+          let activeMathObserver = null;
+          if (window.IntersectionObserver) {
+            activeMathObserver = new IntersectionObserver(function(entries) {
+              if (currentRenderRevision !== renderId) return;
+              for (let i = 0; i < entries.length; i++) {
+                if (entries[i].isIntersecting) {
+                  const target = entries[i].target;
+                  activeMathObserver.unobserve(target);
+                  enhancePlaceholder(target);
+                }
+              }
+            }, { rootMargin: '1200px 0px' });
+            for (let i = 0; i < mathPlaceholders.length; i++) {
+              activeMathObserver.observe(mathPlaceholders[i]);
+            }
+          }
+
+          function processMathChunk() {
+            if (currentRenderRevision !== renderId) {
+              if (activeMathObserver) { activeMathObserver.disconnect(); activeMathObserver = null; }
+              return;
+            }
+            try {
+              const remaining = container.querySelectorAll('.lucid-math-placeholder');
+              if (remaining.length === 0) {
+                if (activeMathObserver) { activeMathObserver.disconnect(); activeMathObserver = null; }
+                mathDone = true;
+                checkFullEnhancement();
+                return;
+              }
+              const limit = Math.min(150, remaining.length);
+              for (let i = 0; i < limit; i++) {
+                const ph = remaining[i];
+                if (activeMathObserver) activeMathObserver.unobserve(ph);
+                enhancePlaceholder(ph);
+              }
+              const nextRemaining = container.querySelectorAll('.lucid-math-placeholder');
+              if (nextRemaining.length > 0) {
+                setTimeout(processMathChunk, 0);
+              } else {
+                if (activeMathObserver) { activeMathObserver.disconnect(); activeMathObserver = null; }
+                mathDone = true;
+                checkFullEnhancement();
+              }
+            } catch (err) {
+              console.warn('processMathChunk error:', err);
+              if (activeMathObserver) { activeMathObserver.disconnect(); activeMathObserver = null; }
+              mathDone = true;
+              checkFullEnhancement();
+            }
+          }
+
+          setTimeout(processMathChunk, 0);
+        }
+      }
+
+      // 2. Mermaid Enhancement
+      if (!mermaidDone) {
+        ensureMermaidInitialized();
+        const mermaidCount = mermaidNodes.length;
+        LucidPerf.mark(renderId, 't15_mermaid_begin', { count: mermaidCount });
+
+        if (mermaidCount <= 6) {
+          try {
+            mermaid.run({ nodes: mermaidNodes, suppressErrors: true }).then(function() {
+              if (currentRenderRevision !== renderId) return;
+              for (let i = 0; i < mermaidNodes.length; i++) {
+                const c = mermaidNodes[i].closest('.mermaid-container');
+                if (c) formatMermaidContainer(c);
+              }
+              LucidPerf.mark(renderId, 't16_mermaid_end', { count: mermaidCount });
+              mermaidDone = true;
+              checkFullEnhancement();
+            }).catch(function(err) {
+              console.warn('Mermaid batch render error:', err);
+              if (currentRenderRevision !== renderId) return;
+              for (let i = 0; i < mermaidNodes.length; i++) {
+                const c = mermaidNodes[i].closest('.mermaid-container');
+                if (c) formatMermaidContainer(c);
+              }
+              LucidPerf.mark(renderId, 't16_mermaid_end', { count: mermaidCount });
+              mermaidDone = true;
+              checkFullEnhancement();
+            });
+          } catch (e) {
+            console.warn('Mermaid synchronous error:', e);
+            if (currentRenderRevision !== renderId) return;
+            mermaidDone = true;
+            checkFullEnhancement();
+          }
+        } else {
+          const allNodes = Array.prototype.slice.call(mermaidNodes);
+          let chunkIndex = 0;
+          const chunkSize = 6;
+
+          function processMermaidChunk() {
+            if (currentRenderRevision !== renderId) return;
+            if (chunkIndex >= allNodes.length) {
+              LucidPerf.mark(renderId, 't16_mermaid_end', { count: mermaidCount });
+              mermaidDone = true;
+              checkFullEnhancement();
+              return;
+            }
+
+            const currentChunk = allNodes.slice(chunkIndex, chunkIndex + chunkSize);
+            chunkIndex += chunkSize;
+
+            try {
+              mermaid.run({ nodes: currentChunk, suppressErrors: true }).then(function() {
+                if (currentRenderRevision !== renderId) return;
+                for (let i = 0; i < currentChunk.length; i++) {
+                  const c = currentChunk[i].closest('.mermaid-container');
+                  if (c) formatMermaidContainer(c);
+                }
+                setTimeout(processMermaidChunk, 0);
+              }).catch(function(err) {
+                console.warn('Mermaid chunk render error:', err);
+                if (currentRenderRevision !== renderId) return;
+                for (let i = 0; i < currentChunk.length; i++) {
+                  const c = currentChunk[i].closest('.mermaid-container');
+                  if (c) formatMermaidContainer(c);
+                }
+                setTimeout(processMermaidChunk, 0);
+              });
+            } catch (e) {
+              console.warn('Mermaid synchronous chunk error:', e);
+              if (currentRenderRevision !== renderId) return;
+              setTimeout(processMermaidChunk, 0);
+            }
+          }
+
+          processMermaidChunk();
+        }
+      }
+
+      // 3. Immediate completion check if nothing is deferred
+      checkFullEnhancement();
     },
 
     updatePreferences: function(prefs) {
@@ -523,7 +813,9 @@
             mermaid.initialize({
               startOnLoad: false,
               theme: currentMermaidTheme,
-              securityLevel: 'loose'
+              securityLevel: 'loose',
+              layout: 'dagre',
+              flowchart: { defaultRenderer: 'dagre' }
             });
           } catch (e) {}
         }
@@ -572,9 +864,11 @@
     handleMessage: function(msg) {
       if (!msg || !msg.type) return;
       if (msg.type === 'updateContent' && typeof msg.markdown === 'string') {
-        window.lucid.updateContent(msg.markdown);
+        window.lucid.updateContent(msg.markdown, msg.renderId || msg.revision);
       } else if (msg.type === 'updatePreferences' && msg.preferences) {
         window.lucid.updatePreferences(msg.preferences);
+      } else if (msg.type === 'ping') {
+        LucidPerf.mark(msg.renderId || 'ping', 't4_js_ping_received', { length: (msg.payload || '').length });
       }
     },
 
@@ -1040,18 +1334,16 @@
     }
   };
 
-  if (typeof mermaid !== 'undefined') {
-    try {
-      mermaid.initialize({
-        startOnLoad: false,
-        theme: 'neutral',
-        securityLevel: 'loose'
-      });
-    } catch (e) {}
+  function notifyBridgeReady() {
+    ensureMermaidInitialized();
+    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.lucidReady) {
+      window.webkit.messageHandlers.lucidReady.postMessage({ status: 'ready' });
+    }
   }
 
-  // Notify native host that WebEngine bridge is initialized and ready for payloads
-  if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.lucidReady) {
-    window.webkit.messageHandlers.lucidReady.postMessage({ ready: true });
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', notifyBridgeReady);
+  } else {
+    notifyBridgeReady();
   }
 })();

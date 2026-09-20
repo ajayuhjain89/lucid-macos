@@ -7,7 +7,9 @@ public struct MainWindowView: View {
     var fileURL: URL?
 
     @StateObject private var preferences = LucidPreferences.shared
-    @State private var headings: [HeadingItem] = []
+    /// Off-main, coalesced document analysis (metrics + outline). Keeps the
+    /// synchronous typing path free of the O(n) scan/parse.
+    @StateObject private var analyzer = DocumentAnalyzer()
     @State private var activeHeading: HeadingItem?
     @State private var scrollToHeadingId: String?
     @State private var previewTargetFraction: Double?
@@ -47,17 +49,14 @@ public struct MainWindowView: View {
     // when Focus Mode has quieted them).
     @State private var isToolbarHovered: Bool = false
 
-    private var wordCount: Int {
-        let words = document.text.components(separatedBy: .whitespacesAndNewlines)
-        return words.filter { !$0.isEmpty }.count
-    }
-
-    private var charCount: Int {
-        document.text.count
-    }
-
-    private var readingTimeMinutes: Int {
-        max(1, Int(ceil(Double(wordCount) / 200.0)))
+    // Document metrics + outline are produced off-main by `analyzer`; these
+    // computed accessors expose its published values to the existing view code.
+    private var wordCount: Int { analyzer.wordCount }
+    private var charCount: Int { analyzer.charCount }
+    private var readingTimeMinutes: Int { analyzer.readingTimeMinutes }
+    private var headings: [HeadingItem] { analyzer.headings }
+    private var headingsBinding: Binding<[HeadingItem]> {
+        Binding(get: { analyzer.headings }, set: { analyzer.headings = $0 })
     }
 
     private var documentTitle: String {
@@ -206,13 +205,22 @@ public struct MainWindowView: View {
         )
         .onAppear {
             setupFileWatcher()
-            headings = MarkdownOutlineParser.parse(markdown: document.text)
+            // Prompt initial analysis (off-main, no debounce).
+            analyzer.prime(text: document.text)
+        }
+        .onDisappear {
+            // Closing the document must not let in-flight analysis publish.
+            analyzer.reset()
+        }
+        .onChange(of: fileURL) { _, _ in
+            // Document switch: drop stale work from the previous document, then
+            // analyze the new one promptly.
+            analyzer.reset()
+            analyzer.prime(text: document.text)
         }
         .onChange(of: document.text) { _, newText in
-            let parsed = MarkdownOutlineParser.parse(markdown: newText)
-            if !parsed.isEmpty || headings.isEmpty {
-                headings = parsed
-            }
+            // Typing path: schedule coalesced/cancellable analysis; never block.
+            analyzer.update(text: newText)
             if isFindBarPresented && !findQuery.isEmpty {
                 performFind(findQuery)
             }
@@ -434,7 +442,7 @@ public struct MainWindowView: View {
                 PreviewWebView(
                     preferences: preferences,
                     markdown: document.text,
-                    headings: $headings,
+                    headings: headingsBinding,
                     activeHeading: $activeHeading,
                     onScrollFractionChanged: nil,
                     onFindMatchesChanged: { count, index in
@@ -467,7 +475,7 @@ public struct MainWindowView: View {
                     PreviewWebView(
                         preferences: preferences,
                         markdown: document.text,
-                        headings: $headings,
+                        headings: headingsBinding,
                         activeHeading: $activeHeading,
                         onScrollFractionChanged: nil,
                         onFindMatchesChanged: { count, index in
