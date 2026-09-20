@@ -1,0 +1,64 @@
+name: Branch Flow Policy
+
+# Validates that every pull request uses an allowed source -> target direction,
+# per github_workflow.md. Maintainers can bypass by adding the "workflow:override"
+# label to the PR (e.g. for repository-maintenance merges).
+
+on:
+  pull_request:
+    types: [opened, reopened, edited, synchronize, labeled, unlabeled]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  validate:
+    name: Validate PR direction
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check source -> target
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_REF: ${{ github.base_ref }}
+          HAS_OVERRIDE: ${{ contains(github.event.pull_request.labels.*.name, 'workflow:override') }}
+        run: |
+          set -euo pipefail
+          echo "PR: $HEAD_REF -> $BASE_REF"
+
+          if [ "$HAS_OVERRIDE" = "true" ]; then
+            echo "::warning::'workflow:override' label present — skipping branch-flow enforcement."
+            exit 0
+          fi
+
+          allowed=0
+          case "$BASE_REF" in
+            design)  [[ "$HEAD_REF" == design-* ]] && allowed=1 ;;
+            logic)   [[ "$HEAD_REF" == logic-*  ]] && allowed=1 ;;
+            docs)    [[ "$HEAD_REF" == docs-*   ]] && allowed=1 ;;
+            develop) [[ "$HEAD_REF" == "design" || "$HEAD_REF" == "logic" || "$HEAD_REF" == "docs" ]] && allowed=1 ;;
+            main)    [[ "$HEAD_REF" == "develop" || "$HEAD_REF" == hotfix-* ]] && allowed=1 ;;
+          esac
+
+          if [ "$allowed" = "1" ]; then
+            echo "✅ Allowed PR direction: $HEAD_REF -> $BASE_REF"
+            exit 0
+          fi
+
+          echo "::error::Disallowed PR direction: '$HEAD_REF' -> '$BASE_REF'."
+          cat <<'EOF'
+          Allowed directions (see github_workflow.md §7):
+            design-*  -> design
+            logic-*   -> logic
+            docs-*    -> docs
+            design    -> develop
+            logic     -> develop
+            docs      -> develop
+            develop   -> main
+            hotfix-*  -> main   (emergency)
+
+          Task branches must go through their category branch, and only
+          'develop' may merge into 'main'. Maintainers may add the
+          'workflow:override' label to bypass this check when necessary.
+          EOF
+          exit 1
