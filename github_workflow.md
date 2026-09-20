@@ -305,13 +305,23 @@ A lightweight **branch-flow** GitHub Action (`.github/workflows/branch-flow.yml`
 validates that each PR uses an allowed source→target direction and flags
 bypasses. Maintainers can override by adding the `workflow:override` label to a PR.
 
-> **Current state:** see the repository's final report / README. On private repos
-> without a paid plan, GitHub branch-protection rules may be unavailable via API or
-> UI. If so, the discipline above is enforced by convention + the branch-flow
-> check, and protection should be enabled once the plan allows it. To enable it
-> manually: **Repo → Settings → Branches → Add branch ruleset** (or classic
-> **Branch protection rules**), target each permanent branch, and enable
-> *Require a pull request before merging* and *Require status checks to pass*.
+### Configured protection (current state)
+
+| Branch | Require PR | Required check | No direct push (enforce admins) | Force-push / delete |
+| :----- | :-------- | :------------- | :------------------------------ | :------------------ |
+| `main`    | ✅ | `Build (macOS, Apple Silicon)` (strict) | ✅ | ❌ (blocked) |
+| `develop` | ✅ | `Build (macOS, Apple Silicon)` (strict) | ✅ | ❌ (blocked) |
+| `design`  | ✅ | — (verification is manual/advisory) | ❌ (maintainer may push for maintenance) | ❌ (blocked) |
+| `logic`   | ✅ | — (verification is manual/advisory) | ❌ (maintainer may push for maintenance) | ❌ (blocked) |
+| `docs`    | ✅ | — (verification is manual/advisory) | ❌ (maintainer may push for maintenance) | ❌ (blocked) |
+
+`main` and `develop` additionally require conversation resolution. The
+branch-flow check runs on every PR as an advisory guard (not a hard-required
+status) so legitimate maintenance is never deadlocked; add the
+`workflow:override` label to bypass it explicitly.
+
+To adjust protection: **Repo → Settings → Branches** (classic rules) or the REST
+`repos/{owner}/{repo}/branches/{branch}/protection` endpoint.
 
 ---
 
