@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { siteConfig } from "@/lib/site-config";
-import { CopyButton } from "@/components/ui/copy-button";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
@@ -17,13 +16,7 @@ const commonIssues = [
     solution: (
       <div className="space-y-2 text-xs">
         <p><strong>Option 1 (Finder):</strong> Right-click (or Control-click) <code className="font-mono bg-surface-elevated px-1 py-0.5 rounded text-accent">Lucid.app</code> in Applications, select <strong>Open</strong>, and click <strong>Open</strong> in the dialog.</p>
-        <p><strong>Option 2 (Terminal):</strong> Run the following command to clear the quarantine flag:</p>
-        <div className="flex items-center justify-between">
-          <pre className="p-2 rounded bg-code-bg border border-code-border font-mono text-[11px] text-code-fg overflow-x-auto flex-1 mr-2">
-            xattr -d com.apple.quarantine /Applications/Lucid.app
-          </pre>
-          <CopyButton text="xattr -d com.apple.quarantine /Applications/Lucid.app" label="Copy" />
-        </div>
+        <p><strong>Option 2 (System Settings):</strong> If macOS still blocks the app, open <strong>System Settings → Privacy &amp; Security</strong>, scroll to the Security section, and click <strong>Open Anyway</strong> next to the message about Lucid.</p>
       </div>
     ),
   },
