@@ -53,6 +53,7 @@ public struct PreviewWebView: NSViewRepresentable {
         userContent.add(context.coordinator, name: "lucidFindMatches")
         userContent.add(context.coordinator, name: "lucidLinkClicked")
         userContent.add(context.coordinator, name: "lucidSaveSvg")
+        userContent.add(context.coordinator, name: "lucidPerf")
         config.userContentController = userContent
 
         let effectiveTokens: LucidThemeTokens = {
@@ -137,6 +138,9 @@ public struct PreviewWebView: NSViewRepresentable {
         var lastRenderedMarkdown = ""
         var lastScrolledHeadingId: String?
         var lastAppliedFraction: Double = -1
+        /// Whether any revision-tagged heading echo has been seen. Once tagging is
+        /// active, an untagged (legacy) echo must not bypass revision safety.
+        var hasSeenTaggedHeadings: Bool = false
         let renderCoordinator = PreviewRenderCoordinator()
 
         init(_ parent: PreviewWebView) {
@@ -174,9 +178,33 @@ public struct PreviewWebView: NSViewRepresentable {
                 } else if let scrolled = body["scrolled"] as? Bool {
                     parent.onScrollIntensityChanged?(scrolled ? 1 : 0)
                 }
-            } else if message.name == "lucidHeadings", let body = message.body as? [[String: Any]] {
+            } else if message.name == "lucidHeadings" {
+                // Accept the tagged shape { renderId, headings }; tolerate the
+                // legacy bare-array shape only until tagging is active.
+                var rawHeadings: [[String: Any]] = []
+                var echoRevision: UInt64? = nil
+                var tagged = false
+                if let body = message.body as? [String: Any] {
+                    rawHeadings = body["headings"] as? [[String: Any]] ?? []
+                    if let rid = body["renderId"] as? String {
+                        tagged = true
+                        echoRevision = UInt64(rid)
+                    }
+                } else if let arr = message.body as? [[String: Any]] {
+                    rawHeadings = arr
+                }
+                // Dual-writer safety: a heading echo may update `headings` ONLY when
+                // its renderId belongs to the CURRENT render/document revision
+                // (compared against the live PreviewRenderCoordinator revision, not
+                // against the last echo). A delayed echo from a superseded render is
+                // dropped, so it can never overwrite the newer text/document state.
+                if tagged { hasSeenTaggedHeadings = true }
+                guard HeadingEchoGate.accepts(tagged: tagged,
+                                              echoRevision: echoRevision,
+                                              currentRevision: renderCoordinator.currentRevision,
+                                              hasSeenTagged: hasSeenTaggedHeadings) else { return }
                 var parsed: [HeadingItem] = []
-                for item in body {
+                for item in rawHeadings {
                     if let id = item["id"] as? String,
                        let level = item["level"] as? Int,
                        let text = item["text"] as? String {
@@ -209,6 +237,8 @@ public struct PreviewWebView: NSViewRepresentable {
                 Task { @MainActor in
                     ExportService.shared.exportSVG(svgString: svgString)
                 }
+            } else if message.name == "lucidPerf" {
+                // Performance event received from WebEngine
             }
         }
 
