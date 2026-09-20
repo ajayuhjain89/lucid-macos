@@ -12,7 +12,6 @@ export const metadata: Metadata = {
 
 export default function DownloadPage() {
   const verifyCommand = `shasum -a 256 ~/Downloads/${currentRelease.fileName}`;
-  const quarantineCommand = `xattr -d com.apple.quarantine /Applications/Lucid.app`;
   const buildCommand = `git clone ${siteConfig.githubUrl}.git\ncd lucid-macos\n./build.sh`;
 
   return (
@@ -79,7 +78,7 @@ export default function DownloadPage() {
                   Get on GitHub Releases
                 </Button>
                 <span className="text-xs text-text-tertiary text-center">
-                  Artifact verified locally • Hosted on GitHub
+                  Artifact verified locally • Publishing to GitHub Releases
                 </span>
               </div>
             )}
@@ -167,13 +166,10 @@ export default function DownloadPage() {
               </div>
             </div>
             <div className="p-3 rounded bg-surface-elevated border border-border-subtle text-xs space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="font-semibold text-text-primary">Option 2: Terminal</span>
-                <CopyButton text={quarantineCommand} label="Copy" />
+              <div className="font-semibold text-text-primary">Option 2: System Settings</div>
+              <div>
+                If macOS still blocks the app, open <strong className="text-text-primary">System Settings → Privacy &amp; Security</strong>, scroll to the Security section, and click <strong className="text-text-primary">Open Anyway</strong> next to the message about Lucid.
               </div>
-              <pre className="p-2 rounded bg-code-bg border border-code-border font-mono text-[11px] text-code-fg overflow-x-auto">
-                {quarantineCommand}
-              </pre>
             </div>
             <p className="text-xs text-text-tertiary">
               Official Apple Developer ID signing and notarization will be configured for the stable release.

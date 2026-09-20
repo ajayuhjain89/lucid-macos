@@ -86,6 +86,19 @@ Design and docs follow the identical shape on the `design` and `docs` branches.
 `design/top-bar`, `docs/getting-started`, `feature/foo`, `fix/bar`, `perf/foo`
 for normal work.
 
+### History hygiene — keep the graph readable
+
+- **Never fast-forward integration/release merges.** This repo sets
+  `git config --local merge.ff false`, so `logic|design|docs → develop` and
+  `develop → main` always create a real merge commit. Fast-forwards collapse
+  `develop` and `main` onto the same commit, which erases the two-lane history.
+- **Keep `develop` ahead of `main`.** New work always lands on `develop` (via a
+  category branch); `main` only moves at a release. Never commit directly on
+  `main`, and never reset one onto the other.
+- **Advance a category branch to the latest `develop` before starting work** on
+  it, so a new commit never branches from a stale tip and swoops back across the
+  graph.
+
 ---
 
 ## 4. Temporary branches — the exception, not the default
