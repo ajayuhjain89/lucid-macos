@@ -41,11 +41,17 @@ python3 -m http.server 8899
 
 ## Pull requests
 
-1. Branch from `main`.
-2. Keep changes focused; describe the *why*, not just the *what*.
+Lucid uses a category-branch workflow — read [docs/github_workflow.md](docs/github_workflow.md)
+for the full model. In short:
+
+1. Branch from the relevant category branch (`design`, `logic`, or `docs`) using a
+   `design-<task>` / `logic-<task>` / `docs-<task>` name.
+2. Keep changes focused and one task per branch; describe the *why*, not just the *what*.
 3. Ensure the project builds (`./build.sh`) before opening the PR.
 4. Include before/after screenshots for any visible UI change.
-5. Do not commit build artifacts (`Lucid`, `Lucid.app`, `*.dmg`, `scratch/`) — they
+5. Open the task PR into its category branch; promotion then flows
+   category → `develop` → `main`.
+6. Do not commit build artifacts (`Lucid`, `Lucid.app`, `*.dmg`, `scratch/`) — they
    are covered by `.gitignore`.
 
 ## Reporting issues

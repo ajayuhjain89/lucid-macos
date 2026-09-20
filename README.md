@@ -99,9 +99,22 @@ Sources/Lucid/
 
 The `Resources/WebEngine` reader is ported from the companion **Lucid** VS Code extension, which remains the visual source of truth for rendered Markdown content.
 
+## Documentation
+
+Application and project documentation lives in [`docs/`](docs/):
+
+- [docs/github_workflow.md](docs/github_workflow.md) — the canonical Git/GitHub branching, verification, and release workflow.
+- [docs/Engineering_Showcase.md](docs/Engineering_Showcase.md) — engineering/architecture showcase.
+- [docs/Sample.md](docs/Sample.md) — sample Markdown for exercising the reader.
+
+Community, legal, and meta files stay in the repository root: this README,
+[LICENSE](LICENSE), [CHANGELOG.md](CHANGELOG.md), [CONTRIBUTING.md](CONTRIBUTING.md),
+and [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+
 ## Contributing
 
-Issues and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Please keep changes aligned with the app's design principles: quiet, native, and document-first.
+Issues and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) and the
+[workflow guide](docs/github_workflow.md). Please keep changes aligned with the app's design principles: quiet, native, and document-first.
 
 ## License
 
