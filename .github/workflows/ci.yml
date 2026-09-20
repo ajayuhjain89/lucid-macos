@@ -28,7 +28,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p scratch/ModuleCache
-          swiftc -parse-as-library -target arm64-apple-macosx14.0 -O \
+          swiftc -parse-as-library -target arm64-apple-macosx14.0 -O -swift-version 5 \
             -module-cache-path scratch/ModuleCache \
             -o /tmp/Lucid \
             $(find Sources/Lucid -name "*.swift")

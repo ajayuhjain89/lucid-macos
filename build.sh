@@ -10,7 +10,10 @@ RESOURCES="$CONTENTS/Resources"
 
 echo "==> Compiling $APP_NAME for macOS (arm64)..."
 mkdir -p "$DIR/scratch/ModuleCache"
-swiftc -parse-as-library -target arm64-apple-macosx14.0 -O \
+# Pin the Swift 5 language mode so the build is deterministic across toolchains
+# (newer Xcode defaults `swiftc` to Swift 6 mode, whose stricter actor isolation
+# the codebase is not written against).
+swiftc -parse-as-library -target arm64-apple-macosx14.0 -O -swift-version 5 \
   -module-cache-path "$DIR/scratch/ModuleCache" \
   -o "$DIR/$APP_NAME" \
   $(find "$DIR/Sources/Lucid" -name "*.swift")
