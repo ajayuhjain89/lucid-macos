@@ -30,21 +30,51 @@ public struct EditorView: NSViewRepresentable {
     }
 
     public func makeNSView(context: Context) -> NSScrollView {
+        let tokens = preferences.theme.themeTokens
+        let bgColor = NSColor(Color(hex: tokens.editorBackground))
+        let fgColor = NSColor(Color(hex: tokens.textPrimary))
+        let selColor = NSColor(Color(hex: tokens.selection))
+
         let scrollView = NSScrollView()
         scrollView.hasVerticalScroller = true
-        scrollView.hasHorizontalScroller = false
+        scrollView.hasHorizontalScroller = !preferences.wordWrap
         scrollView.autohidesScrollers = true
-        scrollView.drawsBackground = false
+        scrollView.drawsBackground = true
+        scrollView.backgroundColor = bgColor
 
-        let textView = LucidTextView()
+        let initialWidth = max(scrollView.contentSize.width, 800)
+        let textStorage = NSTextStorage(string: text)
+        let layoutManager = NSLayoutManager()
+        textStorage.addLayoutManager(layoutManager)
+        let textContainer = NSTextContainer(containerSize: NSSize(width: initialWidth, height: CGFloat.greatestFiniteMagnitude))
+        if preferences.wordWrap {
+            textContainer.widthTracksTextView = true
+        } else {
+            textContainer.widthTracksTextView = false
+            textContainer.containerSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        }
+        layoutManager.addTextContainer(textContainer)
+
+        let textView = LucidTextView(frame: NSRect(x: 0, y: 0, width: initialWidth, height: 1000), textContainer: textContainer)
+        textView.strongTextStorage = textStorage
+        textView.minSize = NSSize(width: 0, height: 0)
+        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        textView.isVerticallyResizable = true
+        textView.isHorizontallyResizable = !preferences.wordWrap
+        textView.autoresizingMask = preferences.wordWrap ? [.width] : []
         textView.isRichText = false
         textView.allowsUndo = true
         textView.isAutomaticQuoteSubstitutionEnabled = false
         textView.isAutomaticDashSubstitutionEnabled = false
         textView.isAutomaticTextReplacementEnabled = false
         textView.isAutomaticSpellingCorrectionEnabled = false
-        textView.backgroundColor = .clear
-        textView.drawsBackground = false
+        textView.drawsBackground = true
+        textView.backgroundColor = bgColor
+        textView.textColor = fgColor
+        textView.selectedTextAttributes = [
+            .backgroundColor: selColor,
+            .foregroundColor: fgColor
+        ]
         textView.delegate = context.coordinator
         textView.preferences = preferences
 
@@ -62,6 +92,9 @@ public struct EditorView: NSViewRepresentable {
 
         // Attach Line Number Gutter
         let gutter = LineNumberGutterView(scrollView: scrollView)
+        gutter.backgroundColor = bgColor
+        gutter.textColor = NSColor(Color(hex: tokens.textTertiary))
+        gutter.activeLineNumberColor = fgColor
         scrollView.verticalRulerView = gutter
         scrollView.hasVerticalRuler = preferences.lineNumbers
         scrollView.rulersVisible = preferences.lineNumbers
@@ -89,6 +122,57 @@ public struct EditorView: NSViewRepresentable {
             scrollView.rulersVisible = preferences.lineNumbers
         }
 
+        // Update word wrap
+        if let textContainer = textView.textContainer, textContainer.widthTracksTextView != preferences.wordWrap {
+            let savedSelectedRanges = textView.selectedRanges
+            let savedVisibleOrigin = scrollView.contentView.bounds.origin
+
+            if preferences.wordWrap {
+                scrollView.hasHorizontalScroller = false
+                textView.isHorizontallyResizable = false
+                textView.autoresizingMask = [.width]
+                textContainer.widthTracksTextView = true
+                textContainer.containerSize = NSSize(width: scrollView.contentSize.width, height: CGFloat.greatestFiniteMagnitude)
+                textView.setFrameSize(NSSize(width: scrollView.contentSize.width, height: textView.frame.height))
+            } else {
+                scrollView.hasHorizontalScroller = true
+                textView.isHorizontallyResizable = true
+                textView.autoresizingMask = []
+                textContainer.widthTracksTextView = false
+                textContainer.containerSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+            }
+
+            textView.layoutManager?.invalidateLayout(forCharacterRange: NSRange(location: 0, length: textView.string.count), actualCharacterRange: nil)
+            textView.selectedRanges = savedSelectedRanges
+            scrollView.contentView.bounds.origin = savedVisibleOrigin
+            context.coordinator.gutterView?.needsDisplay = true
+        }
+
+        let tokens = preferences.theme.themeTokens
+        let bgColor = NSColor(Color(hex: tokens.editorBackground))
+        let fgColor = NSColor(Color(hex: tokens.textPrimary))
+        let selColor = NSColor(Color(hex: tokens.selection))
+
+        if scrollView.backgroundColor != bgColor {
+            scrollView.backgroundColor = bgColor
+        }
+        if textView.backgroundColor != bgColor {
+            textView.backgroundColor = bgColor
+        }
+        if textView.textColor != fgColor {
+            textView.textColor = fgColor
+        }
+        textView.selectedTextAttributes = [
+            .backgroundColor: selColor,
+            .foregroundColor: fgColor
+        ]
+
+        if let gutter = context.coordinator.gutterView {
+            gutter.backgroundColor = bgColor
+            gutter.textColor = NSColor(Color(hex: tokens.textTertiary))
+            gutter.activeLineNumberColor = fgColor
+        }
+
         // Apply updated typography
         applyTypography(to: textView)
 
@@ -104,12 +188,15 @@ public struct EditorView: NSViewRepresentable {
     }
 
     private func applyTypography(to textView: LucidTextView) {
+        let tokens = preferences.theme.themeTokens
         let font = preferences.fontFamily.nsFont(
             size: CGFloat(preferences.fontSize),
             customName: preferences.customFontName
         )
+        let fgColor = NSColor(Color(hex: tokens.textPrimary))
         textView.font = font
-        textView.insertionPointColor = NSColor(Color(hex: preferences.accentColor))
+        textView.textColor = fgColor
+        textView.insertionPointColor = NSColor(Color(hex: tokens.cursor))
 
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.lineSpacing = CGFloat((preferences.lineHeight - 1.0) * preferences.fontSize)
@@ -120,6 +207,13 @@ public struct EditorView: NSViewRepresentable {
         // below it at rest and scrolls beneath it (matching the reader).
         let horizontalPadding: CGFloat = 32
         textView.textContainerInset = NSSize(width: horizontalPadding, height: LucidChrome.contentTopInset)
+
+        if let textStorage = textView.textStorage, textStorage.length > 0 {
+            let fullRange = NSRange(location: 0, length: textStorage.length)
+            textStorage.addAttribute(.font, value: font, range: fullRange)
+            textStorage.addAttribute(.foregroundColor, value: fgColor, range: fullRange)
+            textStorage.addAttribute(.paragraphStyle, value: paragraphStyle, range: fullRange)
+        }
 
         if let gutter = (textView.enclosingScrollView?.verticalRulerView as? LineNumberGutterView) {
             gutter.font = NSFont.monospacedSystemFont(ofSize: max(10, CGFloat(preferences.fontSize * 0.65)), weight: .regular)
@@ -174,7 +268,7 @@ public struct EditorView: NSViewRepresentable {
                 let fraction = clipView.bounds.origin.y / maxScroll
                 parent.onScrollFractionChanged?(Double(fraction))
             }
-            let intensity = min(1, max(0, Double(clipView.bounds.origin.y) / 22))
+            let intensity = min(1, max(0, Double(clipView.bounds.origin.y) / 28))
             parent.onScrollIntensityChanged?(intensity)
             gutterView?.needsDisplay = true
         }
@@ -184,6 +278,7 @@ public struct EditorView: NSViewRepresentable {
 /// Custom NSTextView providing low-cost current-line highlight and context-aware auto-pairing.
 public final class LucidTextView: NSTextView {
     public var preferences: LucidPreferences?
+    public var strongTextStorage: NSTextStorage?
     private var previousActiveLineRect: NSRect?
 
     // MARK: - Drawing: Current-Line Highlight

@@ -228,43 +228,59 @@ struct EditorSettingsTab: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: LucidSpacing.sectionSpacing) {
-                // Typography
+                // Typography Section
                 VStack(alignment: .leading, spacing: LucidSpacing.medium) {
                     LucidSectionHeader(
                         title: "Typography",
-                        subtitle: "Editor font family, sizing, and line height."
+                        subtitle: "Font family and size applied to both the editor and preview."
                     )
 
-                    LucidSettingRow(title: "Font Family") {
-                        Picker("", selection: $preferences.fontFamily) {
-                            ForEach(FontFamily.allCases) { font in
-                                Text(font.displayName).tag(font)
+                    VStack(alignment: .leading, spacing: LucidSpacing.small) {
+                        Text("Font Family")
+                            .font(LucidTypography.label)
+                            .foregroundColor(LucidColors.textSecondary)
+
+                        Picker("Font Family", selection: $preferences.fontFamily) {
+                            ForEach(FontFamily.allCases) { family in
+                                Text(family.displayName).tag(family)
                             }
                         }
-                        .pickerStyle(.menu)
-                        .frame(width: 220)
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+
+                        if preferences.fontFamily == .custom {
+                            TextField("Custom Font Name (e.g. Fira Code)", text: $preferences.customFontName)
+                                .textFieldStyle(.roundedBorder)
+                                .font(LucidTypography.label)
+                        }
                     }
 
-                    LucidSettingRow(title: "Font Size") {
-                        HStack(spacing: LucidSpacing.small) {
-                            Slider(value: $preferences.fontSize, in: 12...28, step: 1)
-                                .frame(width: 160)
+                    // Font Size Slider
+                    VStack(alignment: .leading, spacing: LucidSpacing.xSmall) {
+                        HStack {
+                            Text("Font Size")
+                                .font(LucidTypography.label)
+                                .foregroundColor(LucidColors.textSecondary)
+                            Spacer()
                             Text("\(Int(preferences.fontSize)) pt")
                                 .font(LucidTypography.metadata)
-                                .foregroundColor(LucidColors.textSecondary)
-                                .frame(width: 44, alignment: .trailing)
+                                .foregroundColor(LucidColors.textPrimary)
                         }
+                        Slider(value: $preferences.fontSize, in: LucidPreferences.Limits.fontSizeRange, step: LucidPreferences.Limits.fontSizeStep)
                     }
 
-                    LucidSettingRow(title: "Line Height") {
-                        HStack(spacing: LucidSpacing.small) {
-                            Slider(value: $preferences.lineHeight, in: 1.3...2.4, step: 0.05)
-                                .frame(width: 160)
+                    // Line Height Slider
+                    VStack(alignment: .leading, spacing: LucidSpacing.xSmall) {
+                        HStack {
+                            Text("Line Height")
+                                .font(LucidTypography.label)
+                                .foregroundColor(LucidColors.textSecondary)
+                            Spacer()
                             Text(String(format: "%.2f", preferences.lineHeight))
                                 .font(LucidTypography.metadata)
-                                .foregroundColor(LucidColors.textSecondary)
-                                .frame(width: 44, alignment: .trailing)
+                                .foregroundColor(LucidColors.textPrimary)
                         }
+                        Slider(value: $preferences.lineHeight, in: LucidPreferences.Limits.lineHeightRange, step: LucidPreferences.Limits.lineHeightStep)
                     }
                 }
 
@@ -365,7 +381,7 @@ struct PreviewSettingsTab: View {
 
                     LucidSettingRow(title: "Math Scale") {
                         HStack(spacing: LucidSpacing.small) {
-                            Slider(value: $preferences.mathScale, in: 0.8...1.5, step: 0.1)
+                            Slider(value: $preferences.mathScale, in: LucidPreferences.Limits.mathScaleRange, step: LucidPreferences.Limits.mathScaleStep)
                                 .frame(width: 160)
                             Text(String(format: "%.1f×", preferences.mathScale))
                                 .font(LucidTypography.metadata)
@@ -376,7 +392,7 @@ struct PreviewSettingsTab: View {
 
                     LucidSettingRow(title: "Mermaid Scale") {
                         HStack(spacing: LucidSpacing.small) {
-                            Slider(value: $preferences.mermaidScale, in: 0.8...1.5, step: 0.1)
+                            Slider(value: $preferences.mermaidScale, in: LucidPreferences.Limits.mermaidScaleRange, step: LucidPreferences.Limits.mermaidScaleStep)
                                 .frame(width: 160)
                             Text(String(format: "%.1f×", preferences.mermaidScale))
                                 .font(LucidTypography.metadata)
@@ -509,6 +525,7 @@ struct ShortcutsSettingsTab: View {
 // MARK: - 7. Advanced Settings Tab
 struct AdvancedSettingsTab: View {
     @ObservedObject var preferences: LucidPreferences
+    @State private var showingResetConfirmation: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: LucidSpacing.medium) {
@@ -540,7 +557,19 @@ struct AdvancedSettingsTab: View {
 
             HStack {
                 LucidTextButton("Reset All Preferences…", systemImage: "arrow.counterclockwise", role: .destructive) {
-                    withAnimation(LucidMotion.state) { preferences.resetAll() }
+                    showingResetConfirmation = true
+                }
+                .confirmationDialog(
+                    "Reset All Preferences",
+                    isPresented: $showingResetConfirmation,
+                    titleVisibility: .visible
+                ) {
+                    Button("Reset All Preferences", role: .destructive) {
+                        withAnimation(LucidMotion.state) { preferences.resetAll() }
+                    }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("Are you sure you want to reset all preferences to their default values? This action cannot be undone.")
                 }
 
                 Spacer()

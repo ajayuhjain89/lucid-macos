@@ -27,15 +27,23 @@
     highlight: function(str, lang) {
       if (lang === 'mermaid') {
         const escapedRaw = encodeURIComponent(str);
-        return '<div class="mermaid-wrapper" data-raw-mermaid="' + escapedRaw + '">' +
+        return '<div class="mermaid-container" data-raw-mermaid="' + escapedRaw + '">' +
                '<div class="mermaid-toolbar">' +
-               '<button class="lucid-btn-zoom" title="Zoom In" onclick="window.lucid.zoomDiagram(this, 1.15)">+</button>' +
-               '<button class="lucid-btn-zoom" title="Zoom Out" onclick="window.lucid.zoomDiagram(this, 0.85)">−</button>' +
-               '<button class="lucid-btn-zoom" title="Reset Zoom" onclick="window.lucid.resetZoom(this)">↺</button>' +
-               '<button class="lucid-btn-copy-svg" onclick="window.lucid.copySvg(this)">Copy SVG</button>' +
-               '<button class="lucid-btn-save-svg" onclick="window.lucid.saveSvg(this)">Download SVG</button>' +
+               '<button class="lucid-mermaid-btn lucid-btn-pan" title="Pan Tool" onclick="window.lucid.togglePan(this)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8M6 14v-1.5a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v4a8 8 0 0 0 8 8h2a8 8 0 0 0 8-8v-3a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2"/></svg></button>' +
+               '<button class="lucid-mermaid-btn" title="Zoom In" onclick="window.lucid.zoomDiagram(this, 1.15)">+</button>' +
+               '<button class="lucid-mermaid-btn" title="Zoom Out" onclick="window.lucid.zoomDiagram(this, 0.87)">−</button>' +
+               '<button class="lucid-mermaid-btn" title="Fit to Viewport" onclick="window.lucid.fitDiagram(this)">Fit</button>' +
+               '<button class="lucid-mermaid-btn" title="Reset to Initial View" onclick="window.lucid.resetDiagram(this)">Reset</button>' +
+               '<button class="lucid-mermaid-btn lucid-btn-expand" title="Expand Fullscreen" onclick="window.lucid.expandDiagram(this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button>' +
+               '<span class="mermaid-toolbar-sep"></span>' +
+               '<button class="lucid-mermaid-btn" title="Copy SVG" onclick="window.lucid.copySvg(this)">Copy SVG</button>' +
+               '<button class="lucid-mermaid-btn" title="Export SVG…" onclick="window.lucid.saveSvg(this)">Export SVG…</button>' +
                '</div>' +
+               '<div class="mermaid-viewport" onmousedown="window.lucid.handleDiagramMouseDown(event, this)">' +
+               '<div class="mermaid-canvas">' +
                '<div class="mermaid">' + md.utils.escapeHtml(str) + '</div>' +
+               '</div>' +
+               '</div>' +
                '</div>';
       }
 
@@ -285,9 +293,9 @@
 
     const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
     const fraction = maxScroll > 0 ? window.scrollY / maxScroll : 0;
-    // Graduated 0..1 intensity so the chrome can fade its glass in almost
-    // subconsciously over the first ~22px of travel (spec: scroll-responsive glass).
-    const intensity = Math.max(0, Math.min(1, window.scrollY / 22));
+    // Graduated 0..1 intensity so the chrome can fade its glass and fade out document
+    // metadata smoothly over the first ~28px of travel.
+    const intensity = Math.max(0, Math.min(1, window.scrollY / 28));
     if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.lucidScroll) {
       window.webkit.messageHandlers.lucidScroll.postMessage({ fraction: fraction, scrolled: window.scrollY > 6, intensity: intensity });
     }
@@ -329,7 +337,90 @@
         const mermaidNodes = container.querySelectorAll('.mermaid');
         if (mermaidNodes.length > 0) {
           try {
-            mermaid.run({ nodes: mermaidNodes });
+            mermaid.run({ nodes: mermaidNodes }).then(function() {
+              container.querySelectorAll('.mermaid-container').forEach(function(c) {
+                const svg = c.querySelector('.mermaid-canvas svg') || c.querySelector('.mermaid svg');
+                if (!svg) return;
+                const viewBox = svg.viewBox && svg.viewBox.baseVal;
+                if (viewBox && viewBox.width > 0) {
+                  svg.style.maxWidth = 'none';
+                  svg.style.width = viewBox.width + 'px';
+                  svg.style.height = viewBox.height + 'px';
+
+                  const viewport = c.querySelector('.mermaid-viewport');
+                  const canvas = c.querySelector('.mermaid-canvas');
+                  if (viewport && canvas) {
+                    const availWidth = Math.max(100, viewport.clientWidth - 48);
+
+                    // 1. Inspect real SVG label typography geometry
+                    let baseFontSize = 14;
+                    const labelEl = svg.querySelector('.nodeLabel, .label, text, span');
+                    if (labelEl) {
+                      const fs = parseFloat(window.getComputedStyle(labelEl).fontSize);
+                      if (!isNaN(fs) && fs > 0) baseFontSize = fs;
+                    }
+
+                    // 2. Readability-first scale: target ~13.5px effective label size
+                    const readabilityFloor = Math.min(1.0, 13.5 / baseFontSize);
+                    const widthFitScale = availWidth / viewBox.width;
+
+                    let initialScale = 1.0;
+                    if (viewBox.width > availWidth) {
+                      // Diagram is wider than viewport: do NOT aggressively shrink to fit!
+                      // Prioritize readability so labels are readable without immediate zooming
+                      initialScale = Math.min(1.0, Math.max(widthFitScale, readabilityFloor));
+                    } else {
+                      // Small or medium diagram: keep at natural readable size (~1.0x)
+                      initialScale = 1.0;
+                    }
+
+                    // 3. Dynamic bounded viewport height based on diagram aspect ratio
+                    const scaledHeight = viewBox.height * initialScale;
+                    const targetHeight = Math.round(Math.min(640, Math.max(180, scaledHeight + 64)));
+                    viewport.style.height = targetHeight + 'px';
+
+                    // 4. Meaningful centering translation
+                    let contentOffsetX = 0;
+                    let contentOffsetY = 0;
+                    try {
+                      const bbox = svg.getBBox();
+                      if (bbox && bbox.width > 0) {
+                        const contentCenterX = bbox.x + bbox.width / 2;
+                        const contentCenterY = bbox.y + bbox.height / 2;
+                        const vbCenterX = (viewBox.x || 0) + viewBox.width / 2;
+                        const vbCenterY = (viewBox.y || 0) + viewBox.height / 2;
+                        contentOffsetX = vbCenterX - contentCenterX;
+                        contentOffsetY = vbCenterY - contentCenterY;
+                      }
+                    } catch (e) {}
+
+                    const initialTx = Math.round(contentOffsetX * initialScale);
+                    const initialTy = Math.round(contentOffsetY * initialScale);
+
+                    // 5. Store initial transform & apply
+                    canvas.dataset.initialScale = initialScale;
+                    canvas.dataset.initialTx = initialTx;
+                    canvas.dataset.initialTy = initialTy;
+                    canvas.dataset.contentOffsetX = contentOffsetX;
+                    canvas.dataset.contentOffsetY = contentOffsetY;
+                    canvas.dataset.scale = initialScale;
+                    canvas.dataset.tx = initialTx;
+                    canvas.dataset.ty = initialTy;
+                    canvas.style.transform = 'translate(' + initialTx + 'px, ' + initialTy + 'px) scale(' + initialScale + ')';
+
+                    viewport.onwheel = function(e) { window.lucid.handleDiagramWheel(e, viewport); };
+                    viewport.onmousemove = function(e) {
+                      viewport._lastClientX = e.clientX;
+                      viewport._lastClientY = e.clientY;
+                    };
+                    viewport.onmouseleave = function() {
+                      viewport._lastClientX = null;
+                      viewport._lastClientY = null;
+                    };
+                  }
+                }
+              });
+            });
           } catch (e) {
             console.warn('Mermaid render error:', e);
           }
@@ -424,13 +515,25 @@
 
       if (prefs.theme) {
         body.setAttribute('data-theme', prefs.theme);
-        body.className = 'vscode-body ' + (prefs.theme === 'dark' ? 'vscode-dark' : '');
+        body.className = 'vscode-body ' + (prefs.theme === 'dark' ? 'vscode-dark' : (prefs.theme === 'light' ? 'vscode-light' : 'vscode-sepia'));
+        const newMermaidTheme = (prefs.theme === 'light' ? 'default' : (prefs.theme === 'sepia' ? 'neutral' : 'dark'));
+        if (typeof mermaid !== 'undefined' && currentMermaidTheme !== newMermaidTheme) {
+          currentMermaidTheme = newMermaidTheme;
+          try {
+            mermaid.initialize({
+              startOnLoad: false,
+              theme: currentMermaidTheme,
+              securityLevel: 'loose'
+            });
+          } catch (e) {}
+        }
       }
       if (prefs.fontFamily) root.style.setProperty('--lucid-font-family', prefs.fontFamily);
       if (prefs.fontSize) root.style.setProperty('--lucid-font-size', prefs.fontSize + 'px');
       if (prefs.lineHeight) root.style.setProperty('--lucid-line-height', prefs.lineHeight);
       if (prefs.contentWidth) root.style.setProperty('--lucid-content-width', prefs.contentWidth);
       if (prefs.accentColor) root.style.setProperty('--lucid-accent', prefs.accentColor);
+      if (prefs.topInset) root.style.setProperty('--lucid-top-inset', prefs.topInset + 'px');
       if (typeof prefs.breakout !== 'undefined') {
         if (prefs.breakout) body.classList.remove('no-breakout');
         else body.classList.add('no-breakout');
@@ -475,23 +578,271 @@
       }
     },
 
-    zoomDiagram: function(btn, factor) {
-      const wrapper = btn.closest('.mermaid-wrapper');
-      const svg = wrapper ? wrapper.querySelector('svg') : null;
-      if (!svg) return;
-      let currentScale = parseFloat(svg.dataset.scale || '1.0');
-      currentScale = Math.max(0.4, Math.min(3.0, currentScale * factor));
-      svg.dataset.scale = currentScale;
-      svg.style.transform = 'scale(' + currentScale + ')';
-      svg.style.transformOrigin = 'center center';
+    togglePan: function(btn) {
+      const container = btn.closest('.mermaid-container') || btn.closest('.lucid-mermaid-modal-content');
+      if (!container) return;
+      const viewport = container.querySelector('.mermaid-viewport') || container.querySelector('.lucid-mermaid-modal-body');
+      if (!viewport) return;
+      btn.classList.toggle('active');
+      const isPanning = btn.classList.contains('active');
+      viewport.classList.toggle('is-panning', isPanning);
     },
 
-    resetZoom: function(btn) {
-      const wrapper = btn.closest('.mermaid-wrapper');
-      const svg = wrapper ? wrapper.querySelector('svg') : null;
+    handleDiagramMouseDown: function(e, viewport) {
+      const isPanActive = viewport.classList.contains('is-panning') || e.spaceKey || e.button === 1;
+      if (!isPanActive) return;
+      e.preventDefault();
+      viewport.classList.add('is-dragging');
+      const canvas = viewport.querySelector('.mermaid-canvas');
+      if (!canvas) return;
+
+      let tx = parseFloat(canvas.dataset.tx || '0');
+      let ty = parseFloat(canvas.dataset.ty || '0');
+      let scale = parseFloat(canvas.dataset.scale || '1.0');
+      const startX = e.clientX;
+      const startY = e.clientY;
+
+      function onMouseMove(moveEvent) {
+        const dx = moveEvent.clientX - startX;
+        const dy = moveEvent.clientY - startY;
+        const currentTx = tx + dx;
+        const currentTy = ty + dy;
+        canvas.style.transform = 'translate(' + currentTx + 'px, ' + currentTy + 'px) scale(' + scale + ')';
+        canvas.dataset.tempTx = currentTx;
+        canvas.dataset.tempTy = currentTy;
+      }
+
+      function onMouseUp() {
+        viewport.classList.remove('is-dragging');
+        window.removeEventListener('mousemove', onMouseMove);
+        window.removeEventListener('mouseup', onMouseUp);
+        if (canvas.dataset.tempTx) {
+          canvas.dataset.tx = canvas.dataset.tempTx;
+          canvas.dataset.ty = canvas.dataset.tempTy;
+          delete canvas.dataset.tempTx;
+          delete canvas.dataset.tempTy;
+        }
+      }
+
+      window.addEventListener('mousemove', onMouseMove);
+      window.addEventListener('mouseup', onMouseUp);
+    },
+
+    zoomDiagramAtPoint: function(targetEl, factor, clientX, clientY) {
+      if (!targetEl) return;
+      const viewport = targetEl.classList && (targetEl.classList.contains('mermaid-viewport') || targetEl.classList.contains('lucid-mermaid-modal-body'))
+        ? targetEl
+        : (targetEl.querySelector ? (targetEl.querySelector('.mermaid-viewport') || targetEl.querySelector('.lucid-mermaid-modal-body')) : null)
+          || (targetEl.closest ? (targetEl.closest('.mermaid-viewport') || targetEl.closest('.lucid-mermaid-modal-body')) : null);
+      if (!viewport) return;
+      const canvas = viewport.querySelector('.mermaid-canvas') || (viewport.parentElement ? viewport.parentElement.querySelector('.mermaid-canvas') : null);
+      if (!canvas) return;
+
+      const currentScale = parseFloat(canvas.dataset.scale || '1.0');
+      const tx = parseFloat(canvas.dataset.tx || '0');
+      const ty = parseFloat(canvas.dataset.ty || '0');
+
+      const newScale = Math.max(0.3, Math.min(4.0, currentScale * factor));
+      if (Math.abs(newScale - currentScale) < 0.001) return;
+
+      const viewportRect = viewport.getBoundingClientRect();
+      const centerX = viewportRect.left + viewport.clientWidth / 2;
+      const centerY = viewportRect.top + viewport.clientHeight / 2;
+
+      const targetX = (typeof clientX === 'number' && clientX >= viewportRect.left && clientX <= viewportRect.right) ? clientX : centerX;
+      const targetY = (typeof clientY === 'number' && clientY >= viewportRect.top && clientY <= viewportRect.bottom) ? clientY : centerY;
+
+      const px = targetX - centerX;
+      const py = targetY - centerY;
+
+      const ratio = newScale / currentScale;
+      const newTx = px - (px - tx) * ratio;
+      const newTy = py - (py - ty) * ratio;
+
+      canvas.dataset.scale = newScale;
+      canvas.dataset.tx = newTx;
+      canvas.dataset.ty = newTy;
+      canvas.style.transform = 'translate(' + newTx + 'px, ' + newTy + 'px) scale(' + newScale + ')';
+    },
+
+    zoomDiagram: function(btn, factor) {
+      const container = btn.closest('.mermaid-container') || btn.closest('.lucid-mermaid-modal-content') || btn.closest('.test-container') || btn.parentElement;
+      if (!container) return;
+      const viewport = container.querySelector('.mermaid-viewport') || container.querySelector('.lucid-mermaid-modal-body');
+      const lastX = viewport ? viewport._lastClientX : null;
+      const lastY = viewport ? viewport._lastClientY : null;
+      window.lucid.zoomDiagramAtPoint(container, factor, lastX, lastY);
+    },
+
+    handleDiagramWheel: function(e, viewport) {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        const factor = e.deltaY < 0 ? 1.08 : 0.92;
+        window.lucid.zoomDiagramAtPoint(viewport, factor, e.clientX, e.clientY);
+      }
+      // Normal vertical mouse/trackpad scrolling is intentionally untouched so page scrolls naturally
+    },
+
+    resetDiagram: function(btn) {
+      const container = btn.closest('.mermaid-container') || btn.closest('.lucid-mermaid-modal-content') || btn.closest('.test-container') || btn.parentElement;
+      const canvas = container ? container.querySelector('.mermaid-canvas') : null;
+      if (!canvas) return;
+
+      const initialScale = parseFloat(canvas.dataset.initialScale || '1.0');
+      const initialTx = parseFloat(canvas.dataset.initialTx || '0');
+      const initialTy = parseFloat(canvas.dataset.initialTy || '0');
+
+      canvas.dataset.scale = initialScale;
+      canvas.dataset.tx = initialTx;
+      canvas.dataset.ty = initialTy;
+      canvas.style.transform = 'translate(' + initialTx + 'px, ' + initialTy + 'px) scale(' + initialScale + ')';
+    },
+
+    fitDiagram: function(btn) {
+      const container = btn.closest('.mermaid-container') || btn.closest('.lucid-mermaid-modal-content') || btn.closest('.test-container') || btn.parentElement;
+      const viewport = container ? (container.querySelector('.mermaid-viewport') || container.querySelector('.lucid-mermaid-modal-body')) : null;
+      const canvas = container ? container.querySelector('.mermaid-canvas') : null;
+      const svg = canvas ? canvas.querySelector('svg') : null;
+      if (!viewport || !canvas || !svg) return;
+
+      const viewBox = svg.viewBox && svg.viewBox.baseVal;
+      const unscaledWidth = (viewBox && viewBox.width > 0) ? viewBox.width : (svg.clientWidth || 300);
+      const unscaledHeight = (viewBox && viewBox.height > 0) ? viewBox.height : (svg.clientHeight || 200);
+
+      const availWidth = Math.max(100, viewport.clientWidth - 48);
+      const availHeight = Math.max(100, viewport.clientHeight - 48);
+
+      const fitScale = Math.min(availWidth / unscaledWidth, availHeight / unscaledHeight, 1.5);
+      const contentOffsetX = parseFloat(canvas.dataset.contentOffsetX || '0');
+      const contentOffsetY = parseFloat(canvas.dataset.contentOffsetY || '0');
+      const fitTx = Math.round(contentOffsetX * fitScale);
+      const fitTy = Math.round(contentOffsetY * fitScale);
+
+      canvas.dataset.scale = fitScale;
+      canvas.dataset.tx = fitTx;
+      canvas.dataset.ty = fitTy;
+      canvas.style.transform = 'translate(' + fitTx + 'px, ' + fitTy + 'px) scale(' + fitScale + ')';
+    },
+
+    expandDiagram: function(btn) {
+      const container = btn.closest('.mermaid-container');
+      const svg = container ? (container.querySelector('.mermaid-canvas svg') || container.querySelector('.mermaid svg')) : null;
       if (!svg) return;
-      svg.dataset.scale = '1.0';
-      svg.style.transform = 'scale(1.0)';
+
+      let modal = document.getElementById('lucid-mermaid-modal');
+      if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'lucid-mermaid-modal';
+        modal.className = 'lucid-mermaid-modal';
+        modal.innerHTML =
+          '<div class="lucid-mermaid-modal-content">' +
+            '<div class="lucid-mermaid-modal-header">' +
+              '<span class="lucid-mermaid-modal-title">Diagram Preview</span>' +
+              '<div class="mermaid-toolbar" style="position:static; opacity:1; box-shadow:none; border:none; background:transparent;">' +
+                '<button class="lucid-mermaid-btn lucid-btn-pan" title="Pan Tool" onclick="window.lucid.togglePan(this)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8M6 14v-1.5a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v4a8 8 0 0 0 8 8h2a8 8 0 0 0 8-8v-3a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2"/></svg></button>' +
+                '<button class="lucid-mermaid-btn" title="Zoom In" onclick="window.lucid.zoomDiagram(this, 1.15)">+</button>' +
+                '<button class="lucid-mermaid-btn" title="Zoom Out" onclick="window.lucid.zoomDiagram(this, 0.87)">−</button>' +
+                '<button class="lucid-mermaid-btn" title="Fit to Viewport" onclick="window.lucid.fitDiagram(this)">Fit</button>' +
+                '<button class="lucid-mermaid-btn" title="Reset to Initial View" onclick="window.lucid.resetDiagram(this)">Reset</button>' +
+                '<span class="mermaid-toolbar-sep"></span>' +
+                '<button class="lucid-mermaid-btn" title="Copy SVG" onclick="window.lucid.copySvg(this)">Copy SVG</button>' +
+                '<button class="lucid-mermaid-btn" title="Export SVG…" onclick="window.lucid.saveSvg(this)">Export SVG…</button>' +
+                '<span class="mermaid-toolbar-sep"></span>' +
+                '<button class="lucid-mermaid-btn" title="Close (Esc)" onclick="window.lucid.closeDiagramModal()">✕</button>' +
+              '</div>' +
+            '</div>' +
+            '<div class="lucid-mermaid-modal-body" onmousedown="window.lucid.handleDiagramMouseDown(event, this)">' +
+              '<div class="mermaid-canvas" id="lucid-modal-canvas"></div>' +
+            '</div>' +
+          '</div>';
+        modal.onclick = function(e) {
+          if (e.target === modal) window.lucid.closeDiagramModal();
+        };
+        document.body.appendChild(modal);
+
+        const modalBody = modal.querySelector('.lucid-mermaid-modal-body');
+        if (modalBody) {
+          modalBody.onwheel = function(e) { window.lucid.handleDiagramWheel(e, modalBody); };
+          modalBody.onmousemove = function(e) {
+            modalBody._lastClientX = e.clientX;
+            modalBody._lastClientY = e.clientY;
+          };
+          modalBody.onmouseleave = function() {
+            modalBody._lastClientX = null;
+            modalBody._lastClientY = null;
+          };
+        }
+
+        window.addEventListener('keydown', function(e) {
+          if (e.key === 'Escape' && modal.classList.contains('is-open')) {
+            window.lucid.closeDiagramModal();
+          }
+        });
+      }
+
+      const modalCanvas = document.getElementById('lucid-modal-canvas');
+      const modalViewport = modal.querySelector('.lucid-mermaid-modal-body');
+      modalCanvas.innerHTML = svg.outerHTML;
+      const modalSvg = modalCanvas.querySelector('svg');
+      let modalInitialScale = 1.0;
+      let modalTx = 0;
+      let modalTy = 0;
+      if (modalSvg) {
+        modalSvg.style.maxWidth = 'none';
+        modalSvg.style.display = 'block';
+        const viewBox = modalSvg.viewBox && modalSvg.viewBox.baseVal;
+        if (viewBox && viewBox.width > 0) {
+          modalSvg.style.width = viewBox.width + 'px';
+          modalSvg.style.height = viewBox.height + 'px';
+          const availWidth = Math.max(100, (modalViewport ? modalViewport.clientWidth : 800) - 64);
+          const availHeight = Math.max(100, (modalViewport ? modalViewport.clientHeight : 600) - 80);
+          const fitScale = Math.min(availWidth / viewBox.width, availHeight / viewBox.height);
+
+          let baseFontSize = 14;
+          const labelEl = modalSvg.querySelector('.nodeLabel, .label, text, span');
+          if (labelEl) {
+            const fs = parseFloat(window.getComputedStyle(labelEl).fontSize);
+            if (!isNaN(fs) && fs > 0) baseFontSize = fs;
+          }
+          const readabilityFloor = Math.min(1.0, 13.5 / baseFontSize);
+
+          if (fitScale >= readabilityFloor) {
+            modalInitialScale = Math.min(1.2, fitScale);
+          } else {
+            modalInitialScale = Math.min(1.0, Math.max(fitScale, readabilityFloor));
+          }
+
+          let contentOffsetX = 0;
+          let contentOffsetY = 0;
+          try {
+            const bbox = modalSvg.getBBox();
+            if (bbox && bbox.width > 0) {
+              const contentCenterX = bbox.x + bbox.width / 2;
+              const contentCenterY = bbox.y + bbox.height / 2;
+              const vbCenterX = (viewBox.x || 0) + viewBox.width / 2;
+              const vbCenterY = (viewBox.y || 0) + viewBox.height / 2;
+              contentOffsetX = vbCenterX - contentCenterX;
+              contentOffsetY = vbCenterY - contentCenterY;
+            }
+          } catch (e) {}
+          modalTx = Math.round(contentOffsetX * modalInitialScale);
+          modalTy = Math.round(contentOffsetY * modalInitialScale);
+        }
+      }
+      modalCanvas.dataset.initialScale = modalInitialScale;
+      modalCanvas.dataset.initialTx = modalTx;
+      modalCanvas.dataset.initialTy = modalTy;
+      modalCanvas.dataset.scale = modalInitialScale;
+      modalCanvas.dataset.tx = modalTx;
+      modalCanvas.dataset.ty = modalTy;
+      modalCanvas.style.transform = 'translate(' + modalTx + 'px, ' + modalTy + 'px) scale(' + modalInitialScale + ')';
+
+      modal.classList.add('is-open');
+    },
+
+    closeDiagramModal: function() {
+      const modal = document.getElementById('lucid-mermaid-modal');
+      if (modal) modal.classList.remove('is-open');
     },
 
     scrollToHeading: function(id) {
@@ -542,8 +893,8 @@
     },
 
     copySvg: function(btn) {
-      const wrapper = btn.closest('.mermaid-wrapper');
-      const svg = wrapper ? wrapper.querySelector('svg') : null;
+      const container = btn.closest('.mermaid-container') || btn.closest('.lucid-mermaid-modal-content') || btn.closest('.mermaid-wrapper');
+      const svg = container ? (container.querySelector('.mermaid-canvas svg') || container.querySelector('.mermaid svg') || container.querySelector('svg')) : null;
       if (svg) {
         navigator.clipboard.writeText(svg.outerHTML).then(function() {
           const original = btn.innerText;
@@ -554,18 +905,22 @@
     },
 
     saveSvg: function(btn) {
-      const wrapper = btn.closest('.mermaid-wrapper');
-      const svg = wrapper ? wrapper.querySelector('svg') : null;
+      const container = btn.closest('.mermaid-container') || btn.closest('.lucid-mermaid-modal-content') || btn.closest('.mermaid-wrapper');
+      const svg = container ? (container.querySelector('.mermaid-canvas svg') || container.querySelector('.mermaid svg') || container.querySelector('svg')) : null;
       if (svg) {
-        const blob = new Blob([svg.outerHTML], { type: 'image/svg+xml;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'diagram.svg';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.lucidSaveSvg) {
+          window.webkit.messageHandlers.lucidSaveSvg.postMessage({ svg: svg.outerHTML });
+        } else {
+          const blob = new Blob([svg.outerHTML], { type: 'image/svg+xml;charset=utf-8' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'diagram.svg';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }
       }
     },
 
@@ -672,6 +1027,12 @@
       });
       window.lucid.findMatches = [];
       window.lucid.findCurrentIndex = 0;
+      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.lucidFindMatches) {
+        window.webkit.messageHandlers.lucidFindMatches.postMessage({
+          count: 0,
+          index: 0
+        });
+      }
     },
 
     getStandaloneHTML: function() {
@@ -680,10 +1041,17 @@
   };
 
   if (typeof mermaid !== 'undefined') {
-    mermaid.initialize({
-      startOnLoad: false,
-      theme: 'neutral',
-      securityLevel: 'loose'
-    });
+    try {
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: 'neutral',
+        securityLevel: 'loose'
+      });
+    } catch (e) {}
+  }
+
+  // Notify native host that WebEngine bridge is initialized and ready for payloads
+  if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.lucidReady) {
+    window.webkit.messageHandlers.lucidReady.postMessage({ ready: true });
   }
 })();
