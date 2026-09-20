@@ -202,7 +202,13 @@ public struct PreviewWebView: NSViewRepresentable {
             } else if message.name == "lucidLinkClicked", let href = message.body as? String {
                 handleLinkClick(href)
             } else if message.name == "lucidSaveSvg", let body = message.body as? [String: Any], let svgString = body["svg"] as? String {
-                ExportService.shared.exportSVG(svgString: svgString)
+                // ExportService is @MainActor-isolated; WKScriptMessage handlers are
+                // delivered on the main thread, but the callback itself is nonisolated,
+                // so hop onto the main actor explicitly to satisfy strict concurrency
+                // checking on newer toolchains.
+                Task { @MainActor in
+                    ExportService.shared.exportSVG(svgString: svgString)
+                }
             }
         }
 
