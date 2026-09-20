@@ -15,11 +15,10 @@ public struct InspectorView: View {
 
     public var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: LucidSpacing.sectionSpacing) {
                 // Section: Theme
-                VStack(alignment: .leading, spacing: 8) {
-                    Label("Theme", systemImage: "circle.lefthalf.filled")
-                        .font(.headline)
+                VStack(alignment: .leading, spacing: LucidSpacing.small) {
+                    LucidSectionHeader(title: "Theme")
 
                     Picker("Theme", selection: $preferences.theme) {
                         ForEach(ThemeMode.allCases) { mode in
@@ -29,17 +28,16 @@ public struct InspectorView: View {
                     .pickerStyle(.menu)
                 }
 
-                Divider()
+                LucidDivider()
 
                 // Section: Typography
-                VStack(alignment: .leading, spacing: 14) {
-                    Label("Typography", systemImage: "textformat")
-                        .font(.headline)
+                VStack(alignment: .leading, spacing: LucidSpacing.small) {
+                    LucidSectionHeader(title: "Typography")
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Font Family")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                            .font(LucidTypography.caption)
+                            .foregroundColor(LucidColors.textSecondary)
                         Picker("Font Family", selection: $preferences.fontFamily) {
                             ForEach(FontFamily.allCases) { font in
                                 Text(font.displayName).tag(font)
@@ -51,12 +49,12 @@ public struct InspectorView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
                             Text("Font Size")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                                .font(LucidTypography.caption)
+                                .foregroundColor(LucidColors.textSecondary)
                             Spacer()
-                            Text("\(Int(preferences.fontSize)) px")
-                                .font(.caption.monospacedDigit())
-                                .foregroundColor(.secondary)
+                            Text("\(Int(preferences.fontSize)) pt")
+                                .font(LucidTypography.metadata)
+                                .foregroundColor(LucidColors.textSecondary)
                         }
                         Slider(value: $preferences.fontSize, in: 13...24, step: 1)
                     }
@@ -64,28 +62,27 @@ public struct InspectorView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
                             Text("Line Height")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                                .font(LucidTypography.caption)
+                                .foregroundColor(LucidColors.textSecondary)
                             Spacer()
                             Text(String(format: "%.2f", preferences.lineHeight))
-                                .font(.caption.monospacedDigit())
-                                .foregroundColor(.secondary)
+                                .font(LucidTypography.metadata)
+                                .foregroundColor(LucidColors.textSecondary)
                         }
                         Slider(value: $preferences.lineHeight, in: 1.3...2.2, step: 0.05)
                     }
                 }
 
-                Divider()
+                LucidDivider()
 
                 // Section: Layout
-                VStack(alignment: .leading, spacing: 14) {
-                    Label("Layout", systemImage: "rectangle.arrowtriangle.2.outward")
-                        .font(.headline)
+                VStack(alignment: .leading, spacing: LucidSpacing.small) {
+                    LucidSectionHeader(title: "Layout")
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Reading Column Width")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                            .font(LucidTypography.caption)
+                            .foregroundColor(LucidColors.textSecondary)
                         Picker("Reading Column Width", selection: $preferences.contentWidth) {
                             ForEach(ContentWidth.allCases) { width in
                                 Text(width.displayName).tag(width)
@@ -95,36 +92,31 @@ public struct InspectorView: View {
                     }
 
                     Toggle("Breakout Layout", isOn: $preferences.breakoutEnabled)
+                        .font(LucidTypography.label)
                         .help("Allows wide code blocks, tables, and diagrams to expand gracefully beyond the reading column.")
                 }
 
-                Divider()
+                LucidDivider()
 
                 // Section: Accent Color
-                VStack(alignment: .leading, spacing: 8) {
-                    Label("Accent Color", systemImage: "paintpalette")
-                        .font(.headline)
+                VStack(alignment: .leading, spacing: LucidSpacing.small) {
+                    LucidSectionHeader(title: "Accent Color")
 
-                    HStack(spacing: 8) {
+                    HStack(spacing: LucidSpacing.medium) {
                         ForEach(accentPresets, id: \.0) { hex, name in
-                            Circle()
-                                .fill(Color(hex: hex))
-                                .frame(width: 22, height: 22)
-                                .overlay(
-                                    Circle()
-                                        .stroke(Color.primary, lineWidth: preferences.accentColor == hex ? 2 : 0)
-                                        .padding(-2)
-                                )
-                                .onTapGesture {
-                                    preferences.accentColor = hex
-                                }
-                                .help(name)
+                            LucidAccentSwatch(
+                                hex: hex,
+                                name: name,
+                                isSelected: preferences.accentColor == hex
+                            ) {
+                                withAnimation(LucidMotion.state) { preferences.accentColor = hex }
+                            }
                         }
                     }
                     .padding(.vertical, 4)
                 }
             }
-            .padding(16)
+            .padding(LucidSpacing.panelPadding)
         }
         .frame(minWidth: 240, idealWidth: 270)
     }
