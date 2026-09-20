@@ -4,7 +4,13 @@ import WebKit
 
 /// Coordinates asynchronous preview rendering, debouncing, task cancellation,
 /// and document revision equality checking.
-@MainActor
+///
+/// Intentionally not `@MainActor`-isolated at the type level: it is only ever
+/// used from the main thread (WKNavigationDelegate callbacks and
+/// NSViewRepresentable methods), and its debounced render already hops to the
+/// main actor via `Task { @MainActor in … }`. Keeping the type nonisolated avoids
+/// actor-crossing errors when built against SDKs that annotate WebKit/SwiftUI as
+/// `@MainActor`, while behaving identically at runtime.
 public final class PreviewRenderCoordinator: ObservableObject {
     public private(set) var currentRevision: UInt64 = 0
     private var pendingTask: Task<Void, Never>?
