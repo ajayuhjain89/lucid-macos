@@ -1,5 +1,6 @@
 import AppKit
 import WebKit
+import UniformTypeIdentifiers
 
 @MainActor
 public final class ExportService {
@@ -57,6 +58,27 @@ public final class ExportService {
                 } else if let error = error {
                     Self.showErrorAlert(message: "Failed to generate HTML: \(error.localizedDescription)")
                 }
+            }
+        }
+    }
+
+    public func exportSVG(svgString: String, defaultFilename: String = "diagram") {
+        let savePanel = NSSavePanel()
+        if let svgType = UTType(filenameExtension: "svg") {
+            savePanel.allowedContentTypes = [svgType]
+        }
+        savePanel.canCreateDirectories = true
+        savePanel.isExtensionHidden = false
+        savePanel.nameFieldStringValue = "\(defaultFilename).svg"
+        savePanel.title = "Export SVG"
+
+        savePanel.begin { response in
+            guard response == .OK, let targetURL = savePanel.url else { return }
+            do {
+                try svgString.write(to: targetURL, atomically: true, encoding: .utf8)
+                NSWorkspace.shared.activateFileViewerSelecting([targetURL])
+            } catch {
+                Self.showErrorAlert(message: "Failed to save SVG: \(error.localizedDescription)")
             }
         }
     }

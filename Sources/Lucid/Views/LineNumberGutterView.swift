@@ -23,10 +23,18 @@ public final class LineNumberGutterView: NSRulerView {
         }
     }
 
+    public var backgroundColor: NSColor? = nil {
+        didSet { needsDisplay = true }
+    }
+
+    override public var isFlipped: Bool {
+        return true
+    }
+
     public init(scrollView: NSScrollView) {
         super.init(scrollView: scrollView, orientation: .verticalRuler)
         self.clientView = scrollView.documentView
-        self.ruleThickness = 42
+        self.ruleThickness = 36
     }
 
     required init(coder: NSCoder) {
@@ -40,13 +48,19 @@ public final class LineNumberGutterView: NSRulerView {
             return
         }
 
-        let visibleRect = scrollView?.contentView.bounds ?? rect
+        // Background: strictly fill only within the ruler's width (never bleed into editor)
+        let rulerBounds = NSRect(x: 0, y: 0, width: ruleThickness, height: bounds.height)
+        if let bg = backgroundColor {
+            bg.setFill()
+            rulerBounds.fill()
+        } else {
+            NSColor.clear.setFill()
+            rulerBounds.fill()
+        }
+
+        let visibleRect = textView.visibleRect
         let textString = textView.string as NSString
         let totalLength = textString.length
-
-        // Background
-        NSColor.clear.setFill()
-        rect.fill()
 
         // Calculate visible glyph range
         let visibleGlyphRange = layoutManager.glyphRange(forBoundingRect: visibleRect, in: textContainer)
@@ -56,6 +70,14 @@ public final class LineNumberGutterView: NSRulerView {
         var lineNumber = 1
         textString.enumerateSubstrings(in: NSRange(location: 0, length: min(visibleCharRange.location, totalLength)), options: [.byLines, .substringNotRequired]) { _, _, _, _ in
             lineNumber += 1
+        }
+
+        let digits = max(2, "\(lineNumber)".count)
+        let neededThickness = max(36, CGFloat(digits * 8 + 18))
+        if abs(self.ruleThickness - neededThickness) > 1 {
+            DispatchQueue.main.async {
+                self.ruleThickness = neededThickness
+            }
         }
 
         let textAttributes: [NSAttributedString.Key: Any] = [
@@ -70,8 +92,10 @@ public final class LineNumberGutterView: NSRulerView {
         ]
 
         // Enumerate line fragments within the visible glyph range
-        var glyphIndex = visibleGlyphRange.location
-        let maxGlyphIndex = NSMaxRange(visibleGlyphRange)
+        let totalGlyphs = layoutManager.numberOfGlyphs
+        guard totalGlyphs > 0 else { return }
+        var glyphIndex = min(visibleGlyphRange.location, totalGlyphs - 1)
+        let maxGlyphIndex = min(NSMaxRange(visibleGlyphRange), totalGlyphs)
 
         while glyphIndex < maxGlyphIndex {
             var lineFragmentRange = NSRange()
@@ -89,9 +113,9 @@ public final class LineNumberGutterView: NSRulerView {
 
                 // Align numbers right with padding
                 let drawX = ruleThickness - strSize.width - 10
-                let drawY = lineRect.origin.y + textView.textContainerInset.height + (lineRect.height - strSize.height) / 2
+                let drawY = lineRect.origin.y + textView.textContainerInset.height - visibleRect.origin.y + (lineRect.height - strSize.height) / 2
 
-                if drawY + strSize.height >= visibleRect.origin.y && drawY <= visibleRect.origin.y + visibleRect.height {
+                if drawY + strSize.height >= 0 && drawY <= bounds.height {
                     (numStr as NSString).draw(at: NSPoint(x: drawX, y: drawY), withAttributes: numAttrs)
                 }
                 lineNumber += 1
@@ -101,7 +125,7 @@ public final class LineNumberGutterView: NSRulerView {
         }
 
         // Divider line on the right edge
-        let dividerRect = NSRect(x: ruleThickness - 0.5, y: rect.origin.y, width: 0.5, height: rect.height)
+        let dividerRect = NSRect(x: ruleThickness - 0.5, y: 0, width: 0.5, height: bounds.height)
         NSColor.separatorColor.withAlphaComponent(0.25).setFill()
         dividerRect.fill()
     }

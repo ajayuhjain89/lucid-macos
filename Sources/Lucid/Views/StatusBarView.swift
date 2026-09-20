@@ -84,7 +84,7 @@ public struct StatusBarView: View {
         }
         .padding(.horizontal, LucidSpacing.large)
         .frame(height: preferences.density.statusBarHeight)
-        .background(Color(nsColor: NSColor.windowBackgroundColor))
+        .background(Color(hex: preferences.theme.themeTokens.windowBackground))
         // A barely-there hairline instead of a hard band, so the status area reads
         // as a quiet continuation of the canvas rather than a separate stripe.
         .overlay(
@@ -104,7 +104,7 @@ public struct StatusBarView: View {
             Button("Hide Status Bar") {
                 preferences.showStatusBar = false
             }
-            Button("Customize in Settings…") {
+            Button("Settings…") {
                 onOpenSettings()
             }
         }

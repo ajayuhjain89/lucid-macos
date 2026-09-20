@@ -246,3 +246,42 @@ public struct LucidTheme: Identifiable, Codable, Equatable {
         true
     }
 }
+
+extension ThemeMode {
+    public var themeTokens: LucidThemeTokens {
+        switch self {
+        case .dark:
+            return LucidTheme.studioDark.tokens
+        case .light:
+            return LucidTheme.editorialLight.tokens
+        case .sepia:
+            return LucidTheme.warmSepia.tokens
+        case .system:
+            let isDark = NSApp?.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            return isDark ? LucidTheme.studioDark.tokens : LucidTheme.editorialLight.tokens
+        case .oled:
+            var tokens = LucidTheme.studioDark.tokens
+            tokens.windowBackground = "#000000"
+            tokens.editorBackground = "#000000"
+            tokens.sidebarBackground = "#000000"
+            tokens.previewBackground = "#000000"
+            return tokens
+        case .nord:
+            var tokens = LucidTheme.studioDark.tokens
+            tokens.windowBackground = "#2e3440"
+            tokens.editorBackground = "#2e3440"
+            tokens.sidebarBackground = "#242933"
+            tokens.previewBackground = "#2e3440"
+            tokens.textPrimary = "#d8dee9"
+            return tokens
+        case .dracula:
+            var tokens = LucidTheme.studioDark.tokens
+            tokens.windowBackground = "#282a36"
+            tokens.editorBackground = "#282a36"
+            tokens.sidebarBackground = "#21222c"
+            tokens.previewBackground = "#282a36"
+            tokens.textPrimary = "#f8f8f2"
+            return tokens
+        }
+    }
+}
