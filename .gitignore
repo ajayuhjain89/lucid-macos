@@ -21,3 +21,19 @@ DerivedData/
 .DS_Store
 *.bak*
 *.swp
+.vscode/
+
+# Website
+website/node_modules/
+website/.next/
+website/out/
+website/coverage/
+website/.vercel/
+website/.turbo/
+website/.cache/
+website/playwright-report/
+website/test-results/
+website/.audit/
+website/.env
+website/.env*.local
+!website/.env.example
