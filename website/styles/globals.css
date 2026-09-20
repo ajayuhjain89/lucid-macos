@@ -1,0 +1,86 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Editorial Light default */
+  --background: #fafafa;
+  --surface: #ffffff;
+  --surface-elevated: #ffffff;
+  --surface-hover: rgba(0, 0, 0, 0.04);
+  --text-primary: #1f2328;
+  --text-secondary: #57606a;
+  --text-tertiary: #8c959f;
+  --border-subtle: rgba(0, 0, 0, 0.08);
+  --border-strong: rgba(0, 0, 0, 0.15);
+  --accent: #0969da;
+  --accent-soft: rgba(9, 105, 218, 0.08);
+  --code-bg: #f6f8fa;
+  --code-fg: #1f2328;
+  --code-border: #d0d7de;
+  color-scheme: light;
+}
+
+.dark {
+  /* Studio Dark */
+  --background: #171717;
+  --surface: #1e1e1e;
+  --surface-elevated: #24282f;
+  --surface-hover: rgba(255, 255, 255, 0.05);
+  --text-primary: #e6e6e6;
+  --text-secondary: #8b949e;
+  --text-tertiary: #6e7681;
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --accent: #388bfd;
+  --accent-soft: rgba(56, 139, 253, 0.12);
+  --code-bg: #191d24;
+  --code-fg: #e6edf3;
+  --code-border: #30363d;
+  color-scheme: dark;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  line-height: 1.6;
+}
+
+/* Restrained link styling (no permanent blue underlines) */
+a {
+  color: inherit;
+  text-decoration: none;
+  transition: color 0.15s ease, opacity 0.15s ease;
+}
+
+/* Focus styles */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Selection */
+::selection {
+  background-color: var(--accent-soft);
+  color: var(--text-primary);
+}
