@@ -10,6 +10,13 @@ struct LucidApp: App {
                 .frame(minWidth: 750, minHeight: 550)
         }
         .commands {
+            CommandGroup(replacing: .appSettings) {
+                Button("Settings…") {
+                    NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                }
+                .keyboardShortcut(",", modifiers: .command)
+            }
+
             CommandMenu("View") {
                 Button("Reader Mode") {
                     preferences.viewMode = .reader
@@ -25,6 +32,18 @@ struct LucidApp: App {
                     preferences.viewMode = .editor
                 }
                 .keyboardShortcut("3", modifiers: .command)
+
+                Divider()
+
+                Button(preferences.focusMode ? "Disable Focus Mode" : "Enable Focus Mode") {
+                    preferences.focusMode.toggle()
+                }
+                .keyboardShortcut("d", modifiers: [.command, .shift])
+
+                Button(preferences.typewriterMode ? "Disable Typewriter Mode" : "Enable Typewriter Mode") {
+                    preferences.typewriterMode.toggle()
+                }
+                .keyboardShortcut("t", modifiers: [.command, .shift])
 
                 Divider()
 
@@ -51,7 +70,7 @@ struct LucidApp: App {
                 .keyboardShortcut("-", modifiers: .command)
 
                 Button("Reset Font Size") {
-                    preferences.fontSize = 16.0
+                    preferences.fontSize = 18.0
                 }
                 .keyboardShortcut("0", modifiers: .command)
             }
@@ -63,6 +82,10 @@ struct LucidApp: App {
                     }
                 }
             }
+        }
+
+        Settings {
+            SettingsView(preferences: preferences)
         }
     }
 }

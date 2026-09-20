@@ -1,26 +1,27 @@
 import SwiftUI
 import Combine
+import AppKit
 
 public enum ThemeMode: String, CaseIterable, Identifiable, Codable {
-    case system = "system"
-    case light = "light"
     case dark = "dark"
+    case light = "light"
     case sepia = "sepia"
     case oled = "oled"
     case nord = "nord"
     case dracula = "dracula"
+    case system = "system"
 
     public var id: String { rawValue }
 
     public var displayName: String {
         switch self {
-        case .system: return "System"
-        case .light: return "Light"
-        case .dark: return "Dark"
-        case .sepia: return "Sepia"
-        case .oled: return "OLED Black"
-        case .nord: return "Nord"
+        case .dark: return "Lucid Studio Dark (#171717)"
+        case .light: return "Pure White"
+        case .sepia: return "Warm Book Sepia"
+        case .oled: return "OLED Pure Black"
+        case .nord: return "Nord Arctic"
         case .dracula: return "Dracula"
+        case .system: return "System Dynamic"
         }
     }
 }
@@ -29,42 +30,46 @@ public enum FontFamily: String, CaseIterable, Identifiable, Codable {
     case sans = "sans"
     case serif = "serif"
     case mono = "mono"
+    case custom = "custom"
 
     public var id: String { rawValue }
 
     public var displayName: String {
         switch self {
-        case .sans: return "SF Pro (Sans)"
-        case .serif: return "New York (Serif)"
+        case .sans: return "SF Pro (System Sans)"
+        case .serif: return "New York (Editorial Serif)"
         case .mono: return "SF Mono (Code)"
+        case .custom: return "Custom System Font…"
         }
     }
 
-    public var cssValue: String {
+    public func cssValue(customName: String) -> String {
         switch self {
         case .sans:
-            return "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif"
+            return "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
         case .serif:
             return "'New York', Charter, 'Times New Roman', serif"
         case .mono:
-            return "'SF Mono', Menlo, Monaco, 'Cascadia Code', monospace"
+            return "'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace"
+        case .custom:
+            return customName.isEmpty ? "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" : "'\(customName)', sans-serif"
         }
     }
 }
 
 public enum ContentWidth: String, CaseIterable, Identifiable, Codable {
+    case standard = "1040px"
+    case compact = "820px"
     case narrow = "680px"
-    case standard = "820px"
-    case wide = "980px"
     case full = "100%"
 
     public var id: String { rawValue }
 
     public var displayName: String {
         switch self {
+        case .standard: return "Standard (1040px - Extension Default)"
+        case .compact: return "Compact (820px)"
         case .narrow: return "Narrow (680px)"
-        case .standard: return "Standard (820px)"
-        case .wide: return "Wide (980px)"
         case .full: return "Full Width"
         }
     }
@@ -97,13 +102,18 @@ public enum ViewMode: String, CaseIterable, Identifiable, Codable {
 public final class LucidPreferences: ObservableObject {
     public static let shared = LucidPreferences()
 
-    @AppStorage("lucid.theme") public var theme: ThemeMode = .system
+    @AppStorage("lucid.theme") public var theme: ThemeMode = .dark
     @AppStorage("lucid.fontFamily") public var fontFamily: FontFamily = .sans
-    @AppStorage("lucid.fontSize") public var fontSize: Double = 16.0
-    @AppStorage("lucid.lineHeight") public var lineHeight: Double = 1.7
+    @AppStorage("lucid.customFontName") public var customFontName: String = "Helvetica Neue"
+    @AppStorage("lucid.fontSize") public var fontSize: Double = 18.0
+    @AppStorage("lucid.lineHeight") public var lineHeight: Double = 1.75
     @AppStorage("lucid.contentWidth") public var contentWidth: ContentWidth = .standard
-    @AppStorage("lucid.accentColor") public var accentColor: String = "#0969da"
+    @AppStorage("lucid.accentColor") public var accentColor: String = "#2f81f7"
     @AppStorage("lucid.breakoutEnabled") public var breakoutEnabled: Bool = true
+    @AppStorage("lucid.clickToEdit") public var clickToEdit: Bool = true
+    @AppStorage("lucid.focusMode") public var focusMode: Bool = false
+    @AppStorage("lucid.typewriterMode") public var typewriterMode: Bool = false
+    @AppStorage("lucid.customCSS") public var customCSS: String = ""
     @AppStorage("lucid.viewMode") public var viewMode: ViewMode = .reader
     @AppStorage("lucid.showOutline") public var showOutline: Bool = false
     @AppStorage("lucid.showInspector") public var showInspector: Bool = false
@@ -120,12 +130,16 @@ public final class LucidPreferences: ObservableObject {
     public func jsonPayload(systemColorScheme: ColorScheme) -> String {
         let dict: [String: Any] = [
             "theme": effectiveTheme(systemColorScheme: systemColorScheme),
-            "fontFamily": fontFamily.cssValue,
+            "fontFamily": fontFamily.cssValue(customName: customFontName),
             "fontSize": fontSize,
             "lineHeight": lineHeight,
             "contentWidth": contentWidth.rawValue,
             "accentColor": accentColor,
-            "breakout": breakoutEnabled
+            "breakout": breakoutEnabled,
+            "clickToEdit": clickToEdit,
+            "focusMode": focusMode,
+            "typewriterMode": typewriterMode,
+            "customCSS": customCSS
         ]
         if let data = try? JSONSerialization.data(withJSONObject: dict),
            let string = String(data: data, encoding: .utf8) {
