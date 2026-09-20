@@ -7,6 +7,16 @@
 *.dmg
 .dmg_staging
 
+# Local build cache / scratch
+scratch/
+ModuleCache/
+DerivedData/
+
+# Xcode / SwiftPM
+*.xcodeproj
+*.xcworkspace
+.swiftpm/
+
 # OS & Temp
 .DS_Store
 *.bak*
