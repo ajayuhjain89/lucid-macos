@@ -42,20 +42,22 @@ python3 -m http.server 8899
 ## Pull requests
 
 Lucid uses a **direct category-branch** workflow — read
-[docs/github_workflow.md](docs/github_workflow.md) for the full model. In short:
+[docs/github_workflow.md](docs/github_workflow.md) for the authoritative model. In short:
 
-1. Decide whether the work is **logic** (engineering), **design** (UI/UX), or
+1. The repository uses five permanent branches: `main`, `develop`, `logic`, `design`, and `docs`.
+2. Decide whether your work is **logic** (engineering), **design** (UI/UX), or
    **docs**, and work **directly on that category branch** — do **not** create a
    task branch for ordinary work.
-2. Keep changes focused; describe the *why*, not just the *what*.
-3. Ensure the project builds (`./build.sh`) and relevant checks pass before pushing.
-4. Include before/after screenshots for any visible UI change.
-5. Integrate by merging the category branch into `develop`, then promote
-   `develop` → `main` when stable (`logic`/`design`/`docs` → `develop` → `main`).
-6. Create a temporary branch (`experiment/…`, `prototype/…`, `migration/…`,
+3. Work flows **strictly forward**: `logic` / `design` / `docs` → `develop` → `main`.
+   Never merge `develop` backwards into a category branch.
+4. Ensure the project builds (`./build.sh`) and relevant checks pass before pushing.
+5. Include before/after screenshots for any visible UI change.
+6. Integrate by opening a PR from your category branch into `develop`. Release merges
+   promote `develop` → `main`.
+7. Create a temporary branch (`experiment/…`, `prototype/…`, `migration/…`,
    `refactor/…`) only when isolation is genuinely useful; accepted work folds back
-   into a category branch, rejected work is deleted.
-7. Do not commit build artifacts (`Lucid`, `Lucid.app`, `*.dmg`, `scratch/`) — they
+   into a category branch first, and rejected work is deleted.
+8. Do not commit build artifacts (`Lucid`, `Lucid.app`, `*.dmg`, `scratch/`) — they
    are covered by `.gitignore`.
 
 ## Reporting issues

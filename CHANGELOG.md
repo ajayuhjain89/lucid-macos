@@ -23,11 +23,15 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   showcase, sample), keeping README/LICENSE/CHANGELOG/CONTRIBUTING/THIRD-PARTY-NOTICES
   in the repository root.
 
-## [1.0.0]
+## [1.0.0] - 2026-03-20
 
 ### Added
-- Native macOS Markdown reader & editor with Reader / Split / Editor modes.
+- Initial **v1.0.0 Public Beta** release for macOS 14 Sonoma (Apple Silicon arm64).
+- Native macOS Markdown reader & editor with Reader / Split / Editor modes (`⌘1` / `⌘2` / `⌘3`).
 - Offline WebKit rendering engine: markdown-it, KaTeX (+ mhchem), Mermaid, highlight.js.
 - GitHub/Obsidian alerts, live outline sidebar with scroll-spy, command palette, find.
 - Focus & Typewriter modes, curated themes, customizable accent color.
 - Live external file watching and PDF / standalone-HTML / rich-text export.
+- Pre-packaged `Lucid-1.0.0.dmg` release artifact with verified SHA-256 checksum.
+
+[1.0.0]: https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.0
