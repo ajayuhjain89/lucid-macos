@@ -913,13 +913,13 @@ body.vscode-body #lucid-content > * {
 .mermaid-viewport {
   position: relative;
   width: 100%;
-  min-height: 220px;
-  max-height: 560px;
+  min-height: 180px;
+  max-height: min(840px, 80vh);
   overflow: hidden;
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 32px 20px;
+  padding: 24px 20px;
   box-sizing: border-box;
   touch-action: pan-y;
 }
