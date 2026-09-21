@@ -85,8 +85,8 @@ public struct MainWindowView: View {
             // scrolls beneath the floating glass toolbar rather than starting below
             // a reserved opaque band.
             VStack(spacing: 0) {
-                if preferences.showOutline {
-                    HSplitView {
+                HSplitView {
+                    if preferences.showOutline {
                         // Outline Sidebar — owns its own compact top row with traffic light clearance and toggle
                         OutlineSidebarView(
                             headings: headings,
@@ -106,13 +106,10 @@ public struct MainWindowView: View {
                         }
                         .frame(minWidth: 180, idealWidth: 220, maxWidth: 320)
                         .transition(.move(edge: .leading).combined(with: .opacity))
-
-                        // Document Canvas — owns its own document top row (strictly right of divider)
-                        documentCanvas(sidebarOpen: true)
                     }
-                } else {
-                    // Sidebar closed: Document Canvas fills the entire window edge-to-edge
-                    documentCanvas(sidebarOpen: false)
+
+                    // Document Canvas — fills remaining space, continuously mounted across sidebar toggles
+                    documentCanvas(sidebarOpen: preferences.showOutline)
                 }
 
                 // Minimal, Serene Status Bar
