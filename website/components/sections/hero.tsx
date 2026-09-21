@@ -29,8 +29,8 @@ export function HeroSection() {
 
           {/* Primary & Secondary Actions */}
           <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
-            <Link
-              href="/download"
+            <a
+              href="/api/download"
               className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-5 py-2.5 text-sm font-medium rounded-[8px] bg-text-primary text-background hover:opacity-90 transition-all shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent active:scale-[0.98]"
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -38,8 +38,8 @@ export function HeroSection() {
                 <polyline points="7 10 12 15 17 10" />
                 <line x1="12" y1="15" x2="12" y2="3" />
               </svg>
-              <span>Download for macOS</span>
-            </Link>
+              <span>Download Lucid</span>
+            </a>
 
             <Link
               href="/features"
@@ -54,14 +54,23 @@ export function HeroSection() {
           </div>
 
           {/* Quiet release metadata below CTA */}
-          <div className="pt-2 flex items-center justify-center gap-3 text-xs text-text-tertiary">
-            <span>Requires macOS 14.0 or newer</span>
+          <div className="pt-2 flex flex-wrap items-center justify-center gap-3 text-xs text-text-tertiary">
+            <span>Requires macOS 14.0+</span>
             <span>•</span>
-            <span>Apple Silicon (M1+)</span>
+            <span>Apple Silicon (arm64)</span>
             <span>•</span>
             <Link href="/download#verify" className="hover:text-text-secondary underline underline-offset-2">
               Verify SHA-256
             </Link>
+            <span>•</span>
+            <a
+              href={currentRelease.githubReleaseUrl || siteConfig.githubUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-text-secondary underline underline-offset-2"
+            >
+              Release notes
+            </a>
           </div>
         </div>
 
