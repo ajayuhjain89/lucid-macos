@@ -17,6 +17,41 @@ export interface ReleaseEntry {
 
 export const changelogData: ReleaseEntry[] = [
   {
+    version: "1.0.4",
+    date: "September 22, 2026",
+    channel: "Beta",
+    summary: "Lucid 1.0.4 Public Beta improves Mermaid diagram rendering compatibility for flowcharts containing mathematical notation and delivers the first in-app update via Sparkle.",
+    highlights: [
+      "Mermaid flowchart compatibility: diagrams with parenthesized math labels such as r(t), R(s), and G(s) now render seamlessly without manual syntax modifications.",
+      "Graceful error handling: genuine Mermaid syntax errors are cleanly formatted as reader-facing cards rather than broken SVG charts.",
+      "In-app update delivery: Lucid 1.0.3 users can update directly via Lucid → Check for Updates… without manual re-installation.",
+    ],
+    sections: [
+      {
+        title: "Mermaid Rendering",
+        items: [
+          {
+            type: "fixed",
+            text: "Fixed Mermaid flowchart diagrams containing parenthesized mathematical notation (e.g. r(t), R(s), G(s), θ(t), ω(t)) in node labels that previously caused syntax errors.",
+          },
+          {
+            type: "improved",
+            text: "Improved presentation of unrecoverable Mermaid diagram syntax errors with formatted reader-facing notification cards.",
+          },
+        ],
+      },
+      {
+        title: "In-App Updates",
+        items: [
+          {
+            type: "improved",
+            text: "Delivered through the native Sparkle in-app updater introduced in v1.0.3.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.0.3",
     date: "September 21, 2026",
     channel: "Beta",
