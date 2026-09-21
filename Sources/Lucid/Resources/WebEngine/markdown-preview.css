@@ -913,28 +913,53 @@ body.vscode-body #lucid-content > * {
 .mermaid-viewport {
   position: relative;
   width: 100%;
-  min-height: 220px;
-  max-height: 560px;
+  min-height: 180px;
+  max-height: min(840px, 80vh);
   overflow: hidden;
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 32px 20px;
+  padding: 24px 20px;
   box-sizing: border-box;
   touch-action: pan-y;
 }
 
 .mermaid-viewport.is-panning,
-.mermaid-viewport.is-dragging {
+.mermaid-viewport.is-dragging,
+.lucid-mermaid-modal-body.is-panning,
+.lucid-mermaid-modal-body.is-dragging {
   touch-action: none;
 }
 
-.mermaid-viewport.is-panning {
-  cursor: grab;
+.mermaid-viewport.is-panning,
+.mermaid-viewport.is-panning *,
+.lucid-mermaid-modal-body.is-panning,
+.lucid-mermaid-modal-body.is-panning * {
+  cursor: -webkit-grab !important;
+  cursor: grab !important;
 }
 
-.mermaid-viewport.is-dragging {
+.mermaid-viewport.is-dragging,
+.mermaid-viewport.is-dragging *,
+.lucid-mermaid-modal-body.is-dragging,
+.lucid-mermaid-modal-body.is-dragging * {
+  cursor: -webkit-grabbing !important;
   cursor: grabbing !important;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+body.lucid-diagram-dragging,
+body.lucid-diagram-dragging * {
+  cursor: -webkit-grabbing !important;
+  cursor: grabbing !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+.mermaid-viewport.is-dragging .mermaid-canvas,
+.lucid-mermaid-modal-body.is-dragging .mermaid-canvas {
+  transition: none !important;
 }
 
 .mermaid-canvas {
@@ -1042,6 +1067,20 @@ body.vscode-body .katex-display {
   display: flex;
   justify-content: center;
   margin: 1.6em auto;
+}
+.lucid-math-placeholder.lucid-math-display-inline {
+  display: inline-block;
+  vertical-align: middle;
+  margin: 0.2em 0;
+}
+.lucid-math-inline {
+  display: inline;
+  font-size: calc(var(--lucid-math-scale, 1.0) * 1em);
+}
+.lucid-math-display-inline {
+  display: inline-block;
+  vertical-align: middle;
+  margin: 0.2em 0;
 }
 .lucid-math-raw {
   font-family: "SF Mono", Menlo, Consolas, monospace;

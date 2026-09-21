@@ -9,7 +9,7 @@ export const siteConfig = {
   tagline: "Markdown, made lucid.",
   subheading: "A quiet, native macOS Markdown reader & editor built for technical documents — with beautiful code, math, Mermaid diagrams, chemistry, tables, and more.",
   description: "Lucid is a native macOS Markdown reader and editor designed for technical documents with offline KaTeX equations, mhchem chemistry, Mermaid diagrams, wide tables, syntax highlighting, and an editorial reading canvas.",
-  siteUrl: process.env.NEXT_PUBLIC_SITE_URL || "https://lucid.app",
+  siteUrl: process.env.NEXT_PUBLIC_SITE_URL || "https://website-phi-umber-70.vercel.app",
   githubUrl: "https://github.com/ajayuhjain89/lucid-macos",
   author: {
     name: "Ayush Jain",

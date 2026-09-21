@@ -20,12 +20,17 @@ Requirements: macOS 14+, Apple Silicon, and Xcode Command Line Tools.
 ```bash
 git clone https://github.com/ajayuhjain89/lucid-macos.git
 cd lucid-macos
-./build.sh          # full app bundle + DMG
+./build.sh          # full app bundle + local development DMG (Lucid-local.dmg)
 open Lucid.app
 ```
 
 `build.sh` is the supported build path (it compiles with `swiftc`, bundles, and
-signs). A `Package.swift` is provided for editor/tooling integration; `swift build`
+signs). Ordinary `./build.sh` builds produce `Lucid.app` and a local development disk
+image (`Lucid-local.dmg`) without touching canonical release artifacts (`Lucid-<version>.dmg`).
+For release packaging, `./build.sh --release` packages the versioned release artifact with
+overwrite protection. Release validation (`npm run release:validate` in `website/`) checks
+the published/canonical release artifact, which must never be replaced by a local development rebuild.
+A `Package.swift` is provided for editor/tooling integration; `swift build`
 additionally requires a full Xcode toolchain.
 
 To preview the Markdown reader (`Resources/WebEngine`) in isolation, serve the

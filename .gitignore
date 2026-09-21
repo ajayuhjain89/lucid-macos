@@ -1,6 +1,7 @@
 # Build artifacts
 /Lucid
 /Lucid.app
+/Lucid-local.dmg
 .build/
 *.o
 *.dSYM

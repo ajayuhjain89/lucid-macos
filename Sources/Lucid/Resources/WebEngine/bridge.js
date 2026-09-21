@@ -53,7 +53,7 @@
                '<button class="lucid-mermaid-btn" title="Copy SVG" onclick="window.lucid.copySvg(this)">Copy SVG</button>' +
                '<button class="lucid-mermaid-btn" title="Export SVG…" onclick="window.lucid.saveSvg(this)">Export SVG…</button>' +
                '</div>' +
-               '<div class="mermaid-viewport" onmousedown="window.lucid.handleDiagramMouseDown(event, this)">' +
+               '<div class="mermaid-viewport" onpointerdown="window.lucid.handleDiagramPointerDown(event, this)">' +
                '<div class="mermaid-canvas">' +
                '<div class="mermaid">' + md.utils.escapeHtml(str) + '</div>' +
                '</div>' +
@@ -102,6 +102,249 @@
   if (window.markdownitDeflist) md.use(window.markdownitDeflist);
   if (window.markdownitAbbr) md.use(window.markdownitAbbr);
   if (window.markdownitTaskList) md.use(window.markdownitTaskList, { enabled: true });
+
+  // Render-scoped Math Registry
+  const renderMathRegistries = new Map();
+
+  function getMathRegistry(renderId) {
+    renderId = String(renderId || '0');
+    if (!renderMathRegistries.has(renderId)) {
+      renderMathRegistries.set(renderId, new Map());
+    }
+    return renderMathRegistries.get(renderId);
+  }
+
+  function pruneOldRegistries(currentRenderId) {
+    currentRenderId = String(currentRenderId || '0');
+    for (const key of renderMathRegistries.keys()) {
+      if (key !== currentRenderId) {
+        renderMathRegistries.delete(key);
+      }
+    }
+  }
+
+  function lucidMathPlugin(md) {
+    function mathInline(state, silent) {
+      const start = state.pos;
+      const max = state.posMax;
+      const src = state.src;
+
+      // Check for preceding unescaped backslash
+      if (start > 0 && src.charCodeAt(start - 1) === 0x5C /* \ */) {
+        let backslashCount = 0;
+        let p = start - 1;
+        while (p >= 0 && src.charCodeAt(p) === 0x5C) {
+          backslashCount++;
+          p--;
+        }
+        if (backslashCount % 2 === 1) {
+          return false;
+        }
+      }
+
+      let openDelim = null;
+      let closeDelim = null;
+      let isDisplay = false;
+
+      if (src.charCodeAt(start) === 0x24 /* $ */) {
+        if (start + 1 < max && src.charCodeAt(start + 1) === 0x24) {
+          openDelim = '$$';
+          closeDelim = '$$';
+          isDisplay = true;
+        } else {
+          openDelim = '$';
+          closeDelim = '$';
+          isDisplay = false;
+        }
+      } else if (src.charCodeAt(start) === 0x5C /* \ */ && start + 1 < max) {
+        const nextChar = src.charCodeAt(start + 1);
+        if (nextChar === 0x28 /* ( */) {
+          openDelim = '\\(';
+          closeDelim = '\\)';
+          isDisplay = false;
+        } else if (nextChar === 0x5B /* [ */) {
+          openDelim = '\\[';
+          closeDelim = '\\]';
+          isDisplay = true;
+        }
+      }
+
+      if (!openDelim) return false;
+
+      // Currency / whitespace check for single $
+      if (openDelim === '$') {
+        // Opening $ must not be followed by whitespace
+        if (start + 1 >= max || /\s/.test(src.charAt(start + 1))) return false;
+      }
+
+      const contentStart = start + openDelim.length;
+      let matchEnd = -1;
+      let pos = contentStart;
+
+      while (pos < max) {
+        if (src.startsWith(closeDelim, pos)) {
+          let backslashCount = 0;
+          let p = pos - 1;
+          while (p >= contentStart && src.charCodeAt(p) === 0x5C) {
+            backslashCount++;
+            p--;
+          }
+          if (backslashCount % 2 === 0) {
+            if (closeDelim === '$') {
+              // Closing $ must not be preceded by whitespace
+              if (/\s/.test(src.charAt(pos - 1))) {
+                pos++;
+                continue;
+              }
+              // Closing $ must not be followed immediately by a digit (e.g. $10 and $20)
+              if (pos + 1 < max && /\d/.test(src.charAt(pos + 1))) {
+                pos++;
+                continue;
+              }
+            }
+            matchEnd = pos;
+            break;
+          }
+        }
+        // Single $ inline math cannot cross line breaks
+        if (openDelim === '$' && src.charCodeAt(pos) === 0x0A /* \n */) {
+          break;
+        }
+        pos++;
+      }
+
+      if (matchEnd === -1) return false;
+
+      if (!silent) {
+        const content = src.slice(contentStart, matchEnd);
+        const token = state.push(isDisplay ? 'math_display_inline' : 'math_inline', 'math', 0);
+        token.content = content;
+        token.markup = openDelim;
+      }
+
+      state.pos = matchEnd + closeDelim.length;
+      return true;
+    }
+
+    function mathBlock(state, startLine, endLine, silent) {
+      let start = state.bMarks[startLine] + state.tShift[startLine];
+      let max = state.eMarks[startLine];
+      const src = state.src;
+
+      let openDelim = null;
+      let closeDelim = null;
+
+      if (src.startsWith('$$', start)) {
+        openDelim = '$$';
+        closeDelim = '$$';
+      } else if (src.startsWith('\\[', start)) {
+        openDelim = '\\[';
+        closeDelim = '\\]';
+      }
+
+      if (!openDelim) return false;
+
+      let pos = start + openDelim.length;
+      let haveEnd = false;
+      let nextLine = startLine;
+      let content = '';
+
+      // Check if closing delimiter is on the same line
+      let closePos = src.indexOf(closeDelim, pos);
+      if (closePos !== -1 && closePos < max) {
+        haveEnd = true;
+        content = src.slice(pos, closePos);
+      } else {
+        const contentLines = [];
+        const firstLineRest = src.slice(pos, max);
+        if (firstLineRest.trim().length > 0) {
+          contentLines.push(firstLineRest);
+        }
+
+        while (nextLine < endLine) {
+          nextLine++;
+          if (nextLine >= endLine) break;
+
+          const lStart = state.bMarks[nextLine] + state.tShift[nextLine];
+          const lMax = state.eMarks[nextLine];
+          const lineStr = src.slice(lStart, lMax);
+
+          if (lineStr.startsWith(closeDelim)) {
+            haveEnd = true;
+            break;
+          }
+
+          // Conservative recovery: if another opening delimiter appears without closing this one,
+          // then this construct was unclosed — abort so we do not greedily consume across independent blocks
+          if (lineStr.startsWith('\\[') || lineStr.startsWith('$$')) {
+            return false;
+          }
+
+          contentLines.push(src.slice(state.bMarks[nextLine], lMax));
+        }
+
+        if (haveEnd) {
+          content = contentLines.join('\n');
+        }
+      }
+
+      if (!haveEnd) return false;
+      if (silent) return true;
+
+      state.line = nextLine + 1;
+      const token = state.push('math_block', 'math', 0);
+      token.block = true;
+      token.content = content.trim();
+      token.markup = openDelim;
+      return true;
+    }
+
+    md.inline.ruler.before('escape', 'lucid_math_inline', mathInline);
+    md.block.ruler.before('fence', 'lucid_math_block', mathBlock, {
+      alt: ['paragraph', 'reference', 'blockquote', 'list']
+    });
+
+    md.renderer.rules.math_inline = function(tokens, idx, options, env) {
+      const content = tokens[idx].content;
+      const renderId = env && env.renderId ? String(env.renderId) : currentRenderRevision;
+      const registry = getMathRegistry(renderId);
+      const mathId = registry.size + 1;
+      registry.set(mathId, { tex: content, displayMode: false, isBlock: false });
+
+      if (env && env.isDeferredMath) {
+        return '<span class="lucid-math-placeholder lucid-math-inline" data-math-id="' + mathId + '" data-render-id="' + renderId + '"><span class="lucid-math-raw">' + md.utils.escapeHtml(content) + '</span></span>';
+      }
+      return renderKaTeXInline(content, tokens[idx].markup, mathId, renderId);
+    };
+
+    md.renderer.rules.math_display_inline = function(tokens, idx, options, env) {
+      const content = tokens[idx].content;
+      const renderId = env && env.renderId ? String(env.renderId) : currentRenderRevision;
+      const registry = getMathRegistry(renderId);
+      const mathId = registry.size + 1;
+      registry.set(mathId, { tex: content, displayMode: true, isBlock: false });
+
+      if (env && env.isDeferredMath) {
+        return '<span class="lucid-math-placeholder lucid-math-display lucid-math-display-inline" data-math-id="' + mathId + '" data-render-id="' + renderId + '"><span class="lucid-math-raw">' + md.utils.escapeHtml(content) + '</span></span>';
+      }
+      return renderKaTeXDisplayInline(content, tokens[idx].markup, mathId, renderId);
+    };
+
+    md.renderer.rules.math_block = function(tokens, idx, options, env) {
+      const content = tokens[idx].content;
+      const renderId = env && env.renderId ? String(env.renderId) : currentRenderRevision;
+      const registry = getMathRegistry(renderId);
+      const mathId = registry.size + 1;
+      registry.set(mathId, { tex: content, displayMode: true, isBlock: true });
+
+      if (env && env.isDeferredMath) {
+        return '<div class="lucid-math-placeholder lucid-math-display" data-math-id="' + mathId + '" data-render-id="' + renderId + '"><div class="lucid-math-raw">' + md.utils.escapeHtml(content) + '</div></div>\n';
+      }
+      return renderKaTeXBlock(content, mathId, renderId) + '\n';
+    };
+  }
+
+  md.use(lucidMathPlugin);
 
   function slugify(text) {
     return text.toLowerCase().trim()
@@ -192,34 +435,48 @@
     }
   }
 
-  function countMathExpressions(text) {
-    if (!text || typeof katex === 'undefined' || text.indexOf('$') === -1) return 0;
-    const codeRegex = /(```[\s\S]*?```|~~~[\s\S]*?~~~|`+[^`\n]+?`+)/g;
-    const stripped = text.replace(codeRegex, '');
-    const dispMatches = stripped.match(/\$\$[\s\S]+?\$\$/g);
-    const inlineMatches = stripped.match(/(^|[^\\])\$[^\$\n]+?\$/g);
-    return (dispMatches ? dispMatches.length : 0) + (inlineMatches ? inlineMatches.length : 0);
-  }
-
-  function renderKaTeXBlock(trimmed) {
+  function renderKaTeXBlock(trimmed, mathId, renderId) {
     const cacheKey = 'disp:' + trimmed;
     const cached = katexLRU.get(cacheKey);
-    if (cached) return cached;
+    const mathAttr = (mathId ? ' data-math-id="' + mathId + '"' : '') +
+                     (renderId ? ' data-render-id="' + renderId + '"' : '');
+    if (cached) {
+      return cached.replace(/^<div class="lucid-math-block"/, '<div class="lucid-math-block"' + mathAttr);
+    }
     try {
       const rendered = katex.renderToString(trimmed, { displayMode: true, throwOnError: false });
-      const escapedRaw = encodeURIComponent(trimmed);
-      const res = '<div class="lucid-math-block" data-raw-latex="' + escapedRaw + '">' +
+      const res = '<div class="lucid-math-block"' + mathAttr + '>' +
              rendered +
              '<button class="lucid-btn-copy-latex" onclick="window.lucid.copyLatex(this)">Copy LaTeX</button>' +
              '</div>';
-      katexLRU.set(cacheKey, res);
+      katexLRU.set(cacheKey, '<div class="lucid-math-block">' + rendered + '<button class="lucid-btn-copy-latex" onclick="window.lucid.copyLatex(this)">Copy LaTeX</button></div>');
       return res;
     } catch (e) {
       return '<div class="lucid-math-error"><span class="lucid-error-msg">Formula render warning: ' + md.utils.escapeHtml(e.message || 'Syntax error') + '</span><pre>' + md.utils.escapeHtml(trimmed) + '</pre></div>';
     }
   }
 
-  function renderKaTeXInline(trimmed) {
+  function renderKaTeXDisplayInline(trimmed, originalMarkup, mathId, renderId) {
+    const cacheKey = 'disp_inline:' + trimmed;
+    const cached = katexLRU.get(cacheKey);
+    const mathAttr = (mathId ? ' data-math-id="' + mathId + '"' : '') +
+                     (renderId ? ' data-render-id="' + renderId + '"' : '');
+    if (cached) {
+      return cached.replace(/^<span class="lucid-math-inline lucid-math-display-inline"/, '<span class="lucid-math-inline lucid-math-display-inline"' + mathAttr);
+    }
+    try {
+      const rendered = katex.renderToString(trimmed, { displayMode: true, throwOnError: false });
+      const res = '<span class="lucid-math-inline lucid-math-display-inline"' + mathAttr + '>' + rendered + '</span>';
+      katexLRU.set(cacheKey, '<span class="lucid-math-inline lucid-math-display-inline">' + rendered + '</span>');
+      return res;
+    } catch (e) {
+      const open = originalMarkup || '\\[';
+      const close = (open === '\\[' ? '\\]' : '$$');
+      return '<span class="lucid-math-error" title="' + md.utils.escapeHtml(e.message || 'Syntax error') + '">' + md.utils.escapeHtml(open + trimmed + close) + '</span>';
+    }
+  }
+
+  function renderKaTeXInline(trimmed, originalMarkup, mathId, renderId) {
     const cacheKey = 'inline:' + trimmed;
     const cached = katexLRU.get(cacheKey);
     if (cached) return cached;
@@ -228,70 +485,112 @@
       katexLRU.set(cacheKey, rendered);
       return rendered;
     } catch (e) {
-      return '$' + md.utils.escapeHtml(trimmed) + '$';
+      const open = originalMarkup || '$';
+      const close = (open === '\\(' ? '\\)' : '$');
+      return '<span class="lucid-math-error" title="' + md.utils.escapeHtml(e.message || 'Syntax error') + '">' + md.utils.escapeHtml(open + trimmed + close) + '</span>';
     }
   }
 
   function enhancePlaceholder(ph) {
     if (!ph || !ph.parentNode) return;
+    const isBlock = ph.tagName === 'DIV' || ph.classList.contains('lucid-math-block');
     const isDisplay = ph.classList.contains('lucid-math-display');
+    const isDisplayInline = ph.classList.contains('lucid-math-display-inline');
+    const mathId = parseInt(ph.getAttribute('data-math-id') || (ph.dataset && ph.dataset.mathId) || '0', 10);
+    const renderId = ph.getAttribute('data-render-id') || (ph.dataset && ph.dataset.renderId) || currentRenderRevision;
+
     let rawLatex = '';
-    try {
+    const registry = renderMathRegistries.get(String(renderId));
+    if (registry && registry.has(mathId)) {
+      const entry = registry.get(mathId);
+      rawLatex = entry.tex;
+    } else {
       const attr = ph.getAttribute('data-raw-latex') || (ph.dataset && ph.dataset.rawLatex) || '';
       if (attr) {
-        try {
-          rawLatex = decodeURIComponent(attr);
-        } catch (_) {
-          rawLatex = attr;
-        }
+        try { rawLatex = decodeURIComponent(attr); } catch (_) { rawLatex = attr; }
       }
-      if (rawLatex) {
-        if (isDisplay) {
-          ph.outerHTML = renderKaTeXBlock(rawLatex);
+    }
+
+    if (rawLatex) {
+      try {
+        if (isBlock) {
+          ph.outerHTML = renderKaTeXBlock(rawLatex, mathId, renderId);
+        } else if (isDisplayInline) {
+          ph.outerHTML = renderKaTeXDisplayInline(rawLatex, '$$', mathId, renderId);
+        } else if (isDisplay) {
+          ph.outerHTML = renderKaTeXBlock(rawLatex, mathId, renderId);
         } else {
-          ph.outerHTML = renderKaTeXInline(rawLatex);
+          ph.outerHTML = renderKaTeXInline(rawLatex, '$', mathId, renderId);
         }
-      } else {
-        ph.remove();
+      } catch (e) {
+        console.warn('KaTeX placeholder enhance error:', e);
+        try { ph.remove(); } catch (_) {}
       }
-    } catch (e) {
-      console.warn('KaTeX placeholder enhance error:', e);
-      try { ph.remove(); } catch (_) {}
+    } else {
+      ph.remove();
     }
   }
 
-  function parseKaTeX(text, isDeferred) {
-    if (typeof katex === 'undefined' || text.indexOf('$') === -1) return text;
-
-    const codeBlocks = [];
-    const codeRegex = /(```[\s\S]*?```|~~~[\s\S]*?~~~|`+[^`\n]+?`+)/g;
-    text = text.replace(codeRegex, function(match) {
-      codeBlocks.push(match);
-      return '@@LUCID_CODE_' + (codeBlocks.length - 1) + '@@';
-    });
-
-    text = text.replace(/\$\$([\s\S]+?)\$\$/g, function(match, math) {
-      const trimmed = math.trim();
-      if (isDeferred) {
-        const escapedRaw = encodeURIComponent(trimmed);
-        return '<div class="lucid-math-placeholder lucid-math-display" data-raw-latex="' + escapedRaw + '"><div class="lucid-math-raw">' + md.utils.escapeHtml(trimmed) + '</div></div>';
+  function getRepresentativeFontSize(svg) {
+    if (!svg) return 16;
+    try {
+      const labelEls = svg.querySelectorAll('.nodeLabel, .label, .node text, text, span');
+      const fontSizes = [];
+      for (let i = 0; i < labelEls.length; i++) {
+        const fs = parseFloat(window.getComputedStyle(labelEls[i]).fontSize);
+        if (!isNaN(fs) && fs > 0) {
+          fontSizes.push(fs);
+        }
       }
-      return renderKaTeXBlock(trimmed);
-    });
-    text = text.replace(/(^|[^\\])\$([^\$\n]+?)\$/g, function(match, prefix, math) {
-      const trimmed = math.trim();
-      if (isDeferred) {
-        const escapedRaw = encodeURIComponent(trimmed);
-        return prefix + '<span class="lucid-math-placeholder lucid-math-inline" data-raw-latex="' + escapedRaw + '"><span class="lucid-math-raw">' + md.utils.escapeHtml(trimmed) + '</span></span>';
+      if (fontSizes.length > 0) {
+        fontSizes.sort(function(a, b) { return a - b; });
+        return fontSizes[Math.floor(fontSizes.length / 2)];
       }
-      return prefix + renderKaTeXInline(trimmed);
-    });
+    } catch (e) {}
+    return 16;
+  }
 
-    text = text.replace(/@@LUCID_CODE_(\d+)@@/g, function(match, idx) {
-      return codeBlocks[parseInt(idx, 10)];
-    });
+  function computeSmartDiagramLayout(intrinsicWidth, intrinsicHeight, availWidth, maxAvailHeight, representativeFontSize, targetReadableFontSize) {
+    const rf = (typeof representativeFontSize === 'number' && representativeFontSize > 0) ? representativeFontSize : 16;
+    const tf = (typeof targetReadableFontSize === 'number' && targetReadableFontSize > 0) ? targetReadableFontSize : 13.5;
 
-    return text;
+    if (!intrinsicWidth || intrinsicWidth <= 0 || !intrinsicHeight || intrinsicHeight <= 0 || !availWidth || availWidth <= 0) {
+      return {
+        scale: 1.0,
+        isComplete: false,
+        mode: 'fallback',
+        targetHeight: 320
+      };
+    }
+
+    const widthFitScale = availWidth / intrinsicWidth;
+    const heightFitScale = (maxAvailHeight && maxAvailHeight > 0) ? (maxAvailHeight / intrinsicHeight) : 1.0;
+    const completeFitScale = Math.min(1.0, widthFitScale, heightFitScale);
+
+    const readableMinimumScale = Math.min(1.0, tf / rf);
+
+    let initialScale = 1.0;
+    let mode = 'complete';
+
+    if (completeFitScale >= readableMinimumScale) {
+      initialScale = completeFitScale;
+      mode = 'complete';
+    } else {
+      initialScale = readableMinimumScale;
+      mode = 'readableWorking';
+    }
+
+    const scaledHeight = intrinsicHeight * initialScale;
+    const verticalPadding = 48; // 24px top + 24px bottom
+    const cappedMaxHeight = (maxAvailHeight && maxAvailHeight > 0) ? (maxAvailHeight + verticalPadding) : 840;
+    const targetHeight = Math.round(Math.min(cappedMaxHeight, Math.max(180, scaledHeight + verticalPadding)));
+
+    return {
+      scale: initialScale,
+      isComplete: (mode === 'complete'),
+      mode: mode,
+      targetHeight: targetHeight
+    };
   }
 
   function formatMermaidContainer(c) {
@@ -307,33 +606,30 @@
       const viewport = c.querySelector('.mermaid-viewport');
       const canvas = c.querySelector('.mermaid-canvas');
       if (viewport && canvas) {
-        const availWidth = Math.max(100, viewport.clientWidth - 48);
+        // Horizontal padding: 20px left + 20px right = 40px
+        const availWidth = Math.max(100, (viewport.clientWidth || 800) - 40);
+
+        // Maximum inline viewport height: min(840px, 80vh)
+        const maxInlineHeight = Math.min(840, Math.max(480, Math.round((window.innerHeight || 800) * 0.8)));
+        const maxContentHeight = Math.max(100, maxInlineHeight - 48);
 
         // 1. Inspect real SVG label typography geometry
-        let baseFontSize = 14;
-        const labelEl = svg.querySelector('.nodeLabel, .label, text, span');
-        if (labelEl) {
-          const fs = parseFloat(window.getComputedStyle(labelEl).fontSize);
-          if (!isNaN(fs) && fs > 0) baseFontSize = fs;
-        }
+        const baseFontSize = getRepresentativeFontSize(svg);
 
-        // 2. Readability-first scale: target ~13.5px effective label size
-        const readabilityFloor = Math.min(1.0, 13.5 / baseFontSize);
-        const widthFitScale = availWidth / viewBox.width;
-
-        let initialScale = 1.0;
-        if (viewBox.width > availWidth) {
-          // Diagram is wider than viewport: do NOT aggressively shrink to fit!
-          // Prioritize readability so labels are readable without immediate zooming
-          initialScale = Math.min(1.0, Math.max(widthFitScale, readabilityFloor));
-        } else {
-          // Small or medium diagram: keep at natural readable size (~1.0x)
-          initialScale = 1.0;
-        }
+        // 2. Smart layout: DEFAULT = SMART READABLE COMPLETE VIEW WHEN POSSIBLE
+        const layout = computeSmartDiagramLayout(
+          viewBox.width,
+          viewBox.height,
+          availWidth,
+          maxContentHeight,
+          baseFontSize,
+          13.5
+        );
+        const initialScale = layout.scale;
 
         // 3. Dynamic bounded viewport height based on diagram aspect ratio
         const scaledHeight = viewBox.height * initialScale;
-        const targetHeight = Math.round(Math.min(640, Math.max(180, scaledHeight + 64)));
+        const targetHeight = Math.round(Math.min(maxInlineHeight, Math.max(180, scaledHeight + 48)));
         viewport.style.height = targetHeight + 'px';
 
         // 4. Meaningful centering translation
@@ -512,19 +808,31 @@
     updateContent: function(rawMarkdown, renderId) {
       renderId = String(renderId || '0');
       currentRenderRevision = renderId;
+      pruneOldRegistries(renderId);
       LucidPerf.mark(renderId, 't4_js_received', { length: rawMarkdown ? rawMarkdown.length : 0 });
       const container = document.getElementById('lucid-content');
       if (!container) return;
 
-      LucidPerf.mark(renderId, 't5_katex_pre_begin');
-      const mathCount = countMathExpressions(rawMarkdown);
-      const isDeferredMath = (mathCount > 30);
-      const preprocessed = parseKaTeX(rawMarkdown, isDeferredMath);
-      LucidPerf.mark(renderId, 't5_katex_pre_end', { count: mathCount, deferred: isDeferredMath });
-
       LucidPerf.mark(renderId, 't6_md_render_begin');
-      let html = md.render(preprocessed);
-      LucidPerf.mark(renderId, 't6_md_render_end');
+      const env = { renderId: renderId, isDeferredMath: false };
+      const tokens = md.parse(rawMarkdown || '', env);
+
+      let mathCount = 0;
+      for (let i = 0; i < tokens.length; i++) {
+        const t = tokens[i];
+        if (t.type === 'math_block') mathCount++;
+        else if (t.type === 'inline' && t.children) {
+          for (let j = 0; j < t.children.length; j++) {
+            const c = t.children[j];
+            if (c.type === 'math_inline' || c.type === 'math_display_inline') mathCount++;
+          }
+        }
+      }
+      const isDeferredMath = (mathCount > 30);
+      env.isDeferredMath = isDeferredMath;
+
+      let html = md.renderer.render(tokens, md.options, env);
+      LucidPerf.mark(renderId, 't6_md_render_end', { count: mathCount, deferred: isDeferredMath });
 
       LucidPerf.mark(renderId, 't7_alerts_begin');
       html = parseAlerts(html);
@@ -882,35 +1190,82 @@
       viewport.classList.toggle('is-panning', isPanning);
     },
 
-    handleDiagramMouseDown: function(e, viewport) {
+    handleDiagramPointerDown: function(e, viewport) {
       const isPanActive = viewport.classList.contains('is-panning') || e.spaceKey || e.button === 1;
       if (!isPanActive) return;
+      if (e.button !== 0 && e.button !== 1) return;
       e.preventDefault();
-      viewport.classList.add('is-dragging');
+
       const canvas = viewport.querySelector('.mermaid-canvas');
       if (!canvas) return;
 
-      let tx = parseFloat(canvas.dataset.tx || '0');
-      let ty = parseFloat(canvas.dataset.ty || '0');
-      let scale = parseFloat(canvas.dataset.scale || '1.0');
-      const startX = e.clientX;
-      const startY = e.clientY;
-
-      function onMouseMove(moveEvent) {
-        const dx = moveEvent.clientX - startX;
-        const dy = moveEvent.clientY - startY;
-        const currentTx = tx + dx;
-        const currentTy = ty + dy;
-        canvas.style.transform = 'translate(' + currentTx + 'px, ' + currentTy + 'px) scale(' + scale + ')';
-        canvas.dataset.tempTx = currentTx;
-        canvas.dataset.tempTy = currentTy;
+      const pointerId = e.pointerId;
+      if (typeof viewport.setPointerCapture === 'function' && pointerId !== undefined) {
+        try {
+          viewport.setPointerCapture(pointerId);
+        } catch (err) {}
       }
 
-      function onMouseUp() {
+      viewport.classList.add('is-dragging');
+      document.body.classList.add('lucid-diagram-dragging');
+
+      const panStartX = parseFloat(canvas.dataset.tx || '0');
+      const panStartY = parseFloat(canvas.dataset.ty || '0');
+      const scale = parseFloat(canvas.dataset.scale || '1.0');
+      const pointerStartX = e.clientX;
+      const pointerStartY = e.clientY;
+
+      let nextTx = panStartX;
+      let nextTy = panStartY;
+      let rafId = null;
+
+      function renderTransform() {
+        rafId = null;
+        canvas.style.transform = 'translate(' + nextTx + 'px, ' + nextTy + 'px) scale(' + scale + ')';
+        canvas.dataset.tempTx = nextTx;
+        canvas.dataset.tempTy = nextTy;
+      }
+
+      function onPointerMove(moveEvent) {
+        if (pointerId !== undefined && moveEvent.pointerId !== undefined && moveEvent.pointerId !== pointerId) return;
+        const dx = moveEvent.clientX - pointerStartX;
+        const dy = moveEvent.clientY - pointerStartY;
+        nextTx = panStartX + dx;
+        nextTy = panStartY + dy;
+
+        if (!rafId) {
+          rafId = requestAnimationFrame(renderTransform);
+        }
+      }
+
+      function cleanup() {
+        if (rafId) {
+          cancelAnimationFrame(rafId);
+          renderTransform();
+        }
         viewport.classList.remove('is-dragging');
-        window.removeEventListener('mousemove', onMouseMove);
-        window.removeEventListener('mouseup', onMouseUp);
-        if (canvas.dataset.tempTx) {
+        document.body.classList.remove('lucid-diagram-dragging');
+
+        if (typeof viewport.releasePointerCapture === 'function' && pointerId !== undefined) {
+          try {
+            if (viewport.hasPointerCapture(pointerId)) {
+              viewport.releasePointerCapture(pointerId);
+            }
+          } catch (err) {}
+        }
+
+        viewport.removeEventListener('pointermove', onPointerMove);
+        viewport.removeEventListener('pointerup', onPointerUp);
+        viewport.removeEventListener('pointercancel', onPointerCancel);
+        viewport.removeEventListener('lostpointercapture', onPointerCancel);
+        window.removeEventListener('pointermove', onPointerMove);
+        window.removeEventListener('pointerup', onPointerUp);
+        window.removeEventListener('pointercancel', onPointerCancel);
+        window.removeEventListener('mousemove', onPointerMove);
+        window.removeEventListener('mouseup', onPointerUp);
+        window.removeEventListener('blur', onPointerCancel);
+
+        if (canvas.dataset.tempTx !== undefined) {
           canvas.dataset.tx = canvas.dataset.tempTx;
           canvas.dataset.ty = canvas.dataset.tempTy;
           delete canvas.dataset.tempTx;
@@ -918,8 +1273,30 @@
         }
       }
 
-      window.addEventListener('mousemove', onMouseMove);
-      window.addEventListener('mouseup', onMouseUp);
+      function onPointerUp(upEvent) {
+        if (pointerId !== undefined && upEvent.pointerId !== undefined && upEvent.pointerId !== pointerId) return;
+        cleanup();
+      }
+
+      function onPointerCancel(cancelEvent) {
+        if (pointerId !== undefined && cancelEvent && cancelEvent.pointerId !== undefined && cancelEvent.pointerId !== pointerId) return;
+        cleanup();
+      }
+
+      viewport.addEventListener('pointermove', onPointerMove);
+      viewport.addEventListener('pointerup', onPointerUp);
+      viewport.addEventListener('pointercancel', onPointerCancel);
+      viewport.addEventListener('lostpointercapture', onPointerCancel);
+      window.addEventListener('pointermove', onPointerMove);
+      window.addEventListener('pointerup', onPointerUp);
+      window.addEventListener('pointercancel', onPointerCancel);
+      window.addEventListener('mousemove', onPointerMove);
+      window.addEventListener('mouseup', onPointerUp);
+      window.addEventListener('blur', onPointerCancel);
+    },
+
+    handleDiagramMouseDown: function(e, viewport) {
+      window.lucid.handleDiagramPointerDown(e, viewport);
     },
 
     zoomDiagramAtPoint: function(targetEl, factor, clientX, clientY) {
@@ -1003,7 +1380,7 @@
       const unscaledWidth = (viewBox && viewBox.width > 0) ? viewBox.width : (svg.clientWidth || 300);
       const unscaledHeight = (viewBox && viewBox.height > 0) ? viewBox.height : (svg.clientHeight || 200);
 
-      const availWidth = Math.max(100, viewport.clientWidth - 48);
+      const availWidth = Math.max(100, viewport.clientWidth - 40);
       const availHeight = Math.max(100, viewport.clientHeight - 48);
 
       const fitScale = Math.min(availWidth / unscaledWidth, availHeight / unscaledHeight, 1.5);
@@ -1045,7 +1422,7 @@
                 '<button class="lucid-mermaid-btn" title="Close (Esc)" onclick="window.lucid.closeDiagramModal()">✕</button>' +
               '</div>' +
             '</div>' +
-            '<div class="lucid-mermaid-modal-body" onmousedown="window.lucid.handleDiagramMouseDown(event, this)">' +
+            '<div class="lucid-mermaid-modal-body" onpointerdown="window.lucid.handleDiagramPointerDown(event, this)">' +
               '<div class="mermaid-canvas" id="lucid-modal-canvas"></div>' +
             '</div>' +
           '</div>';
@@ -1081,6 +1458,8 @@
       let modalInitialScale = 1.0;
       let modalTx = 0;
       let modalTy = 0;
+      let contentOffsetX = 0;
+      let contentOffsetY = 0;
       if (modalSvg) {
         modalSvg.style.maxWidth = 'none';
         modalSvg.style.display = 'block';
@@ -1090,24 +1469,17 @@
           modalSvg.style.height = viewBox.height + 'px';
           const availWidth = Math.max(100, (modalViewport ? modalViewport.clientWidth : 800) - 64);
           const availHeight = Math.max(100, (modalViewport ? modalViewport.clientHeight : 600) - 80);
-          const fitScale = Math.min(availWidth / viewBox.width, availHeight / viewBox.height);
+          const baseFontSize = getRepresentativeFontSize(modalSvg);
+          const layout = computeSmartDiagramLayout(
+            viewBox.width,
+            viewBox.height,
+            availWidth,
+            availHeight,
+            baseFontSize,
+            13.5
+          );
+          modalInitialScale = layout.scale;
 
-          let baseFontSize = 14;
-          const labelEl = modalSvg.querySelector('.nodeLabel, .label, text, span');
-          if (labelEl) {
-            const fs = parseFloat(window.getComputedStyle(labelEl).fontSize);
-            if (!isNaN(fs) && fs > 0) baseFontSize = fs;
-          }
-          const readabilityFloor = Math.min(1.0, 13.5 / baseFontSize);
-
-          if (fitScale >= readabilityFloor) {
-            modalInitialScale = Math.min(1.2, fitScale);
-          } else {
-            modalInitialScale = Math.min(1.0, Math.max(fitScale, readabilityFloor));
-          }
-
-          let contentOffsetX = 0;
-          let contentOffsetY = 0;
           try {
             const bbox = modalSvg.getBBox();
             if (bbox && bbox.width > 0) {
@@ -1126,6 +1498,8 @@
       modalCanvas.dataset.initialScale = modalInitialScale;
       modalCanvas.dataset.initialTx = modalTx;
       modalCanvas.dataset.initialTy = modalTy;
+      modalCanvas.dataset.contentOffsetX = contentOffsetX;
+      modalCanvas.dataset.contentOffsetY = contentOffsetY;
       modalCanvas.dataset.scale = modalInitialScale;
       modalCanvas.dataset.tx = modalTx;
       modalCanvas.dataset.ty = modalTy;
@@ -1176,8 +1550,17 @@
 
     copyLatex: function(btn) {
       const container = btn.closest('.lucid-math-block');
-      if (container && container.dataset.rawLatex) {
-        const latex = decodeURIComponent(container.dataset.rawLatex);
+      if (!container) return;
+      let latex = '';
+      const mathId = parseInt(container.getAttribute('data-math-id') || (container.dataset && container.dataset.mathId) || '0', 10);
+      const renderId = container.getAttribute('data-render-id') || (container.dataset && container.dataset.renderId) || currentRenderRevision;
+      const registry = renderMathRegistries.get(String(renderId));
+      if (registry && registry.has(mathId)) {
+        latex = registry.get(mathId).tex;
+      } else if (container.dataset && container.dataset.rawLatex) {
+        latex = decodeURIComponent(container.dataset.rawLatex);
+      }
+      if (latex) {
         navigator.clipboard.writeText(latex).then(function() {
           const original = btn.innerText;
           btn.innerText = 'Copied!';
@@ -1331,10 +1714,27 @@
 
     getStandaloneHTML: function() {
       return document.documentElement.outerHTML;
-    }
+    },
+
+    getCurrentRevision: function() {
+      return currentRenderRevision;
+    },
+
+    computeSmartDiagramLayout: computeSmartDiagramLayout,
+    getRepresentativeFontSize: getRepresentativeFontSize
   };
 
+  function isRenderingStackReady() {
+    return typeof window.markdownit !== 'undefined' &&
+           typeof window.katex !== 'undefined' &&
+           typeof window.hljs !== 'undefined';
+  }
+
   function notifyBridgeReady() {
+    if (!isRenderingStackReady()) {
+      setTimeout(notifyBridgeReady, 10);
+      return;
+    }
     ensureMermaidInitialized();
     if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.lucidReady) {
       window.webkit.messageHandlers.lucidReady.postMessage({ status: 'ready' });

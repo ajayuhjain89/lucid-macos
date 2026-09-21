@@ -20,6 +20,8 @@ public struct MarkdownOutlineParser {
 
         var items: [HeadingItem] = []
         var inCodeBlock = false
+        var inMathBlock = false
+        var activeMathCloseDelim: String? = nil
         var seenIds: [String: Int] = [:]
 
         markdown.enumerateLines { line, _ in
@@ -31,6 +33,31 @@ public struct MarkdownOutlineParser {
                 return
             }
             if inCodeBlock { return }
+
+            // Track display math blocks ($$ or \[)
+            if inMathBlock {
+                if let close = activeMathCloseDelim, trimmed.contains(close) {
+                    inMathBlock = false
+                    activeMathCloseDelim = nil
+                }
+                return
+            } else {
+                if trimmed.hasPrefix("$$") {
+                    if trimmed.dropFirst(2).contains("$$") {
+                        return
+                    }
+                    inMathBlock = true
+                    activeMathCloseDelim = "$$"
+                    return
+                } else if trimmed.hasPrefix("\\[") {
+                    if trimmed.dropFirst(2).contains("\\]") {
+                        return
+                    }
+                    inMathBlock = true
+                    activeMathCloseDelim = "\\]"
+                    return
+                }
+            }
 
             // Check for ATX headings (# ... ######)
             if trimmed.hasPrefix("#") {
