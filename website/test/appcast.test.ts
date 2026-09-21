@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { generateAppcastXml, GET } from "../app/api/appcast/route";
+import { generateAppcastXml } from "../lib/appcast";
+import { GET } from "../app/api/appcast/route";
 import { currentRelease, ReleaseMetadata } from "../lib/release";
 
 describe("Sparkle Appcast Feed", () => {
