@@ -3,6 +3,7 @@ import SwiftUI
 @main
 struct LucidApp: App {
     @StateObject private var preferences = LucidPreferences.shared
+    @StateObject private var updateController = LucidUpdateController.shared
 
     var body: some Scene {
         DocumentGroup(newDocument: LucidDocument()) { file in
@@ -12,6 +13,13 @@ struct LucidApp: App {
         }
         .windowStyle(.hiddenTitleBar)
         .commands {
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") {
+                    updateController.checkForUpdates()
+                }
+                .disabled(!updateController.canCheckForUpdates)
+                Divider()
+            }
 
             CommandGroup(replacing: .appSettings) {
                 Button("Settings…") {

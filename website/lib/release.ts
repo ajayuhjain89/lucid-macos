@@ -11,6 +11,7 @@ export type ProductReleaseState = "development" | "privateBeta" | "publicBeta" |
 export interface ReleaseMetadata {
   productName: string;
   version: string;
+  buildNumber: number;
   productState: ProductReleaseState;
   releaseChannel: "stable" | "beta" | "preview";
   releaseDate: string; // ISO date string (YYYY-MM-DD)
@@ -18,7 +19,12 @@ export interface ReleaseMetadata {
   // Artifact details (verified from local build Lucid-1.0.0.dmg)
   fileName: string;
   fileSize: string;
+  sizeBytes: number;
   sha256: string;
+  
+  // Sparkle update metadata
+  sparkleEdSignature?: string;
+  sparklePublished: boolean;
   
   // Target environment (verified from Info.plist and build.sh)
   minimumMacOS: string;
@@ -43,6 +49,7 @@ export interface ReleaseMetadata {
 export const currentRelease: ReleaseMetadata = {
   productName: "Lucid",
   version: "1.0.2",
+  buildNumber: 3,
   productState: "publicBeta",
   releaseChannel: "beta",
   releaseDate: "2026-09-21",
@@ -50,7 +57,11 @@ export const currentRelease: ReleaseMetadata = {
   // Exact properties from local artifact Lucid-1.0.2.dmg
   fileName: "Lucid-1.0.2.dmg",
   fileSize: "5.0 MB",
+  sizeBytes: 5262700,
   sha256: "38b9c3e6b78ab50c3f293b656a8969e493f072e598b8fffb698ae6617386aef0",
+  
+  // Sparkle update staging (staged false until v1.0.3 canonical build and activation)
+  sparklePublished: false,
   
   // Environment requirements verified from Info.plist (LSMinimumSystemVersion 14.0) and build.sh (arm64-apple-macosx14.0)
   minimumMacOS: "14.0",
