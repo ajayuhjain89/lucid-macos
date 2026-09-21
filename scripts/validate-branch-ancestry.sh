@@ -86,9 +86,12 @@ is_category_branch() {
 }
 
 # Is $1 a recognised temporary branch name?
+# hotfix/* is included: even an urgent fix must fold into a category branch and
+# flow forward (category -> develop -> main). There is NO direct path to main
+# other than develop.
 is_temp_branch() {
   case "$1" in
-    experiment/*|prototype/*|migration/*|refactor/*) return 0 ;;
+    experiment/*|prototype/*|migration/*|refactor/*|hotfix/*) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -226,7 +229,7 @@ mode_transition() {
 #
 # Validates a pull request. Two layers:
 #   (a) direction: the source->target pair must be an allowed permanent flow
-#       (or a documented temporary/hotfix exception);
+#       (or a documented temporary-branch intake into a category branch);
 #   (b) ancestry: for a HEAD that must stay "ahead only" of integration
 #       branches, reject any merge commit unique to the PR (BASE..HEAD) whose
 #       parent pulls in develop/main content newer than the fork point.
@@ -255,8 +258,8 @@ check_pr_direction() {
       is_category_branch "$_d_head" && return 0
       return 1 ;;
     main)
+      # develop is the ONLY branch that may merge into main.
       [ "$_d_head" = "develop" ] && return 0
-      case "$_d_head" in hotfix/*) return 0 ;; esac
       return 1 ;;
     logic|design|docs)
       is_temp_branch "$_d_head" && return 0
@@ -271,9 +274,8 @@ print_allowed_directions() {
   err "      logic   -> develop"
   err "      design  -> develop"
   err "      docs    -> develop"
-  err "      develop -> main"
-  err "      experiment/* | prototype/* | migration/* | refactor/*  -> logic | design | docs"
-  err "      hotfix/*  -> main   (emergency)"
+  err "      develop -> main   (the ONLY path into main)"
+  err "      experiment/* | prototype/* | migration/* | refactor/* | hotfix/*  -> logic | design | docs"
 }
 
 mode_pr() {
