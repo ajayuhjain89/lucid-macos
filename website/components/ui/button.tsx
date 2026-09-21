@@ -51,6 +51,13 @@ export function Button({
         </a>
       );
     }
+    if (href.startsWith("/api/")) {
+      return (
+        <a href={href} className={combinedClasses}>
+          {children}
+        </a>
+      );
+    }
     return (
       <Link href={href} className={combinedClasses}>
         {children}

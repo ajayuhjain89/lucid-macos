@@ -29,8 +29,8 @@ export function DownloadCTASection() {
 
         {/* Action Buttons */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-          <Link
-            href="/download"
+          <a
+            href="/api/download"
             className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-6 py-3 text-sm font-medium rounded-mac bg-text-primary text-background hover:opacity-90 transition-all shadow-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent active:scale-[0.98]"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -39,7 +39,7 @@ export function DownloadCTASection() {
               <line x1="12" y1="15" x2="12" y2="3" />
             </svg>
             <span>Download Lucid {currentRelease.version} Beta</span>
-          </Link>
+          </a>
 
           <Link
             href="/docs/getting-started"
