@@ -64,8 +64,8 @@ export const currentRelease: ReleaseMetadata = {
   
   // URL configurations
   downloadUrl: "https://github.com/ajayuhjain89/lucid-macos/releases/download/v1.0.0/Lucid-1.0.0.dmg",
-  hasPublicDownloadUrl: false, // Set to true once published to GitHub releases
-  githubReleaseUrl: "https://github.com/ajayuhjain89/lucid-macos/releases",
+  hasPublicDownloadUrl: true,
+  githubReleaseUrl: "https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.0",
   releaseNotesUrl: "/changelog#1-0-0",
   
   // Kept false until official accepted benchmark numbers are measured
