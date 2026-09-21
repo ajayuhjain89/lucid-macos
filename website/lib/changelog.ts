@@ -17,6 +17,59 @@ export interface ReleaseEntry {
 
 export const changelogData: ReleaseEntry[] = [
   {
+    version: "1.0.2",
+    date: "September 21, 2026",
+    channel: "Beta",
+    summary: "Quality, UX hardening, and Mermaid technical layout release delivering expandable scrollbars, zero-jitter sidebar transitions, adaptive tall flowchart presentation, and Lucid Blue-Tint diagrams.",
+    highlights: [
+      "Expandable Reader scrollbar: subtle 4px resting thumb, easy-to-grab 8px hover, 10px active drag, and zero layout shift",
+      "Zero-jitter sidebar: smooth native transition, preserved WKWebView identity, preserved scroll, and stored width memory",
+      "Tall Mermaid flowchart inline layout: adaptively expands up to 2400px so complex technical diagrams are readable without pressing Expand",
+      "Lucid Blue-Tint theme: cohesive technical visual language across Dark, Light, and Sepia themes while preserving custom diagram styles",
+      "Renderer conformance: verified 100% pass rate across all 13 core mathematical and structural rendering invariants",
+    ],
+    sections: [
+      {
+        title: "Reader & UX Hardening",
+        items: [
+          {
+            type: "improved",
+            text: "Expandable scrollbar thumb: subtle 4px rest, 8px hover hit area, and 10px active drag contrast inside a constant 12px gutter.",
+          },
+          {
+            type: "fixed",
+            text: "Completely eliminated left outline sidebar open/close jitter with a native SwiftUI transition and stored sidebar width memory.",
+          },
+          {
+            type: "fixed",
+            text: "WKWebView lifecycle and document scroll position remain completely uninterrupted across sidebar toggles and window resizing.",
+          },
+        ],
+      },
+      {
+        title: "Mermaid Technical Diagrams",
+        items: [
+          {
+            type: "improved",
+            text: "Adaptive inline diagram presentation: tall technical flowcharts (e.g. ESP32 control flow) now expand inline up to 2400px so all labels remain readable at standard text size.",
+          },
+          {
+            type: "improved",
+            text: "Readability floor: enforces a minimum scale targeting ≥ 13.5px effective font size for labels on initial display.",
+          },
+          {
+            type: "new",
+            text: "Lucid Blue-Tint technical styling: curated node surfaces, crisp blue borders, and clear arrowheads across Dark, Light, and Sepia themes.",
+          },
+          {
+            type: "improved",
+            text: "User-interaction state preservation: user zoom and pan adjustments are preserved across window resizing.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.0.0",
     date: "September 20, 2026",
     channel: "Beta",
