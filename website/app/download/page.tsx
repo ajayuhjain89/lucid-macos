@@ -61,7 +61,7 @@ export default function DownloadPage() {
                 <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                 </svg>
-                Download DMG ({currentRelease.fileSize})
+                Download Lucid ({currentRelease.fileSize})
               </Button>
             ) : (
               <div className="flex flex-col gap-2 w-full md:w-auto">
@@ -78,12 +78,21 @@ export default function DownloadPage() {
                   Get on GitHub Releases
                 </Button>
                 <span className="text-xs text-text-tertiary text-center">
-                  Artifact verified locally • Publishing to GitHub Releases
+                  Direct download temporarily unavailable • View on GitHub Releases
                 </span>
               </div>
             )}
             <Button
               variant="secondary"
+              size="lg"
+              href={currentRelease.githubReleaseUrl || siteConfig.githubUrl}
+              external
+              className="w-full md:w-auto justify-center"
+            >
+              View on GitHub
+            </Button>
+            <Button
+              variant="subtle"
               size="lg"
               href={siteConfig.githubUrl}
               external
@@ -197,13 +206,25 @@ export default function DownloadPage() {
       </div>
 
       {/* Release Notes Link */}
-      <div className="text-center pt-8 border-t border-border-subtle">
-        <p className="text-sm text-text-secondary">
+      <div className="text-center pt-8 border-t border-border-subtle flex flex-wrap items-center justify-center gap-4 text-sm text-text-secondary">
+        <p>
           Looking for past changes, bug fixes, or release notes?{" "}
           <Link href="/changelog" className="text-accent hover:underline font-medium">
             Read the v{currentRelease.version} Changelog →
           </Link>
         </p>
+        <span className="text-text-tertiary hidden sm:inline">•</span>
+        <a
+          href={currentRelease.githubReleaseUrl || siteConfig.githubUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-text-secondary hover:text-text-primary hover:underline font-medium inline-flex items-center gap-1"
+        >
+          <span>View Release on GitHub</span>
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+          </svg>
+        </a>
       </div>
     </div>
   );

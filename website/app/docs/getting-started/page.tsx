@@ -239,7 +239,7 @@ export default function GettingStartedPage() {
         <Link href="/docs" className="text-sm text-text-secondary hover:text-accent font-medium">
           ← Back to Documentation
         </Link>
-        <Button variant="primary" size="md" href="/download">
+        <Button variant="primary" size="md" href="/api/download">
           Download Lucid for macOS
         </Button>
       </div>
