@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.0"><img src="https://img.shields.io/badge/release-v1.0.0--beta-blue?style=flat-square" alt="v1.0.0 Public Beta"></a>
+  <a href="https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.1"><img src="https://img.shields.io/badge/release-v1.0.1--beta-blue?style=flat-square" alt="v1.0.1 Public Beta"></a>
   <img src="https://img.shields.io/badge/platform-macOS%2014.0%2B-black?style=flat-square&logo=apple" alt="macOS 14+">
   <img src="https://img.shields.io/badge/arch-Apple%20Silicon%20(arm64)-orange?style=flat-square" alt="Apple Silicon (arm64)">
   <img src="https://img.shields.io/badge/Swift-5.9%2B-F05138?style=flat-square&logo=swift&logoColor=white" alt="Swift 5.9+">
@@ -19,9 +19,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ajayuhjain89/lucid-macos/releases/download/v1.0.0/Lucid-1.0.0.dmg"><strong>Download Lucid (5.0 MB)</strong></a> &nbsp;•&nbsp;
+  <a href="https://github.com/ajayuhjain89/lucid-macos/releases/download/v1.0.1/Lucid-1.0.1.dmg"><strong>Download Lucid (5.0 MB)</strong></a> &nbsp;•&nbsp;
   <a href="https://website-phi-umber-70.vercel.app"><strong>Official Website</strong></a> &nbsp;•&nbsp;
-  <a href="https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.0">Release Notes</a>
+  <a href="https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.1">Release Notes</a>
 </p>
 
 ---
@@ -30,8 +30,8 @@ Lucid renders Markdown with an editorial identity and wraps it in a genuinely na
 
 ## Install
 
-1. Download [**Lucid-1.0.0.dmg**](https://github.com/ajayuhjain89/lucid-macos/releases/download/v1.0.0/Lucid-1.0.0.dmg) (5.0 MB).
-2. Open `Lucid-1.0.0.dmg` in your Downloads folder.
+1. Download [**Lucid-1.0.1.dmg**](https://github.com/ajayuhjain89/lucid-macos/releases/download/v1.0.1/Lucid-1.0.1.dmg) (5.0 MB).
+2. Open `Lucid-1.0.1.dmg` in your Downloads folder.
 3. Drag `Lucid.app` into your `Applications` folder.
 4. Launch Lucid from Applications or Spotlight.
 
