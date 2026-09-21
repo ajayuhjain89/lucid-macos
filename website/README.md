@@ -94,28 +94,44 @@ npx tsx scripts/validate-release.ts
 
 ---
 
-## Updating Releases
+## Release & Download Architecture
 
-When a new version of Lucid is built:
+The website provides a seamless one-click download experience for users while keeping repository and deployment footprints minimal:
 
-1. **Calculate Checksum**:
+```
+website (Download button)
+  → /api/download
+  → HTTP 307 Temporary Redirect
+  → GitHub Releases asset (Lucid-1.0.0.dmg)
+```
+
+- **Hosted on GitHub Releases**: The public DMG binary is hosted directly on GitHub Releases.
+- **No Proxying / No Streaming**: Next.js / Vercel does not proxy or stream the binary.
+- **Not Stored in `website/public`**: The DMG is not tracked in the web application static assets.
+- **Single Source of Truth**: Release metadata and checksums live in [`website/lib/release.ts`](lib/release.ts).
+
+---
+
+## Release Process
+
+When a new version of Lucid is prepared for release:
+
+1. **Build and verify new DMG**: Build the native macOS artifact using `./build.sh` and verify application packaging.
+2. **Calculate SHA-256**: Run `npx tsx scripts/checksum.ts ../Lucid-X.Y.Z.dmg` to generate the official checksum.
+3. **Create/update GitHub Release**: Draft or publish the release tag (e.g. `vX.Y.Z`) on GitHub.
+4. **Attach verified DMG**: Upload the verified DMG file to the GitHub Release.
+5. **Update `website/lib/release.ts`**: Set `version`, `releaseDate`, `fileName`, `fileSize`, `sha256`, `downloadUrl`, and `hasPublicDownloadUrl: true`.
+6. **Verify direct asset URL**: Confirm the direct GitHub Release asset URL returns HTTP 200/302.
+7. **Verify `/api/download`**: Confirm the route issues an HTTP 307 redirect to the asset.
+8. **Verify website Download button**: Test that clicking "Download Lucid" initiates the download immediately.
+9. **Run validation, tests, and build**:
    ```bash
-   npx tsx scripts/checksum.ts ../Lucid-X.Y.Z.dmg
-   ```
-
-2. **Update `lib/release.ts`**:
-   - Update `version`, `releaseDate`, `fileName`, `fileSize`, and `sha256`.
-   - Update `downloadUrl` and set `hasPublicDownloadUrl: true` when published.
-
-3. **Update `lib/changelog.ts`**:
-   - Add new entry with release highlights and categorized changes (New, Improved, Fixed).
-
-4. **Verify**:
-   ```bash
-   npx tsx scripts/validate-release.ts
+   npm run lint
    npm test
+   npm run release:validate
    npm run build
    ```
+10. **Promote through canonical workflow**: Land changes through `docs`/`logic` → `develop` → `main` as defined in `docs/github_workflow.md`.
 
 ---
 

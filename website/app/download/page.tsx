@@ -78,7 +78,7 @@ export default function DownloadPage() {
                   Get on GitHub Releases
                 </Button>
                 <span className="text-xs text-text-tertiary text-center">
-                  Direct download temporarily unavailable • View on GitHub Releases
+                  Direct download fallback • View on GitHub Releases
                 </span>
               </div>
             )}
@@ -89,7 +89,7 @@ export default function DownloadPage() {
               external
               className="w-full md:w-auto justify-center"
             >
-              View on GitHub
+              View release on GitHub
             </Button>
             <Button
               variant="subtle"
@@ -98,7 +98,7 @@ export default function DownloadPage() {
               external
               className="w-full md:w-auto justify-center"
             >
-              Source Code
+              View source on GitHub
             </Button>
           </div>
         </div>
