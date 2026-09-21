@@ -95,9 +95,10 @@ for normal work.
 - **Keep `develop` ahead of `main`.** New work always lands on `develop` (via a
   category branch); `main` only moves at a release. Never commit directly on
   `main`, and never reset one onto the other.
-- **Advance a category branch to the latest `develop` before starting work** on
-  it, so a new commit never branches from a stale tip and swoops back across the
-  graph.
+- **Strictly unidirectional flow — never merge `develop` back into category branches.**
+  Work always flows one way: `logic|design|docs → develop → main`. Never run `git merge develop`
+  (or pull `develop`) while on a category branch. Category branches only promote forward into
+  `develop`; `develop` is the integration gate, never a backwards source into category branches.
 
 ---
 
@@ -139,6 +140,10 @@ Temporary branches must never become permanent category branches, and are
 
 - **Never create a new branch for ordinary work.** Engineering → `logic`,
   design → `design`, documentation → `docs`; work directly there.
+- **Strictly unidirectional category flow.** Always merge category branches forward
+  into `develop` (`logic|design|docs → develop`), never merge `develop` backwards into a
+  category branch. Do not create reverse sync commits like "chore: sync logic with develop"
+  or "Merge branch 'develop' into logic".
 - Only create a branch when (1) the user explicitly asks, or (2) the work is a
   genuine experiment / prototype / migration / major-refactor where isolation
   has a concrete benefit. Name it for its purpose.
@@ -181,7 +186,7 @@ bypass for maintenance):
 | Hotfix (emergency) | `hotfix/*` → `main` (then back-merge to `develop`) |
 
 Disallowed: anything into `main` other than `develop`/`hotfix/*`; ad-hoc
-`feature/*`/`fix/*` task branches for normal work.
+`feature/*`/`fix/*` task branches for normal work; merging `develop` backwards into category branches.
 
 ---
 
