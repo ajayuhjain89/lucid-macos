@@ -327,7 +327,7 @@ export default function FeaturesPage() {
           Lucid is free and open-source under the MIT license. Download the DMG or clone the repository to build from source.
         </p>
         <div className="flex flex-wrap items-center justify-center gap-4">
-          <Button variant="primary" size="lg" href="/download">
+          <Button variant="primary" size="lg" href="/api/download">
             Download Lucid for macOS
           </Button>
           <Button variant="secondary" size="lg" href="/docs">

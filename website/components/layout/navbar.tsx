@@ -49,8 +49,8 @@ export function Navbar() {
         {/* Actions (Theme toggle + Download button) */}
         <div className="hidden md:flex items-center gap-3">
           <ThemeToggle />
-          <Link
-            href="/download"
+          <a
+            href="/api/download"
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-[7px] bg-text-primary text-background hover:opacity-90 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent shadow-sm"
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -59,7 +59,7 @@ export function Navbar() {
               <line x1="12" y1="15" x2="12" y2="3" />
             </svg>
             <span>Download</span>
-          </Link>
+          </a>
         </div>
 
         {/* Mobile menu button */}
@@ -101,8 +101,8 @@ export function Navbar() {
             </Link>
           ))}
           <div className="pt-2 border-t border-border-subtle">
-            <Link
-              href="/download"
+            <a
+              href="/api/download"
               onClick={() => setMobileMenuOpen(false)}
               className="flex items-center justify-center gap-2 w-full py-2 text-xs font-medium rounded-[7px] bg-text-primary text-background"
             >
@@ -112,7 +112,7 @@ export function Navbar() {
                 <line x1="12" y1="15" x2="12" y2="3" />
               </svg>
               <span>Download Lucid ({currentRelease.version})</span>
-            </Link>
+            </a>
           </div>
         </div>
       )}
