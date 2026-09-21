@@ -42,15 +42,15 @@ export interface ReleaseMetadata {
 
 export const currentRelease: ReleaseMetadata = {
   productName: "Lucid",
-  version: "1.0.1",
+  version: "1.0.2",
   productState: "publicBeta",
   releaseChannel: "beta",
   releaseDate: "2026-09-21",
   
-  // Exact properties from local artifact Lucid-1.0.1.dmg
-  fileName: "Lucid-1.0.1.dmg",
+  // Exact properties from local artifact Lucid-1.0.2.dmg
+  fileName: "Lucid-1.0.2.dmg",
   fileSize: "5.0 MB",
-  sha256: "3e21388d85a42316fc60e6e060c2b7834949755746ed4826528b05b8af0b82a5",
+  sha256: "38b9c3e6b78ab50c3f293b656a8969e493f072e598b8fffb698ae6617386aef0",
   
   // Environment requirements verified from Info.plist (LSMinimumSystemVersion 14.0) and build.sh (arm64-apple-macosx14.0)
   minimumMacOS: "14.0",
@@ -63,10 +63,10 @@ export const currentRelease: ReleaseMetadata = {
   gatekeeperVerified: false,
   
   // URL configurations
-  downloadUrl: "https://github.com/ajayuhjain89/lucid-macos/releases/download/v1.0.1/Lucid-1.0.1.dmg",
+  downloadUrl: "https://github.com/ajayuhjain89/lucid-macos/releases/download/v1.0.2/Lucid-1.0.2.dmg",
   hasPublicDownloadUrl: true,
-  githubReleaseUrl: "https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.1",
-  releaseNotesUrl: "/changelog#1-0-1",
+  githubReleaseUrl: "https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.2",
+  releaseNotesUrl: "/changelog#1-0-2",
   
   // Kept false until official accepted benchmark numbers are measured
   showPerformanceBenchmarks: false,
