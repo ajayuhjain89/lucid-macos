@@ -103,6 +103,249 @@
   if (window.markdownitAbbr) md.use(window.markdownitAbbr);
   if (window.markdownitTaskList) md.use(window.markdownitTaskList, { enabled: true });
 
+  // Render-scoped Math Registry
+  const renderMathRegistries = new Map();
+
+  function getMathRegistry(renderId) {
+    renderId = String(renderId || '0');
+    if (!renderMathRegistries.has(renderId)) {
+      renderMathRegistries.set(renderId, new Map());
+    }
+    return renderMathRegistries.get(renderId);
+  }
+
+  function pruneOldRegistries(currentRenderId) {
+    currentRenderId = String(currentRenderId || '0');
+    for (const key of renderMathRegistries.keys()) {
+      if (key !== currentRenderId) {
+        renderMathRegistries.delete(key);
+      }
+    }
+  }
+
+  function lucidMathPlugin(md) {
+    function mathInline(state, silent) {
+      const start = state.pos;
+      const max = state.posMax;
+      const src = state.src;
+
+      // Check for preceding unescaped backslash
+      if (start > 0 && src.charCodeAt(start - 1) === 0x5C /* \ */) {
+        let backslashCount = 0;
+        let p = start - 1;
+        while (p >= 0 && src.charCodeAt(p) === 0x5C) {
+          backslashCount++;
+          p--;
+        }
+        if (backslashCount % 2 === 1) {
+          return false;
+        }
+      }
+
+      let openDelim = null;
+      let closeDelim = null;
+      let isDisplay = false;
+
+      if (src.charCodeAt(start) === 0x24 /* $ */) {
+        if (start + 1 < max && src.charCodeAt(start + 1) === 0x24) {
+          openDelim = '$$';
+          closeDelim = '$$';
+          isDisplay = true;
+        } else {
+          openDelim = '$';
+          closeDelim = '$';
+          isDisplay = false;
+        }
+      } else if (src.charCodeAt(start) === 0x5C /* \ */ && start + 1 < max) {
+        const nextChar = src.charCodeAt(start + 1);
+        if (nextChar === 0x28 /* ( */) {
+          openDelim = '\\(';
+          closeDelim = '\\)';
+          isDisplay = false;
+        } else if (nextChar === 0x5B /* [ */) {
+          openDelim = '\\[';
+          closeDelim = '\\]';
+          isDisplay = true;
+        }
+      }
+
+      if (!openDelim) return false;
+
+      // Currency / whitespace check for single $
+      if (openDelim === '$') {
+        // Opening $ must not be followed by whitespace
+        if (start + 1 >= max || /\s/.test(src.charAt(start + 1))) return false;
+      }
+
+      const contentStart = start + openDelim.length;
+      let matchEnd = -1;
+      let pos = contentStart;
+
+      while (pos < max) {
+        if (src.startsWith(closeDelim, pos)) {
+          let backslashCount = 0;
+          let p = pos - 1;
+          while (p >= contentStart && src.charCodeAt(p) === 0x5C) {
+            backslashCount++;
+            p--;
+          }
+          if (backslashCount % 2 === 0) {
+            if (closeDelim === '$') {
+              // Closing $ must not be preceded by whitespace
+              if (/\s/.test(src.charAt(pos - 1))) {
+                pos++;
+                continue;
+              }
+              // Closing $ must not be followed immediately by a digit (e.g. $10 and $20)
+              if (pos + 1 < max && /\d/.test(src.charAt(pos + 1))) {
+                pos++;
+                continue;
+              }
+            }
+            matchEnd = pos;
+            break;
+          }
+        }
+        // Single $ inline math cannot cross line breaks
+        if (openDelim === '$' && src.charCodeAt(pos) === 0x0A /* \n */) {
+          break;
+        }
+        pos++;
+      }
+
+      if (matchEnd === -1) return false;
+
+      if (!silent) {
+        const content = src.slice(contentStart, matchEnd);
+        const token = state.push(isDisplay ? 'math_display_inline' : 'math_inline', 'math', 0);
+        token.content = content;
+        token.markup = openDelim;
+      }
+
+      state.pos = matchEnd + closeDelim.length;
+      return true;
+    }
+
+    function mathBlock(state, startLine, endLine, silent) {
+      let start = state.bMarks[startLine] + state.tShift[startLine];
+      let max = state.eMarks[startLine];
+      const src = state.src;
+
+      let openDelim = null;
+      let closeDelim = null;
+
+      if (src.startsWith('$$', start)) {
+        openDelim = '$$';
+        closeDelim = '$$';
+      } else if (src.startsWith('\\[', start)) {
+        openDelim = '\\[';
+        closeDelim = '\\]';
+      }
+
+      if (!openDelim) return false;
+
+      let pos = start + openDelim.length;
+      let haveEnd = false;
+      let nextLine = startLine;
+      let content = '';
+
+      // Check if closing delimiter is on the same line
+      let closePos = src.indexOf(closeDelim, pos);
+      if (closePos !== -1 && closePos < max) {
+        haveEnd = true;
+        content = src.slice(pos, closePos);
+      } else {
+        const contentLines = [];
+        const firstLineRest = src.slice(pos, max);
+        if (firstLineRest.trim().length > 0) {
+          contentLines.push(firstLineRest);
+        }
+
+        while (nextLine < endLine) {
+          nextLine++;
+          if (nextLine >= endLine) break;
+
+          const lStart = state.bMarks[nextLine] + state.tShift[nextLine];
+          const lMax = state.eMarks[nextLine];
+          const lineStr = src.slice(lStart, lMax);
+
+          if (lineStr.startsWith(closeDelim)) {
+            haveEnd = true;
+            break;
+          }
+
+          // Conservative recovery: if another opening delimiter appears without closing this one,
+          // then this construct was unclosed — abort so we do not greedily consume across independent blocks
+          if (lineStr.startsWith('\\[') || lineStr.startsWith('$$')) {
+            return false;
+          }
+
+          contentLines.push(src.slice(state.bMarks[nextLine], lMax));
+        }
+
+        if (haveEnd) {
+          content = contentLines.join('\n');
+        }
+      }
+
+      if (!haveEnd) return false;
+      if (silent) return true;
+
+      state.line = nextLine + 1;
+      const token = state.push('math_block', 'math', 0);
+      token.block = true;
+      token.content = content.trim();
+      token.markup = openDelim;
+      return true;
+    }
+
+    md.inline.ruler.before('escape', 'lucid_math_inline', mathInline);
+    md.block.ruler.before('fence', 'lucid_math_block', mathBlock, {
+      alt: ['paragraph', 'reference', 'blockquote', 'list']
+    });
+
+    md.renderer.rules.math_inline = function(tokens, idx, options, env) {
+      const content = tokens[idx].content;
+      const renderId = env && env.renderId ? String(env.renderId) : currentRenderRevision;
+      const registry = getMathRegistry(renderId);
+      const mathId = registry.size + 1;
+      registry.set(mathId, { tex: content, displayMode: false, isBlock: false });
+
+      if (env && env.isDeferredMath) {
+        return '<span class="lucid-math-placeholder lucid-math-inline" data-math-id="' + mathId + '" data-render-id="' + renderId + '"><span class="lucid-math-raw">' + md.utils.escapeHtml(content) + '</span></span>';
+      }
+      return renderKaTeXInline(content, tokens[idx].markup, mathId, renderId);
+    };
+
+    md.renderer.rules.math_display_inline = function(tokens, idx, options, env) {
+      const content = tokens[idx].content;
+      const renderId = env && env.renderId ? String(env.renderId) : currentRenderRevision;
+      const registry = getMathRegistry(renderId);
+      const mathId = registry.size + 1;
+      registry.set(mathId, { tex: content, displayMode: true, isBlock: false });
+
+      if (env && env.isDeferredMath) {
+        return '<span class="lucid-math-placeholder lucid-math-display lucid-math-display-inline" data-math-id="' + mathId + '" data-render-id="' + renderId + '"><span class="lucid-math-raw">' + md.utils.escapeHtml(content) + '</span></span>';
+      }
+      return renderKaTeXDisplayInline(content, tokens[idx].markup, mathId, renderId);
+    };
+
+    md.renderer.rules.math_block = function(tokens, idx, options, env) {
+      const content = tokens[idx].content;
+      const renderId = env && env.renderId ? String(env.renderId) : currentRenderRevision;
+      const registry = getMathRegistry(renderId);
+      const mathId = registry.size + 1;
+      registry.set(mathId, { tex: content, displayMode: true, isBlock: true });
+
+      if (env && env.isDeferredMath) {
+        return '<div class="lucid-math-placeholder lucid-math-display" data-math-id="' + mathId + '" data-render-id="' + renderId + '"><div class="lucid-math-raw">' + md.utils.escapeHtml(content) + '</div></div>\n';
+      }
+      return renderKaTeXBlock(content, mathId, renderId) + '\n';
+    };
+  }
+
+  md.use(lucidMathPlugin);
+
   function slugify(text) {
     return text.toLowerCase().trim()
       .replace(/[^\w\s-]/g, '')
@@ -192,34 +435,48 @@
     }
   }
 
-  function countMathExpressions(text) {
-    if (!text || typeof katex === 'undefined' || text.indexOf('$') === -1) return 0;
-    const codeRegex = /(```[\s\S]*?```|~~~[\s\S]*?~~~|`+[^`\n]+?`+)/g;
-    const stripped = text.replace(codeRegex, '');
-    const dispMatches = stripped.match(/\$\$[\s\S]+?\$\$/g);
-    const inlineMatches = stripped.match(/(^|[^\\])\$[^\$\n]+?\$/g);
-    return (dispMatches ? dispMatches.length : 0) + (inlineMatches ? inlineMatches.length : 0);
-  }
-
-  function renderKaTeXBlock(trimmed) {
+  function renderKaTeXBlock(trimmed, mathId, renderId) {
     const cacheKey = 'disp:' + trimmed;
     const cached = katexLRU.get(cacheKey);
-    if (cached) return cached;
+    const mathAttr = (mathId ? ' data-math-id="' + mathId + '"' : '') +
+                     (renderId ? ' data-render-id="' + renderId + '"' : '');
+    if (cached) {
+      return cached.replace(/^<div class="lucid-math-block"/, '<div class="lucid-math-block"' + mathAttr);
+    }
     try {
       const rendered = katex.renderToString(trimmed, { displayMode: true, throwOnError: false });
-      const escapedRaw = encodeURIComponent(trimmed);
-      const res = '<div class="lucid-math-block" data-raw-latex="' + escapedRaw + '">' +
+      const res = '<div class="lucid-math-block"' + mathAttr + '>' +
              rendered +
              '<button class="lucid-btn-copy-latex" onclick="window.lucid.copyLatex(this)">Copy LaTeX</button>' +
              '</div>';
-      katexLRU.set(cacheKey, res);
+      katexLRU.set(cacheKey, '<div class="lucid-math-block">' + rendered + '<button class="lucid-btn-copy-latex" onclick="window.lucid.copyLatex(this)">Copy LaTeX</button></div>');
       return res;
     } catch (e) {
       return '<div class="lucid-math-error"><span class="lucid-error-msg">Formula render warning: ' + md.utils.escapeHtml(e.message || 'Syntax error') + '</span><pre>' + md.utils.escapeHtml(trimmed) + '</pre></div>';
     }
   }
 
-  function renderKaTeXInline(trimmed) {
+  function renderKaTeXDisplayInline(trimmed, originalMarkup, mathId, renderId) {
+    const cacheKey = 'disp_inline:' + trimmed;
+    const cached = katexLRU.get(cacheKey);
+    const mathAttr = (mathId ? ' data-math-id="' + mathId + '"' : '') +
+                     (renderId ? ' data-render-id="' + renderId + '"' : '');
+    if (cached) {
+      return cached.replace(/^<span class="lucid-math-inline lucid-math-display-inline"/, '<span class="lucid-math-inline lucid-math-display-inline"' + mathAttr);
+    }
+    try {
+      const rendered = katex.renderToString(trimmed, { displayMode: true, throwOnError: false });
+      const res = '<span class="lucid-math-inline lucid-math-display-inline"' + mathAttr + '>' + rendered + '</span>';
+      katexLRU.set(cacheKey, '<span class="lucid-math-inline lucid-math-display-inline">' + rendered + '</span>');
+      return res;
+    } catch (e) {
+      const open = originalMarkup || '\\[';
+      const close = (open === '\\[' ? '\\]' : '$$');
+      return '<span class="lucid-math-error" title="' + md.utils.escapeHtml(e.message || 'Syntax error') + '">' + md.utils.escapeHtml(open + trimmed + close) + '</span>';
+    }
+  }
+
+  function renderKaTeXInline(trimmed, originalMarkup, mathId, renderId) {
     const cacheKey = 'inline:' + trimmed;
     const cached = katexLRU.get(cacheKey);
     if (cached) return cached;
@@ -228,70 +485,50 @@
       katexLRU.set(cacheKey, rendered);
       return rendered;
     } catch (e) {
-      return '$' + md.utils.escapeHtml(trimmed) + '$';
+      const open = originalMarkup || '$';
+      const close = (open === '\\(' ? '\\)' : '$');
+      return '<span class="lucid-math-error" title="' + md.utils.escapeHtml(e.message || 'Syntax error') + '">' + md.utils.escapeHtml(open + trimmed + close) + '</span>';
     }
   }
 
   function enhancePlaceholder(ph) {
     if (!ph || !ph.parentNode) return;
+    const isBlock = ph.tagName === 'DIV' || ph.classList.contains('lucid-math-block');
     const isDisplay = ph.classList.contains('lucid-math-display');
+    const isDisplayInline = ph.classList.contains('lucid-math-display-inline');
+    const mathId = parseInt(ph.getAttribute('data-math-id') || (ph.dataset && ph.dataset.mathId) || '0', 10);
+    const renderId = ph.getAttribute('data-render-id') || (ph.dataset && ph.dataset.renderId) || currentRenderRevision;
+
     let rawLatex = '';
-    try {
+    const registry = renderMathRegistries.get(String(renderId));
+    if (registry && registry.has(mathId)) {
+      const entry = registry.get(mathId);
+      rawLatex = entry.tex;
+    } else {
       const attr = ph.getAttribute('data-raw-latex') || (ph.dataset && ph.dataset.rawLatex) || '';
       if (attr) {
-        try {
-          rawLatex = decodeURIComponent(attr);
-        } catch (_) {
-          rawLatex = attr;
-        }
+        try { rawLatex = decodeURIComponent(attr); } catch (_) { rawLatex = attr; }
       }
-      if (rawLatex) {
-        if (isDisplay) {
-          ph.outerHTML = renderKaTeXBlock(rawLatex);
-        } else {
-          ph.outerHTML = renderKaTeXInline(rawLatex);
-        }
-      } else {
-        ph.remove();
-      }
-    } catch (e) {
-      console.warn('KaTeX placeholder enhance error:', e);
-      try { ph.remove(); } catch (_) {}
     }
-  }
 
-  function parseKaTeX(text, isDeferred) {
-    if (typeof katex === 'undefined' || text.indexOf('$') === -1) return text;
-
-    const codeBlocks = [];
-    const codeRegex = /(```[\s\S]*?```|~~~[\s\S]*?~~~|`+[^`\n]+?`+)/g;
-    text = text.replace(codeRegex, function(match) {
-      codeBlocks.push(match);
-      return '@@LUCID_CODE_' + (codeBlocks.length - 1) + '@@';
-    });
-
-    text = text.replace(/\$\$([\s\S]+?)\$\$/g, function(match, math) {
-      const trimmed = math.trim();
-      if (isDeferred) {
-        const escapedRaw = encodeURIComponent(trimmed);
-        return '<div class="lucid-math-placeholder lucid-math-display" data-raw-latex="' + escapedRaw + '"><div class="lucid-math-raw">' + md.utils.escapeHtml(trimmed) + '</div></div>';
+    if (rawLatex) {
+      try {
+        if (isBlock) {
+          ph.outerHTML = renderKaTeXBlock(rawLatex, mathId, renderId);
+        } else if (isDisplayInline) {
+          ph.outerHTML = renderKaTeXDisplayInline(rawLatex, '$$', mathId, renderId);
+        } else if (isDisplay) {
+          ph.outerHTML = renderKaTeXBlock(rawLatex, mathId, renderId);
+        } else {
+          ph.outerHTML = renderKaTeXInline(rawLatex, '$', mathId, renderId);
+        }
+      } catch (e) {
+        console.warn('KaTeX placeholder enhance error:', e);
+        try { ph.remove(); } catch (_) {}
       }
-      return renderKaTeXBlock(trimmed);
-    });
-    text = text.replace(/(^|[^\\])\$([^\$\n]+?)\$/g, function(match, prefix, math) {
-      const trimmed = math.trim();
-      if (isDeferred) {
-        const escapedRaw = encodeURIComponent(trimmed);
-        return prefix + '<span class="lucid-math-placeholder lucid-math-inline" data-raw-latex="' + escapedRaw + '"><span class="lucid-math-raw">' + md.utils.escapeHtml(trimmed) + '</span></span>';
-      }
-      return prefix + renderKaTeXInline(trimmed);
-    });
-
-    text = text.replace(/@@LUCID_CODE_(\d+)@@/g, function(match, idx) {
-      return codeBlocks[parseInt(idx, 10)];
-    });
-
-    return text;
+    } else {
+      ph.remove();
+    }
   }
 
   function getRepresentativeFontSize(svg) {
@@ -571,19 +808,31 @@
     updateContent: function(rawMarkdown, renderId) {
       renderId = String(renderId || '0');
       currentRenderRevision = renderId;
+      pruneOldRegistries(renderId);
       LucidPerf.mark(renderId, 't4_js_received', { length: rawMarkdown ? rawMarkdown.length : 0 });
       const container = document.getElementById('lucid-content');
       if (!container) return;
 
-      LucidPerf.mark(renderId, 't5_katex_pre_begin');
-      const mathCount = countMathExpressions(rawMarkdown);
-      const isDeferredMath = (mathCount > 30);
-      const preprocessed = parseKaTeX(rawMarkdown, isDeferredMath);
-      LucidPerf.mark(renderId, 't5_katex_pre_end', { count: mathCount, deferred: isDeferredMath });
-
       LucidPerf.mark(renderId, 't6_md_render_begin');
-      let html = md.render(preprocessed);
-      LucidPerf.mark(renderId, 't6_md_render_end');
+      const env = { renderId: renderId, isDeferredMath: false };
+      const tokens = md.parse(rawMarkdown || '', env);
+
+      let mathCount = 0;
+      for (let i = 0; i < tokens.length; i++) {
+        const t = tokens[i];
+        if (t.type === 'math_block') mathCount++;
+        else if (t.type === 'inline' && t.children) {
+          for (let j = 0; j < t.children.length; j++) {
+            const c = t.children[j];
+            if (c.type === 'math_inline' || c.type === 'math_display_inline') mathCount++;
+          }
+        }
+      }
+      const isDeferredMath = (mathCount > 30);
+      env.isDeferredMath = isDeferredMath;
+
+      let html = md.renderer.render(tokens, md.options, env);
+      LucidPerf.mark(renderId, 't6_md_render_end', { count: mathCount, deferred: isDeferredMath });
 
       LucidPerf.mark(renderId, 't7_alerts_begin');
       html = parseAlerts(html);
@@ -1301,8 +1550,17 @@
 
     copyLatex: function(btn) {
       const container = btn.closest('.lucid-math-block');
-      if (container && container.dataset.rawLatex) {
-        const latex = decodeURIComponent(container.dataset.rawLatex);
+      if (!container) return;
+      let latex = '';
+      const mathId = parseInt(container.getAttribute('data-math-id') || (container.dataset && container.dataset.mathId) || '0', 10);
+      const renderId = container.getAttribute('data-render-id') || (container.dataset && container.dataset.renderId) || currentRenderRevision;
+      const registry = renderMathRegistries.get(String(renderId));
+      if (registry && registry.has(mathId)) {
+        latex = registry.get(mathId).tex;
+      } else if (container.dataset && container.dataset.rawLatex) {
+        latex = decodeURIComponent(container.dataset.rawLatex);
+      }
+      if (latex) {
         navigator.clipboard.writeText(latex).then(function() {
           const original = btn.innerText;
           btn.innerText = 'Copied!';
@@ -1458,11 +1716,25 @@
       return document.documentElement.outerHTML;
     },
 
+    getCurrentRevision: function() {
+      return currentRenderRevision;
+    },
+
     computeSmartDiagramLayout: computeSmartDiagramLayout,
     getRepresentativeFontSize: getRepresentativeFontSize
   };
 
+  function isRenderingStackReady() {
+    return typeof window.markdownit !== 'undefined' &&
+           typeof window.katex !== 'undefined' &&
+           typeof window.hljs !== 'undefined';
+  }
+
   function notifyBridgeReady() {
+    if (!isRenderingStackReady()) {
+      setTimeout(notifyBridgeReady, 10);
+      return;
+    }
     ensureMermaidInitialized();
     if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.lucidReady) {
       window.webkit.messageHandlers.lucidReady.postMessage({ status: 'ready' });
