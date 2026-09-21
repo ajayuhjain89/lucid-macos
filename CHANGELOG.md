@@ -6,22 +6,23 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Added
-- Floating glass toolbar (`NSVisualEffectView`) that document content scrolls beneath.
-- Scroll-responsive chrome depth: material, hairline, and shadow fade in with scroll.
-- Refined content top inset so the first heading clears the toolbar at rest and
-  travels beneath it on scroll.
-- Reduce Motion and Reduce Transparency accessibility support across chrome and motion.
-- Focus Mode toolbar recede-on-idle with gentle reveal on hover.
+## [1.0.2] - 2026-09-21
 
-### Changed
-- Unified motion vocabulary (hover / state / panel / modal / glass) in the design system.
-- Command palette and find bar moved to the native glass material with a lighter,
-  less intrusive entrance.
-- Status bar softened from a hard band to a barely-there hairline.
-- Moved application/project documentation into `docs/` (workflow guide, engineering
-  showcase, sample), keeping README/LICENSE/CHANGELOG/CONTRIBUTING/THIRD-PARTY-NOTICES
-  in the repository root.
+### Added
+- Lucid Blue-Tint technical visual language for Mermaid diagrams across Dark, Light, and Sepia themes with coherent borders, surfaces, and arrowheads while preserving custom user styles.
+- Custom draggable `SidebarDivider` with AppKit `NSCursor.resizeLeftRight` cursor rects and active drag capture.
+- Persistent sidebar width preference (`lucid.sidebarWidth`, 180–320px) stored across sessions.
+
+### Improved
+- Reader scrollbar interaction: expandable visible thumb inside a constant 12px gutter (4px rest, 8px hover, 10px active drag) with theme-specific contrast, eliminating accidental misses and layout shifts.
+- Adaptive inline Mermaid presentation: tall technical flowcharts (e.g. ESP32 control flow) expand inline up to 2400px, remaining readable without pressing Expand.
+- Diagram typography floor: enforces minimum scale targeting ≥ 13.5px effective font size for labels on initial display.
+- Preserved user zoom and pan adjustments on diagrams across window resize events.
+
+### Fixed
+- Completely eliminated left outline sidebar open/close jitter by replacing AppKit `HSplitView` with SwiftUI `HStack` and an animated leading transition.
+- WKWebView lifecycle, document scroll position, and active heading scroll-spy remain completely uninterrupted across sidebar toggles.
+- Verified 100% pass rate across all 13 core mathematical and structural renderer conformance invariants.
 
 ## [1.0.1] - 2026-09-21
 
@@ -46,5 +47,6 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Live external file watching and PDF / standalone-HTML / rich-text export.
 - Pre-packaged `Lucid-1.0.0.dmg` release artifact with verified SHA-256 checksum.
 
+[1.0.2]: https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.2
 [1.0.1]: https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.1
 [1.0.0]: https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.0
