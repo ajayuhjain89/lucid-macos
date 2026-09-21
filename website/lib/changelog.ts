@@ -17,6 +17,54 @@ export interface ReleaseEntry {
 
 export const changelogData: ReleaseEntry[] = [
   {
+    version: "1.0.1",
+    date: "September 21, 2026",
+    channel: "Beta",
+    summary: "Patch release delivering smart adaptive Mermaid diagram fitting, smooth 1:1 diagram panning with visible grab/grabbing feedback, and stable Reader outline sidebar toggling without blank flashes.",
+    highlights: [
+      "Smart adaptive initial Mermaid layout: normal and medium diagrams display completely on first render when readable",
+      "Mermaid Hand/Pan interaction: visible grab/grabbing cursor feedback, Pointer Events, and smooth 1:1 panning",
+      "Sidebar stability: opening/closing the left outline sidebar preserves WKWebView identity with zero blank flash",
+      "Huge diagrams retain readable typography with pan navigation, while Fit provides full-diagram overview and Reset restores smart initial view",
+    ],
+    sections: [
+      {
+        title: "Mermaid Improvements",
+        items: [
+          {
+            type: "improved",
+            text: "Smart adaptive initial diagram fitting: normal and medium diagrams now fit completely within the available viewing area on first render when doing so preserves readable typography (targeting ≥ 13.5px effective size).",
+          },
+          {
+            type: "improved",
+            text: "Dynamic bounded viewport height: diagram viewing area dynamically adapts up to min(840px, 80vh), eliminating vertical cropping of tall/normal diagrams while keeping huge diagrams comfortably bounded.",
+          },
+          {
+            type: "improved",
+            text: "Smooth Hand/Pan tool: visible grab cursor on hover, grabbing cursor during drag, Pointer Events with pointer capture, stable drag origin, and requestAnimationFrame transform coalescing.",
+          },
+          {
+            type: "improved",
+            text: "Small diagrams remain at natural 1.0x scale without blurry upscaling, while Reset reliably restores the exact smart initial view.",
+          },
+        ],
+      },
+      {
+        title: "Reader Fixes",
+        items: [
+          {
+            type: "fixed",
+            text: "Fixed brief Reader content flash when opening/closing the outline sidebar by preserving the permanent AppKit HSplitView and WKWebView lifecycle.",
+          },
+          {
+            type: "fixed",
+            text: "Document scroll position, active heading spy, and Mermaid diagram transform states remain completely intact across sidebar toggles.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.0.0",
     date: "September 20, 2026",
     channel: "Beta",
