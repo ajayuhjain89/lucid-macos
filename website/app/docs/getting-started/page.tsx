@@ -44,12 +44,12 @@ export default function GettingStartedPage() {
             <div className="space-y-2">
               <h3 className="font-semibold text-text-primary text-base">Step 1: Download Lucid</h3>
               <p>
-                Click the <strong className="text-text-primary">Download Lucid</strong> button on the website. The disk image (<code className="font-mono text-xs px-1.5 py-0.5 rounded bg-surface-elevated text-accent">Lucid-1.0.2.dmg</code>) begins downloading directly to your Mac.
+                Click the <strong className="text-text-primary">Download Lucid</strong> button on the website. The disk image (<code className="font-mono text-xs px-1.5 py-0.5 rounded bg-surface-elevated text-accent">Lucid-1.0.3.dmg</code>) begins downloading directly to your Mac.
               </p>
               <p className="text-xs text-text-tertiary">
                 Optional fallback: You can also inspect the release notes or browse the verified DMG artifact directly on{" "}
                 <a
-                  href="https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.2"
+                  href="https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.3"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="underline hover:text-text-secondary"
@@ -62,7 +62,7 @@ export default function GettingStartedPage() {
             <div className="space-y-2">
               <h3 className="font-semibold text-text-primary text-base">Step 2: Open the Disk Image</h3>
               <p>
-                Once downloaded, double-click <strong className="text-text-primary">Lucid-1.0.2.dmg</strong> in your Downloads folder to mount the disk image.
+                Once downloaded, double-click <strong className="text-text-primary">Lucid-1.0.3.dmg</strong> in your Downloads folder to mount the disk image.
               </p>
             </div>
 
@@ -270,6 +270,69 @@ export default function GettingStartedPage() {
               <p className="text-xs text-text-secondary">
                 Hover over any Mermaid diagram card and click the SVG button to export crisp vector diagrams.
               </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Step 6: Updating Lucid */}
+      <section id="updates" className="space-y-6">
+        <div className="flex items-center gap-3">
+          <span className="w-8 h-8 rounded-full bg-accent-soft text-accent font-mono text-sm font-bold flex items-center justify-center shrink-0">
+            6
+          </span>
+          <h2 className="text-2xl font-semibold tracking-tight text-text-primary">
+            Updating Lucid &amp; Migration
+          </h2>
+        </div>
+
+        <div className="pl-11 space-y-6 text-sm text-text-secondary leading-relaxed">
+          {/* Migration Callout */}
+          <div className="p-4 rounded-window border border-amber-500/30 bg-amber-500/5 space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-mono uppercase tracking-wider px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-500 font-semibold">
+                One-Time Migration Note
+              </span>
+            </div>
+            <p className="text-xs text-text-secondary leading-relaxed">
+              Lucid v1.0.0, v1.0.1, and v1.0.2 do not contain an in-app updater and cannot update automatically. If you are running an earlier version, you must download and install <strong className="text-text-primary">Lucid v1.0.3</strong> manually once. Starting with v1.0.3, all future releases update seamlessly inside the app.
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            <h3 className="font-semibold text-text-primary text-base">In-App Update Features</h3>
+            <p>
+              Lucid includes native, secure in-app updates powered by Sparkle 2. Updates are delivered over HTTPS and cryptographically verified using EdDSA (Ed25519) signatures before installation.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="p-4 rounded-window border border-border-subtle bg-surface space-y-2">
+                <h4 className="font-semibold text-text-primary text-sm">Manual Update Check</h4>
+                <p className="text-xs text-text-secondary">
+                  Choose <strong className="text-text-primary">Lucid → Check for Updates…</strong> from the menu bar at any time to query the update feed immediately.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-window border border-border-subtle bg-surface space-y-2">
+                <h4 className="font-semibold text-text-primary text-sm">Update Preferences</h4>
+                <p className="text-xs text-text-secondary">
+                  Open <strong className="text-text-primary">Settings → Updates</strong> (<kbd className="font-mono text-xs">⌘,</kbd>) to toggle automatic background checks (daily) and automatic downloading / install-on-quit.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-window border border-border-subtle bg-surface space-y-2">
+                <h4 className="font-semibold text-text-primary text-sm">Cryptographic Verification</h4>
+                <p className="text-xs text-text-secondary">
+                  Every release archive is signed with an EdDSA private key. The app checks signatures against a pinned public key and fails closed if signatures are absent or mismatched.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-window border border-border-subtle bg-surface space-y-2">
+                <h4 className="font-semibold text-text-primary text-sm">Install Location Guard</h4>
+                <p className="text-xs text-text-secondary">
+                  If you run Lucid directly from a mounted disk image (<code className="font-mono text-xs">.dmg</code>), the updater notifies you to move Lucid to <code className="font-mono text-xs">/Applications</code> first.
+                </p>
+              </div>
             </div>
           </div>
         </div>

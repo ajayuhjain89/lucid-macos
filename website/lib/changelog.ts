@@ -17,6 +17,51 @@ export interface ReleaseEntry {
 
 export const changelogData: ReleaseEntry[] = [
   {
+    version: "1.0.3",
+    date: "September 21, 2026",
+    channel: "Beta",
+    summary: "First updater-bearing release introducing native Sparkle 2 in-app update checking, EdDSA cryptographic archive verification, and dedicated update preferences in Settings.",
+    highlights: [
+      "Built-in in-app updates: check for updates directly from the Lucid application menu or Settings",
+      "Cryptographic EdDSA verification: all update packages are cryptographically signed and authenticated before installation",
+      "User-controlled update preferences: configure automatic background checks and automatic downloading in Settings → Updates",
+      "One-time manual migration: v1.0.2 and earlier must install v1.0.3 manually once; once verified, subsequent releases can update in-app",
+      "Production HTTPS feed: securely hosted on Vercel with strict staged-vs-published gating to eliminate broken download links",
+    ],
+    sections: [
+      {
+        title: "In-App Updates",
+        items: [
+          {
+            type: "new",
+            text: "Native Check for Updates… command added to the Lucid application menu.",
+          },
+          {
+            type: "new",
+            text: "Dedicated Updates tab in Settings (⌘,) with current version display, last checked timestamp, and automatic check/download toggles.",
+          },
+          {
+            type: "new",
+            text: "Sparkle 2 integration with EdDSA archive signing and HTTPS feed delivery.",
+          },
+          {
+            type: "improved",
+            text: "Disk image detection displays a quiet notification if Lucid is launched from a read-only DMG volume, prompting to move to Applications.",
+          },
+        ],
+      },
+      {
+        title: "Migration Notice",
+        items: [
+          {
+            type: "improved",
+            text: "Lucid 1.0.3 is the first release containing updater infrastructure. Users on 1.0.2 or earlier must manually install 1.0.3 once; subsequent releases will be delivered through the built-in updater once verified.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.0.2",
     date: "September 21, 2026",
     channel: "Beta",
