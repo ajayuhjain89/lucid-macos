@@ -23,7 +23,7 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   showcase, sample), keeping README/LICENSE/CHANGELOG/CONTRIBUTING/THIRD-PARTY-NOTICES
   in the repository root.
 
-## [1.0.0] - 2026-03-20
+## [1.0.0] - 2026-09-20
 
 ### Added
 - Initial **v1.0.0 Public Beta** release for macOS 14 Sonoma (Apple Silicon arm64).
