@@ -224,8 +224,10 @@ git pull --ff-only origin develop
 - **Never** commit directly on `main`.
 - **Never** force-push `main`.
 - **Never** rewrite `main`.
-- Only verified `develop` promotes to `main`, via a `develop → main` PR (or a
-  genuine `hotfix/*` in an emergency).
+- Only verified `develop` promotes to `main`, via a `develop → main` PR.
+  **`develop` is the only branch that may merge into `main` — no exceptions.**
+  There is no direct `hotfix/* → main` path: even an urgent fix goes through a
+  category branch, then `develop`, then `main` (see §9).
 
 `main` moves only at a release. Every other permanent branch will therefore be
 behind `main` most of the time — which is, again, normal.
@@ -264,10 +266,16 @@ experiment/textkit2-renderer
 prototype/multi-document
 migration/swift-6
 refactor/document-state-model
-hotfix/preview-crash        # only for a genuine, urgent production issue
+hotfix/preview-crash        # a genuine, urgent production fix — still folds
+                           # into a category branch, NEVER straight to main
 ```
 
 Never: `test`, `temp`, `new`, `branch1`, `feature123`, `ayush-work`.
+
+> **Emergencies use the same forward path.** A `hotfix/*` branch (or a direct
+> commit on the appropriate category branch) folds into `logic | design | docs`,
+> then promotes `→ develop → main`. There is **no** direct `hotfix/* → main`
+> shortcut — `develop` is the only branch that merges into `main`.
 
 ### Rules
 
@@ -408,9 +416,8 @@ add the `workflow:override` label to bypass for a reviewed maintenance merge):
 | PR type | Source → Target |
 | :------ | :-------------- |
 | Integration | `logic` → `develop`, `design` → `develop`, `docs` → `develop` |
-| Release | `develop` → `main` |
-| Temporary intake | `experiment/*` \| `prototype/*` \| `migration/*` \| `refactor/*` → `logic` \| `design` \| `docs` |
-| Hotfix (emergency) | `hotfix/*` → `main` |
+| Release | `develop` → `main` — **the only path into `main`** |
+| Temporary intake (incl. hotfixes) | `experiment/*` \| `prototype/*` \| `migration/*` \| `refactor/*` \| `hotfix/*` → `logic` \| `design` \| `docs` |
 
 **Explicitly forbidden** (never open these):
 
@@ -419,6 +426,7 @@ develop → logic     develop → design     develop → docs
 main    → logic     main    → design     main    → docs
 main    → develop   (as ordinary synchronization)
 logic   → main      design  → main       docs    → main
+hotfix/* → main     (no direct path to main — route through a category branch)
 logic   → docs      logic   → design     docs    → logic
 docs    → design    design  → logic      design  → docs
 ```
