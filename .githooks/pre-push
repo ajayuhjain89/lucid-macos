@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+#
+# Lucid pre-push guard — Layer 2 of the branch-flow protection model.
+#
+# Blocks any push that would introduce develop/main (integration) ancestry into
+# a permanent category branch (logic/design/docs). Category branches are
+# intentionally allowed to remain BEHIND develop/main; they must only ever move
+# FORWARD toward develop. See docs/github_workflow.md.
+#
+# Git invokes this hook with the remote name and URL as $1/$2 and feeds one
+# line per ref on stdin:
+#
+#     <local ref> <local sha> <remote ref> <remote sha>
+#
+# For a push to refs/heads/{logic,design,docs} we run the shared validator in
+# --transition mode with --old <remote sha> --new <local sha>.
+#
+# Install with:  bash scripts/install-git-guards.sh
+#
+set -u
+
+# Locate the repository root and the validator relative to it (the hook may be
+# invoked from any subdirectory).
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || printf '.')"
+VALIDATOR="$REPO_ROOT/scripts/validate-branch-ancestry.sh"
+
+if [ ! -f "$VALIDATOR" ]; then
+  echo "pre-push: cannot find $VALIDATOR — skipping branch-flow guard." >&2
+  exit 0
+fi
+
+ZERO='0000000000000000000000000000000000000000'
+STATUS=0
+
+# Read the ref updates Git provides on stdin.
+while read -r LOCAL_REF LOCAL_SHA REMOTE_REF REMOTE_SHA; do
+  # Skip branch deletions (local sha all zeroes).
+  if [ "$LOCAL_SHA" = "$ZERO" ]; then
+    continue
+  fi
+
+  case "$REMOTE_REF" in
+    refs/heads/logic)  BR=logic  ;;
+    refs/heads/design) BR=design ;;
+    refs/heads/docs)   BR=docs   ;;
+    *) continue ;;   # develop/main/temp refs are governed by PR + protections.
+  esac
+
+  echo "pre-push: validating $BR transition ($(git rev-parse --short "$REMOTE_SHA" 2>/dev/null || echo new) -> $(git rev-parse --short "$LOCAL_SHA"))" >&2
+  if ! bash "$VALIDATOR" --transition --branch "$BR" --old "$REMOTE_SHA" --new "$LOCAL_SHA"; then
+    STATUS=1
+  fi
+done
+
+if [ "$STATUS" != "0" ]; then
+  echo "" >&2
+  echo "pre-push: BLOCKED. This push would introduce integration ancestry into a" >&2
+  echo "          permanent category branch. Category branches only move forward:" >&2
+  echo "              logic|design|docs -> develop -> main" >&2
+  echo "          Do not merge develop/main back into a category branch." >&2
+  echo "          (Override only for a deliberate, reviewed exception with" >&2
+  echo "           'git push --no-verify' — never for routine synchronisation.)" >&2
+  exit 1
+fi
+
+exit 0

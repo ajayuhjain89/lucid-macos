@@ -1,13 +1,26 @@
 name: Branch Flow Policy
 
-# Validates that every pull request uses an allowed source -> target direction,
-# per docs/github_workflow.md §7. The workflow is direct-to-category, so most work
-# needs no PR at all; this only guards the PRs that are opened. Maintainers can
-# bypass by adding the "workflow:override" label (e.g. for maintenance merges).
+# Server-side enforcement of Lucid's permanent branch-flow rules (Layer 3 of the
+# protection model in docs/github_workflow.md). Every pull request must use an
+# allowed source -> target direction AND must not carry backward integration
+# ancestry (develop/main content merged back into a category branch).
+#
+# The heavy lifting is done by the shared, unit-tested validator
+# scripts/validate-branch-ancestry.sh, so the exact same logic runs here, in the
+# local pre-push hook, and in the regression suite.
+#
+# The primary trigger is `pull_request`. We deliberately do NOT rely on category
+# `push` workflows for enforcement, because permanent category branches are
+# intentionally kept behind and may not carry the latest workflow version.
+# `workflow_dispatch` is offered for a manual ancestry audit.
+#
+# Maintainers can bypass the PR check by adding the "workflow:override" label
+# (e.g. for a deliberate, reviewed maintenance merge).
 
 on:
   pull_request:
     types: [opened, reopened, edited, synchronize, labeled, unlabeled]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -18,11 +31,68 @@ jobs:
     name: Validate PR direction
     runs-on: ubuntu-latest
     steps:
-      - name: Check source -> target
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch develop and main tips
+        run: |
+          set -eu
+          # Ensure ancestry checks have real integration-branch tips to reason
+          # about, regardless of which branch the PR targets.
+          git fetch --no-tags --quiet origin \
+            "+refs/heads/develop:refs/remotes/origin/develop" \
+            "+refs/heads/main:refs/remotes/origin/main" || true
+          git fetch --no-tags --quiet origin \
+            "+refs/heads/logic:refs/remotes/origin/logic" \
+            "+refs/heads/design:refs/remotes/origin/design" \
+            "+refs/heads/docs:refs/remotes/origin/docs" || true
+
+      - name: Resolve validator
+        id: resolver
+        run: |
+          set -eu
+          # Prefer the validator from the checked-out (merge) tree; fall back to
+          # origin/main, then origin/develop. This keeps enforcement working even
+          # for temp -> category PRs whose base branch is behind.
+          V=""
+          if [ -f scripts/validate-branch-ancestry.sh ]; then
+            V="scripts/validate-branch-ancestry.sh"
+          elif git show origin/main:scripts/validate-branch-ancestry.sh >/tmp/validator.sh 2>/dev/null; then
+            V="/tmp/validator.sh"
+          elif git show origin/develop:scripts/validate-branch-ancestry.sh >/tmp/validator.sh 2>/dev/null; then
+            V="/tmp/validator.sh"
+          fi
+          echo "validator=$V" >> "$GITHUB_OUTPUT"
+          if [ -n "$V" ]; then
+            echo "Using validator: $V"
+          else
+            echo "::warning::Shared validator not found; using inline direction-only fallback."
+          fi
+
+      - name: Manual ancestry audit
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          LUCID_DEV_REF: origin/develop
+          LUCID_MAIN_REF: origin/main
+          VALIDATOR: ${{ steps.resolver.outputs.validator }}
+        run: |
+          set -eu
+          [ -n "$VALIDATOR" ] || { echo "::error::validator unavailable for audit"; exit 1; }
+          bash "$VALIDATOR" --audit-history
+
+      - name: Validate PR direction and ancestry
+        if: github.event_name == 'pull_request'
         env:
           HEAD_REF: ${{ github.head_ref }}
           BASE_REF: ${{ github.base_ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HAS_OVERRIDE: ${{ contains(github.event.pull_request.labels.*.name, 'workflow:override') }}
+          VALIDATOR: ${{ steps.resolver.outputs.validator }}
+          LUCID_DEV_REF: origin/develop
+          LUCID_MAIN_REF: origin/main
         run: |
           set -euo pipefail
           echo "PR: $HEAD_REF -> $BASE_REF"
@@ -32,45 +102,43 @@ jobs:
             exit 0
           fi
 
-          # Temporary branches that may be taken into a category branch.
+          if [ -n "${VALIDATOR:-}" ]; then
+            # Make sure the endpoint commits are present locally for ancestry.
+            git fetch --no-tags --quiet origin "$HEAD_SHA" 2>/dev/null || true
+            git fetch --no-tags --quiet origin "$BASE_SHA" 2>/dev/null || true
+            bash "$VALIDATOR" --pr \
+              --head "$HEAD_SHA" --base "$BASE_SHA" \
+              --head-branch "$HEAD_REF" --base-branch "$BASE_REF"
+            exit $?
+          fi
+
+          # ---- Inline fallback: direction-only (validator unavailable) --------
+          echo "::warning::Running inline direction-only check."
           is_temp=0
           case "$HEAD_REF" in
             experiment/*|prototype/*|migration/*|refactor/*) is_temp=1 ;;
           esac
-
           allowed=0
           case "$BASE_REF" in
             develop)
-              # Verified category work integrates into develop.
-              [[ "$HEAD_REF" == "logic" || "$HEAD_REF" == "design" || "$HEAD_REF" == "docs" ]] && allowed=1
-              ;;
+              [[ "$HEAD_REF" == "logic" || "$HEAD_REF" == "design" || "$HEAD_REF" == "docs" ]] && allowed=1 ;;
             main)
-              # Only develop (or an emergency hotfix) promotes to main.
-              [[ "$HEAD_REF" == "develop" || "$HEAD_REF" == hotfix/* ]] && allowed=1
-              ;;
+              [[ "$HEAD_REF" == "develop" || "$HEAD_REF" == hotfix/* ]] && allowed=1 ;;
             logic|design|docs)
-              # Accepted temporary branches fold into a category branch.
-              [ "$is_temp" = "1" ] && allowed=1
-              ;;
+              [ "$is_temp" = "1" ] && allowed=1 ;;
           esac
-
           if [ "$allowed" = "1" ]; then
             echo "✅ Allowed PR direction: $HEAD_REF -> $BASE_REF"
             exit 0
           fi
-
           echo "::error::Disallowed PR direction: '$HEAD_REF' -> '$BASE_REF'."
           cat <<'EOF'
-          Allowed directions (see docs/github_workflow.md §7):
+          Allowed directions (see docs/github_workflow.md):
             logic     -> develop
             design    -> develop
             docs      -> develop
             develop   -> main
             experiment/… | prototype/… | migration/… | refactor/…  -> logic | design | docs
             hotfix/…  -> main   (emergency)
-
-          Normal work is committed directly on logic/design/docs (no task branch,
-          no PR required). Only 'develop' may merge into 'main'. Maintainers may
-          add the 'workflow:override' label to bypass this check when necessary.
           EOF
           exit 1
