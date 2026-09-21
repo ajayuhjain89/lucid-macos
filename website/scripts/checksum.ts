@@ -6,7 +6,7 @@ function calculateChecksum() {
   const targetArg = process.argv[2];
   const targetPath = targetArg
     ? path.resolve(process.cwd(), targetArg)
-    : path.resolve(__dirname, "../../Lucid-1.0.1.dmg");
+    : path.resolve(__dirname, "../../Lucid-1.0.2.dmg");
 
   if (!fs.existsSync(targetPath)) {
     console.error(`Error: File not found at: ${targetPath}`);
