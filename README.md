@@ -20,7 +20,7 @@
 
 <p align="center">
   <a href="https://github.com/ajayuhjain89/lucid-macos/releases/download/v1.0.0/Lucid-1.0.0.dmg"><strong>Download Lucid (5.0 MB)</strong></a> &nbsp;•&nbsp;
-  <a href="https://lucid.app"><strong>Official Website</strong></a> &nbsp;•&nbsp;
+  <a href="https://website-phi-umber-70.vercel.app"><strong>Official Website</strong></a> &nbsp;•&nbsp;
   <a href="https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.0">Release Notes</a>
 </p>
 
@@ -108,7 +108,7 @@ Lucid is designed to respect document privacy:
 - **Offline rendering**: KaTeX, Mermaid, highlight.js, and markdown-it run entirely locally inside a sandboxed WebKit instance.
 - **Local files**: Documents never leave your Mac.
 
-Read our full [Privacy Policy](https://lucid.app/privacy).
+Read our full [Privacy Policy](https://website-phi-umber-70.vercel.app/privacy).
 
 ## Building from Source
 
@@ -156,14 +156,14 @@ Sources/Lucid/
 
 ## Documentation & Links
 
-- **Official Website**: [lucid.app](https://lucid.app)
-- **Features Overview**: [lucid.app/features](https://lucid.app/features)
-- **Documentation Hub**: [lucid.app/docs](https://lucid.app/docs)
-- **Getting Started Guide**: [lucid.app/docs/getting-started](https://lucid.app/docs/getting-started)
-- **Download Page**: [lucid.app/download](https://lucid.app/download)
-- **Changelog**: [lucid.app/changelog](https://lucid.app/changelog) or repository [CHANGELOG.md](CHANGELOG.md)
-- **Support & Help**: [lucid.app/support](https://lucid.app/support)
-- **Privacy Policy**: [lucid.app/privacy](https://lucid.app/privacy)
+- **Official Website**: [website-phi-umber-70.vercel.app](https://website-phi-umber-70.vercel.app)
+- **Features Overview**: [website-phi-umber-70.vercel.app/features](https://website-phi-umber-70.vercel.app/features)
+- **Documentation Hub**: [website-phi-umber-70.vercel.app/docs](https://website-phi-umber-70.vercel.app/docs)
+- **Getting Started Guide**: [website-phi-umber-70.vercel.app/docs/getting-started](https://website-phi-umber-70.vercel.app/docs/getting-started)
+- **Download Page**: [website-phi-umber-70.vercel.app/download](https://website-phi-umber-70.vercel.app/download)
+- **Changelog**: [website-phi-umber-70.vercel.app/changelog](https://website-phi-umber-70.vercel.app/changelog) or repository [CHANGELOG.md](CHANGELOG.md)
+- **Support & Help**: [website-phi-umber-70.vercel.app/support](https://website-phi-umber-70.vercel.app/support)
+- **Privacy Policy**: [website-phi-umber-70.vercel.app/privacy](https://website-phi-umber-70.vercel.app/privacy)
 - **Engineering Showcase**: [docs/Engineering_Showcase.md](docs/Engineering_Showcase.md)
 - **Reader Sample Document**: [docs/Sample.md](docs/Sample.md)
 - **Git & GitHub Workflow**: [docs/github_workflow.md](docs/github_workflow.md)
