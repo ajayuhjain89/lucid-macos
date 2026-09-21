@@ -3,9 +3,12 @@ import AppKit
 
 public struct SettingsView: View {
     @ObservedObject var preferences: LucidPreferences
+    @ObservedObject var updateController: LucidUpdateController
 
-    public init(preferences: LucidPreferences = .shared) {
+    @MainActor
+    public init(preferences: LucidPreferences = .shared, updateController: LucidUpdateController? = nil) {
         self.preferences = preferences
+        self.updateController = updateController ?? .shared
     }
 
     public var body: some View {
@@ -27,6 +30,9 @@ public struct SettingsView: View {
 
             ShortcutsSettingsTab()
                 .tabItem { Label("Shortcuts", systemImage: "command") }
+
+            UpdatesSettingsTab(updateController: updateController)
+                .tabItem { Label("Updates", systemImage: "arrow.triangle.2.circlepath") }
 
             AdvancedSettingsTab(preferences: preferences)
                 .tabItem { Label("Advanced", systemImage: "wrench.and.screwdriver") }
@@ -578,3 +584,117 @@ struct AdvancedSettingsTab: View {
         .padding(LucidSpacing.small)
     }
 }
+
+// MARK: - 8. Updates Settings Tab
+struct UpdatesSettingsTab: View {
+    @ObservedObject var updateController: LucidUpdateController
+
+    private var formattedLastCheckDate: String {
+        guard let date = updateController.lastUpdateCheckDate else {
+            return "Never"
+        }
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: LucidSpacing.sectionSpacing) {
+                VStack(alignment: .leading, spacing: LucidSpacing.medium) {
+                    LucidSectionHeader(
+                        title: "Software Updates",
+                        subtitle: "Keep Lucid up to date with the latest features, performance improvements, and security enhancements."
+                    )
+
+                    if updateController.isMountedFromDiskImage {
+                        HStack(alignment: .top, spacing: LucidSpacing.medium) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(.orange)
+                                .font(.system(size: 16))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Running from Disk Image")
+                                    .font(LucidTypography.label)
+                                    .foregroundColor(LucidColors.textPrimary)
+                                Text("Lucid is currently running from a mounted disk image. To enable in-app updates, drag Lucid.app to your Applications folder.")
+                                    .font(LucidTypography.caption)
+                                    .foregroundColor(LucidColors.textSecondary)
+                            }
+                        }
+                        .padding(LucidSpacing.medium)
+                        .background(LucidColors.elevatedSurface)
+                        .cornerRadius(LucidRadius.small)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: LucidRadius.small)
+                                .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+                        )
+                    }
+
+                    // Version information
+                    LucidSettingRow(
+                        title: "Current Version",
+                        description: "Installed build: \(updateController.currentBuild)"
+                    ) {
+                        Text("Lucid \(updateController.currentVersion)")
+                            .font(LucidTypography.labelMedium)
+                            .foregroundColor(LucidColors.textPrimary)
+                    }
+
+                    LucidSettingRow(
+                        title: "Last Checked",
+                        description: "Time of the most recent update check"
+                    ) {
+                        Text(formattedLastCheckDate)
+                            .font(LucidTypography.metadata)
+                            .foregroundColor(LucidColors.textSecondary)
+                    }
+
+                    LucidSettingRow(
+                        title: "Check for Updates",
+                        description: "Manually check the production update feed now."
+                    ) {
+                        Button("Check for Updates…") {
+                            updateController.checkForUpdates()
+                        }
+                        .disabled(!updateController.canCheckForUpdates)
+                    }
+                }
+
+                LucidDivider()
+
+                VStack(alignment: .leading, spacing: LucidSpacing.medium) {
+                    LucidSectionHeader(
+                        title: "Automatic Updates",
+                        subtitle: "Configure background update scheduling and download preferences."
+                    )
+
+                    LucidSettingRow(
+                        title: "Automatically check for updates",
+                        description: "Periodically check the update feed in the background."
+                    ) {
+                        Toggle("", isOn: Binding(
+                            get: { updateController.automaticallyChecksForUpdates },
+                            set: { updateController.automaticallyChecksForUpdates = $0 }
+                        ))
+                        .toggleStyle(.switch)
+                    }
+
+                    LucidSettingRow(
+                        title: "Automatically download updates",
+                        description: "Download updates in the background and notify when ready to install."
+                    ) {
+                        Toggle("", isOn: Binding(
+                            get: { updateController.automaticallyDownloadsUpdates },
+                            set: { updateController.automaticallyDownloadsUpdates = $0 }
+                        ))
+                        .toggleStyle(.switch)
+                        .disabled(!updateController.automaticallyChecksForUpdates)
+                    }
+                }
+            }
+            .padding(LucidSpacing.small)
+        }
+    }
+}
+

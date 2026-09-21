@@ -27,22 +27,24 @@ jobs:
       - name: Compile optimized arm64 binary
         run: |
           set -euo pipefail
-          mkdir -p scratch/ModuleCache
-          swiftc -parse-as-library -target arm64-apple-macosx14.0 -O -swift-version 5 \
-            -module-cache-path scratch/ModuleCache \
-            -o /tmp/Lucid \
-            $(find Sources/Lucid -name "*.swift")
-          test -x /tmp/Lucid && echo "Lucid binary built successfully"
+          swift build -c release --arch arm64 -Xlinker -rpath -Xlinker @executable_path/../Frameworks
+          test -x .build/arm64-apple-macosx/release/Lucid && echo "Lucid binary built successfully"
 
       - name: Assemble & sign app bundle
         run: |
           set -euo pipefail
           APP="/tmp/Lucid.app"; C="$APP/Contents"
-          mkdir -p "$C/MacOS" "$C/Resources"
-          cp /tmp/Lucid "$C/MacOS/Lucid"
+          mkdir -p "$C/MacOS" "$C/Resources" "$C/Frameworks"
+          cp .build/arm64-apple-macosx/release/Lucid "$C/MacOS/Lucid"
           cp Info.plist "$C/Info.plist"
           echo "APPL????" > "$C/PkgInfo"
           [ -f AppIcon.icns ] && cp AppIcon.icns "$C/Resources/AppIcon.icns" || true
           cp -R Sources/Lucid/Resources/WebEngine "$C/Resources/WebEngine"
-          codesign --force --deep -s - "$APP"
+          cp -R .build/arm64-apple-macosx/release/Sparkle.framework "$C/Frameworks/"
+          codesign --force -s - "$C/Frameworks/Sparkle.framework/Versions/B/XPCServices/Downloader.xpc"
+          codesign --force -s - "$C/Frameworks/Sparkle.framework/Versions/B/XPCServices/Installer.xpc"
+          codesign --force -s - "$C/Frameworks/Sparkle.framework/Versions/B/Autoupdate"
+          codesign --force -s - "$C/Frameworks/Sparkle.framework/Versions/B/Updater.app"
+          codesign --force -s - "$C/Frameworks/Sparkle.framework/Versions/B"
+          codesign --force -s - "$APP"
           codesign --verify --deep --strict "$APP" && echo "App bundle signed and verified"

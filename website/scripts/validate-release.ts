@@ -23,7 +23,27 @@ function validateRelease() {
     errors.push(`Invalid fileName: "${currentRelease.fileName}"`);
   }
 
-  // 4. Check if local artifact exists to verify hash directly
+  // 4. Build number (positive integer)
+  if (!Number.isInteger(currentRelease.buildNumber) || currentRelease.buildNumber <= 0) {
+    errors.push(`Invalid buildNumber: "${currentRelease.buildNumber}" (must be positive integer)`);
+  }
+
+  // 5. Size in bytes (positive integer)
+  if (!Number.isInteger(currentRelease.sizeBytes) || currentRelease.sizeBytes < 0) {
+    errors.push(`Invalid sizeBytes: "${currentRelease.sizeBytes}"`);
+  }
+
+  // 6. Sparkle published update checks
+  if (currentRelease.sparklePublished) {
+    if (!currentRelease.sparkleEdSignature || !/^[A-Za-z0-9+/=]+$/.test(currentRelease.sparkleEdSignature)) {
+      errors.push(`Invalid or missing sparkleEdSignature for published release`);
+    }
+    if (currentRelease.sizeBytes <= 0) {
+      errors.push(`Published release must have sizeBytes > 0`);
+    }
+  }
+
+  // 7. Check if local artifact exists to verify hash and size directly
   const candidatePaths = [
     path.resolve(__dirname, "../../", currentRelease.fileName),
     path.resolve(process.cwd(), currentRelease.fileName),
@@ -41,6 +61,12 @@ function validateRelease() {
         errors.push(`SHA-256 mismatch! Config has: ${currentRelease.sha256}, actual file has: ${computedHash}`);
       } else {
         console.log(`✓ SHA-256 hash matches local artifact: ${computedHash}`);
+      }
+
+      if (currentRelease.sizeBytes > 0 && fileBuffer.length !== currentRelease.sizeBytes) {
+        errors.push(`Size mismatch! Config has: ${currentRelease.sizeBytes} bytes, actual file has: ${fileBuffer.length} bytes`);
+      } else if (currentRelease.sizeBytes > 0) {
+        console.log(`✓ File size matches local artifact: ${currentRelease.sizeBytes} bytes`);
       }
       break;
     }
