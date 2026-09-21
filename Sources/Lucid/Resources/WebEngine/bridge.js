@@ -416,18 +416,176 @@
   let currentRenderRevision = '0';
   const katexLRU = new SimpleLRU(500);
   const mermaidLRU = new SimpleLRU(50);
-  let currentMermaidTheme = 'neutral';
+  let currentMermaidTheme = 'dark';
+
+  // ============================================================
+  // MERMAID BLUE-TINT THEME CONFIGURATION
+  // ============================================================
+  const LUCID_MERMAID_THEMES = {
+    dark: {
+      theme: 'base',
+      themeVariables: {
+        darkMode: true,
+        background: '#1a1a1a',
+        primaryColor: '#162032',           // Deep navy/slate-blue node surface
+        primaryBorderColor: '#3b82f6',     // Clear medium blue border
+        primaryTextColor: '#f1f5f9',       // High-contrast cool off-white text
+        secondaryColor: '#1e293b',         // Differentiated blue-gray
+        secondaryBorderColor: '#475569',
+        secondaryTextColor: '#e2e8f0',
+        tertiaryColor: '#0f172a',
+        tertiaryBorderColor: '#334155',
+        tertiaryTextColor: '#cbd5e1',
+        lineColor: '#60a5fa',              // Brighter blue edges/arrows
+        textColor: '#f1f5f9',
+        mainBkg: '#162032',
+        nodeBorder: '#3b82f6',
+        clusterBkg: '#111827',             // Subtle blue-tint cluster background
+        clusterBorder: '#2d3e58',
+        defaultLinkColor: '#60a5fa',
+        titleColor: '#93c5fd',
+        edgeLabelBackground: '#171717',    // Matches reader background
+        actorBkg: '#162032',
+        actorBorder: '#3b82f6',
+        actorTextColor: '#f1f5f9',
+        actorLineColor: '#60a5fa',
+        signalColor: '#60a5fa',
+        signalTextColor: '#f1f5f9',
+        labelBoxBkgColor: '#162032',
+        labelBoxBorderColor: '#3b82f6',
+        labelTextColor: '#f1f5f9',
+        classText: '#f1f5f9',
+        fillType0: '#162032',
+        fillType1: '#1e293b',
+        fillType2: '#0f172a',
+        fontFamily: 'var(--lucid-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif)',
+        fontSize: '13px'
+      },
+      themeCSS: `
+        .node rect, .node circle, .node ellipse, .node polygon, .node path { stroke-width: 1.5px; }
+        .edgePath .path { stroke-width: 1.5px; stroke: #60a5fa; }
+        .arrowheadPath { fill: #60a5fa !important; stroke: #60a5fa !important; }
+        .marker { fill: #60a5fa !important; stroke: #60a5fa !important; }
+        .edgeLabel { background-color: #171717 !important; color: #cbd5e1 !important; }
+        .cluster rect { rx: 6px; ry: 6px; }
+      `
+    },
+    light: {
+      theme: 'base',
+      themeVariables: {
+        darkMode: false,
+        background: '#f6f8fa',
+        primaryColor: '#f0f5ff',           // Very pale cool-blue node surface
+        primaryBorderColor: '#2563eb',     // Clean medium blue border
+        primaryTextColor: '#0f172a',       // Deep slate text
+        secondaryColor: '#e0edff',
+        secondaryBorderColor: '#3b82f6',
+        secondaryTextColor: '#1e293b',
+        tertiaryColor: '#f8faff',
+        tertiaryBorderColor: '#93c5fd',
+        tertiaryTextColor: '#334155',
+        lineColor: '#2563eb',              // Blue edges/arrows
+        textColor: '#0f172a',
+        mainBkg: '#f0f5ff',
+        nodeBorder: '#2563eb',
+        clusterBkg: '#f8faff',             // Subtle cool cluster background
+        clusterBorder: '#cbd5e1',
+        defaultLinkColor: '#2563eb',
+        titleColor: '#1d4ed8',
+        edgeLabelBackground: '#ffffff',
+        actorBkg: '#f0f5ff',
+        actorBorder: '#2563eb',
+        actorTextColor: '#0f172a',
+        actorLineColor: '#2563eb',
+        signalColor: '#2563eb',
+        signalTextColor: '#0f172a',
+        labelBoxBkgColor: '#f0f5ff',
+        labelBoxBorderColor: '#2563eb',
+        labelTextColor: '#0f172a',
+        classText: '#0f172a',
+        fillType0: '#f0f5ff',
+        fillType1: '#e0edff',
+        fillType2: '#f8faff',
+        fontFamily: 'var(--lucid-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif)',
+        fontSize: '13px'
+      },
+      themeCSS: `
+        .node rect, .node circle, .node ellipse, .node polygon, .node path { stroke-width: 1.5px; }
+        .edgePath .path { stroke-width: 1.5px; stroke: #2563eb; }
+        .arrowheadPath { fill: #2563eb !important; stroke: #2563eb !important; }
+        .marker { fill: #2563eb !important; stroke: #2563eb !important; }
+        .edgeLabel { background-color: #ffffff !important; color: #334155 !important; }
+        .cluster rect { rx: 6px; ry: 6px; }
+      `
+    },
+    sepia: {
+      theme: 'base',
+      themeVariables: {
+        darkMode: false,
+        background: '#f5efe3',
+        primaryColor: '#f0ece3',           // Warm-compatible muted surface
+        primaryBorderColor: '#4a627a',     // Desaturated slate-blue border
+        primaryTextColor: '#261e16',       // Deep sepia ink
+        secondaryColor: '#e8e2d5',
+        secondaryBorderColor: '#5c748c',
+        secondaryTextColor: '#382d22',
+        tertiaryColor: '#faf6ee',
+        tertiaryBorderColor: '#8da0b3',
+        tertiaryTextColor: '#4a3d31',
+        lineColor: '#4a627a',              // Desaturated slate-blue edges
+        textColor: '#261e16',
+        mainBkg: '#f0ece3',
+        nodeBorder: '#4a627a',
+        clusterBkg: '#ede6d8',
+        clusterBorder: '#c8bba8',
+        defaultLinkColor: '#4a627a',
+        titleColor: '#2d3f50',
+        edgeLabelBackground: '#fcf8f2',
+        actorBkg: '#f0ece3',
+        actorBorder: '#4a627a',
+        actorTextColor: '#261e16',
+        actorLineColor: '#4a627a',
+        signalColor: '#4a627a',
+        signalTextColor: '#261e16',
+        labelBoxBkgColor: '#f0ece3',
+        labelBoxBorderColor: '#4a627a',
+        labelTextColor: '#261e16',
+        classText: '#261e16',
+        fillType0: '#f0ece3',
+        fillType1: '#e8e2d5',
+        fillType2: '#faf6ee',
+        fontFamily: 'var(--lucid-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif)',
+        fontSize: '13px'
+      },
+      themeCSS: `
+        .node rect, .node circle, .node ellipse, .node polygon, .node path { stroke-width: 1.5px; }
+        .edgePath .path { stroke-width: 1.5px; stroke: #4a627a; }
+        .arrowheadPath { fill: #4a627a !important; stroke: #4a627a !important; }
+        .marker { fill: #4a627a !important; stroke: #4a627a !important; }
+        .edgeLabel { background-color: #fcf8f2 !important; color: #4a3d31 !important; }
+        .cluster rect { rx: 6px; ry: 6px; }
+      `
+    }
+  };
+
+  function getMermaidConfigForTheme(themeName) {
+    const key = (themeName === 'light' || themeName === 'sepia') ? themeName : 'dark';
+    const cfg = LUCID_MERMAID_THEMES[key];
+    return {
+      startOnLoad: false,
+      theme: cfg.theme,
+      themeVariables: cfg.themeVariables,
+      themeCSS: cfg.themeCSS,
+      securityLevel: 'loose',
+      layout: 'dagre',
+      flowchart: { defaultRenderer: 'dagre' }
+    };
+  }
 
   function ensureMermaidInitialized() {
     if (typeof mermaid !== 'undefined' && !mermaid._lucidInitialized) {
       try {
-        mermaid.initialize({
-          startOnLoad: false,
-          theme: currentMermaidTheme || 'neutral',
-          securityLevel: 'loose',
-          layout: 'dagre',
-          flowchart: { defaultRenderer: 'dagre' }
-        });
+        mermaid.initialize(getMermaidConfigForTheme(currentMermaidTheme));
         mermaid._lucidInitialized = true;
       } catch (e) {
         console.warn('Failed to initialize Mermaid:', e);
@@ -563,33 +721,49 @@
       };
     }
 
-    const widthFitScale = availWidth / intrinsicWidth;
-    const heightFitScale = (maxAvailHeight && maxAvailHeight > 0) ? (maxAvailHeight / intrinsicHeight) : 1.0;
-    const completeFitScale = Math.min(1.0, widthFitScale, heightFitScale);
-
+    // 1. Readability Floor: Scale required so that rendered label font size does not drop below targetReadableFontSize
     const readableMinimumScale = Math.min(1.0, tf / rf);
 
+    // 2. Width-fitting scale: fit diagram to available reader width (up to 1.0, no upscaling beyond intrinsic)
+    const widthFitScale = Math.min(1.0, availWidth / intrinsicWidth);
+
+    // 3. Initial Scale: Priority 1 is readable labels.
+    // If widthFitScale >= readableMinimumScale, diagram fits width while maintaining readability.
+    // If widthFitScale < readableMinimumScale, clamp to readableMinimumScale to preserve readability.
     let initialScale = 1.0;
     let mode = 'complete';
 
-    if (completeFitScale >= readableMinimumScale) {
-      initialScale = completeFitScale;
+    if (widthFitScale >= readableMinimumScale) {
+      initialScale = widthFitScale;
       mode = 'complete';
     } else {
       initialScale = readableMinimumScale;
       mode = 'readableWorking';
     }
 
-    const scaledHeight = intrinsicHeight * initialScale;
+    // 4. Compute natural readable inline height
     const verticalPadding = 48; // 24px top + 24px bottom
-    const cappedMaxHeight = (maxAvailHeight && maxAvailHeight > 0) ? (maxAvailHeight + verticalPadding) : 840;
-    const targetHeight = Math.round(Math.min(cappedMaxHeight, Math.max(180, scaledHeight + verticalPadding)));
+    const scaledHeight = intrinsicHeight * initialScale;
+    const naturalHeight = Math.round(scaledHeight + verticalPadding);
+
+    // 5. Adaptive safe maximum height:
+    // Allow tall diagrams (like ESP32 control flow) to expand inline so users can read them
+    // naturally by scrolling the document, without needing Expand.
+    // Cap at an adaptive ceiling (1200 - 2400px) to prevent pathological infinite pages.
+    const winH = (typeof window !== 'undefined' && window.innerHeight) ? window.innerHeight : 900;
+    const adaptiveCeiling = (maxAvailHeight && maxAvailHeight > 0)
+      ? maxAvailHeight
+      : Math.max(1200, Math.min(2400, Math.round(winH * 2.5)));
+
+    const targetHeight = Math.round(Math.min(adaptiveCeiling, Math.max(180, naturalHeight)));
+    const isComplete = (naturalHeight <= adaptiveCeiling) && (widthFitScale >= readableMinimumScale);
 
     return {
       scale: initialScale,
-      isComplete: (mode === 'complete'),
-      mode: mode,
-      targetHeight: targetHeight
+      isComplete: isComplete,
+      mode: isComplete ? 'complete' : mode,
+      targetHeight: targetHeight,
+      naturalHeight: naturalHeight
     };
   }
 
@@ -609,10 +783,6 @@
         // Horizontal padding: 20px left + 20px right = 40px
         const availWidth = Math.max(100, (viewport.clientWidth || 800) - 40);
 
-        // Maximum inline viewport height: min(840px, 80vh)
-        const maxInlineHeight = Math.min(840, Math.max(480, Math.round((window.innerHeight || 800) * 0.8)));
-        const maxContentHeight = Math.max(100, maxInlineHeight - 48);
-
         // 1. Inspect real SVG label typography geometry
         const baseFontSize = getRepresentativeFontSize(svg);
 
@@ -621,16 +791,14 @@
           viewBox.width,
           viewBox.height,
           availWidth,
-          maxContentHeight,
+          0, // Inline: uses adaptive ceiling
           baseFontSize,
           13.5
         );
         const initialScale = layout.scale;
 
-        // 3. Dynamic bounded viewport height based on diagram aspect ratio
-        const scaledHeight = viewBox.height * initialScale;
-        const targetHeight = Math.round(Math.min(maxInlineHeight, Math.max(180, scaledHeight + 48)));
-        viewport.style.height = targetHeight + 'px';
+        // 3. Dynamic bounded viewport height based on diagram aspect ratio & readable scale
+        viewport.style.height = layout.targetHeight + 'px';
 
         // 4. Meaningful centering translation
         let contentOffsetX = 0;
@@ -654,6 +822,7 @@
         canvas.dataset.initialScale = initialScale;
         canvas.dataset.initialTx = initialTx;
         canvas.dataset.initialTy = initialTy;
+        canvas.dataset.initialHeight = layout.targetHeight;
         canvas.dataset.contentOffsetX = contentOffsetX;
         canvas.dataset.contentOffsetY = contentOffsetY;
         canvas.dataset.scale = initialScale;
@@ -1114,16 +1283,27 @@
       if (prefs.theme) {
         body.setAttribute('data-theme', prefs.theme);
         body.className = 'vscode-body ' + (prefs.theme === 'dark' ? 'vscode-dark' : (prefs.theme === 'light' ? 'vscode-light' : 'vscode-sepia'));
-        const newMermaidTheme = (prefs.theme === 'light' ? 'default' : (prefs.theme === 'sepia' ? 'neutral' : 'dark'));
-        if (typeof mermaid !== 'undefined' && currentMermaidTheme !== newMermaidTheme) {
-          currentMermaidTheme = newMermaidTheme;
+        const newThemeName = (prefs.theme === 'light' || prefs.theme === 'sepia') ? prefs.theme : 'dark';
+        if (typeof mermaid !== 'undefined' && currentMermaidTheme !== newThemeName) {
+          currentMermaidTheme = newThemeName;
           try {
-            mermaid.initialize({
-              startOnLoad: false,
-              theme: currentMermaidTheme,
-              securityLevel: 'loose',
-              layout: 'dagre',
-              flowchart: { defaultRenderer: 'dagre' }
+            mermaid.initialize(getMermaidConfigForTheme(currentMermaidTheme));
+            // Re-render Mermaid diagrams with new theme without full document re-render
+            const containers = document.querySelectorAll('.mermaid-container');
+            containers.forEach(function(c) {
+              const rawAttr = c.getAttribute('data-raw-mermaid');
+              const canvas = c.querySelector('.mermaid-canvas');
+              if (rawAttr && canvas) {
+                let rawCode = '';
+                try { rawCode = decodeURIComponent(rawAttr); } catch (_) { rawCode = rawAttr; }
+                const id = 'mermaid-dyn-' + Math.random().toString(36).substring(2, 9);
+                mermaid.render(id, rawCode).then(function(res) {
+                  canvas.innerHTML = res.svg;
+                  formatMermaidContainer(c);
+                }).catch(function(err) {
+                  console.warn('Mermaid dynamic re-render error:', err);
+                });
+              }
             });
           } catch (e) {}
         }
@@ -1268,6 +1448,7 @@
         if (canvas.dataset.tempTx !== undefined) {
           canvas.dataset.tx = canvas.dataset.tempTx;
           canvas.dataset.ty = canvas.dataset.tempTy;
+          canvas.dataset.userInteracted = 'true';
           delete canvas.dataset.tempTx;
           delete canvas.dataset.tempTy;
         }
@@ -1333,6 +1514,7 @@
       canvas.dataset.scale = newScale;
       canvas.dataset.tx = newTx;
       canvas.dataset.ty = newTy;
+      canvas.dataset.userInteracted = 'true';
       canvas.style.transform = 'translate(' + newTx + 'px, ' + newTy + 'px) scale(' + newScale + ')';
     },
 
@@ -1362,11 +1544,18 @@
       const initialScale = parseFloat(canvas.dataset.initialScale || '1.0');
       const initialTx = parseFloat(canvas.dataset.initialTx || '0');
       const initialTy = parseFloat(canvas.dataset.initialTy || '0');
+      const initialHeight = canvas.dataset.initialHeight ? parseFloat(canvas.dataset.initialHeight) : null;
 
       canvas.dataset.scale = initialScale;
       canvas.dataset.tx = initialTx;
       canvas.dataset.ty = initialTy;
+      delete canvas.dataset.userInteracted;
       canvas.style.transform = 'translate(' + initialTx + 'px, ' + initialTy + 'px) scale(' + initialScale + ')';
+
+      const viewport = container ? container.querySelector('.mermaid-viewport') : null;
+      if (viewport && initialHeight) {
+        viewport.style.height = initialHeight + 'px';
+      }
     },
 
     fitDiagram: function(btn) {
@@ -1392,6 +1581,7 @@
       canvas.dataset.scale = fitScale;
       canvas.dataset.tx = fitTx;
       canvas.dataset.ty = fitTy;
+      canvas.dataset.userInteracted = 'true';
       canvas.style.transform = 'translate(' + fitTx + 'px, ' + fitTy + 'px) scale(' + fitScale + ')';
     },
 
@@ -1723,6 +1913,22 @@
     computeSmartDiagramLayout: computeSmartDiagramLayout,
     getRepresentativeFontSize: getRepresentativeFontSize
   };
+
+  let resizeTimer = null;
+  if (typeof window !== 'undefined') {
+    window.addEventListener('resize', function() {
+      if (resizeTimer) clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(function() {
+        // Settle logic: only update diagrams that have NOT been manually interacted with
+        document.querySelectorAll('.mermaid-container').forEach(function(c) {
+          const canvas = c.querySelector('.mermaid-canvas');
+          if (canvas && !canvas.dataset.userInteracted) {
+            formatMermaidContainer(c);
+          }
+        });
+      }, 200);
+    });
+  }
 
   function isRenderingStackReady() {
     return typeof window.markdownit !== 'undefined' &&

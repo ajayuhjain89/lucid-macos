@@ -1,12 +1,5 @@
 import SwiftUI
 
-public struct SidebarWidthPreferenceKey: PreferenceKey {
-    public static var defaultValue: CGFloat = 220
-    public static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
-
 public struct OutlineSidebarView: View {
     let headings: [HeadingItem]
     let activeHeadingId: String?
@@ -180,12 +173,7 @@ public struct OutlineSidebarView: View {
                 }
             }
         }
-        .frame(minWidth: 180, idealWidth: 220, maxWidth: 320)
-        .background(
-            GeometryReader { geo in
-                Color.clear.preference(key: SidebarWidthPreferenceKey.self, value: geo.size.width)
-            }
-        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(
             ZStack {
                 LucidVisualEffectView(material: .sidebar, blendingMode: .behindWindow)

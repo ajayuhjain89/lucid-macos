@@ -350,8 +350,21 @@ body.vscode-body pre.lucid-ascii-diagram code {
 }
 
 /* Code-block scrollbars (extension). */
-body.vscode-body pre::-webkit-scrollbar { height: 10px; }
-body.vscode-body pre::-webkit-scrollbar-thumb { background: #4a515b; border-radius: 6px; }
+body.vscode-body pre::-webkit-scrollbar { height: 8px; }
+body.vscode-body pre::-webkit-scrollbar-thumb {
+  background-color: var(--lucid-scrollbar-thumb, rgba(128, 128, 128, 0.22));
+  background-clip: padding-box;
+  border: 2px solid transparent;
+  border-radius: 5px;
+}
+body.vscode-body pre::-webkit-scrollbar-thumb:hover {
+  background-color: var(--lucid-scrollbar-thumb-hover, rgba(128, 128, 128, 0.48));
+  border: 1px solid transparent;
+}
+body.vscode-body pre::-webkit-scrollbar-thumb:active {
+  background-color: var(--lucid-scrollbar-thumb-active, rgba(128, 128, 128, 0.72));
+  border: 0px solid transparent;
+}
 body.vscode-body pre::-webkit-scrollbar-track { background: transparent; }
 
 /* ============================================================
@@ -667,6 +680,9 @@ body[data-theme="dark"] {
   --lucid-kbd-border: #555555;
   --lucid-diagram-bg: #1a1a1a;
   --lucid-diagram-border: rgba(255, 255, 255, 0.06);
+  --lucid-scrollbar-thumb: rgba(148, 163, 184, 0.22);
+  --lucid-scrollbar-thumb-hover: rgba(148, 163, 184, 0.48);
+  --lucid-scrollbar-thumb-active: rgba(148, 163, 184, 0.72);
 }
 
 /* 2. Editorial Light — extension default (light) values */
@@ -694,6 +710,9 @@ body[data-theme="light"] {
   --lucid-kbd-border: #cfcfcf;
   --lucid-diagram-bg: #f6f8fa;
   --lucid-diagram-border: rgba(0, 0, 0, 0.06);
+  --lucid-scrollbar-thumb: rgba(100, 116, 139, 0.25);
+  --lucid-scrollbar-thumb-hover: rgba(71, 85, 105, 0.52);
+  --lucid-scrollbar-thumb-active: rgba(51, 65, 85, 0.75);
 }
 
 /* 3. Warm Book Sepia — same relationships, warm tones */
@@ -718,10 +737,13 @@ body[data-theme="sepia"] {
   --lucid-details-bg-open: #f8f3ea;
   --lucid-toc-bg: #f5efe3;
   --lucid-figcaption: #7d6b58;
-  --lucid-kbd-bg: #f1e9db;
-  --lucid-kbd-border: #cbbaa0;
+  --lucid-kbd-bg: #efe6d6;
+  --lucid-kbd-border: #c8b79c;
   --lucid-diagram-bg: #f5efe3;
-  --lucid-diagram-border: rgba(56, 45, 34, 0.10);
+  --lucid-diagram-border: rgba(99, 82, 63, 0.12);
+  --lucid-scrollbar-thumb: rgba(120, 105, 90, 0.25);
+  --lucid-scrollbar-thumb-hover: rgba(105, 90, 75, 0.50);
+  --lucid-scrollbar-thumb-active: rgba(85, 70, 55, 0.72);
 }
 
 /* ============================================================
@@ -914,7 +936,7 @@ body.vscode-body #lucid-content > * {
   position: relative;
   width: 100%;
   min-height: 180px;
-  max-height: min(840px, 80vh);
+  max-height: min(2400px, 250vh);
   overflow: hidden;
   display: flex;
   justify-content: center;
@@ -1169,15 +1191,36 @@ body.lucid-focus-mode #lucid-content > .lucid-active-block {
 }
 
 /* ============================================================
-   NATIVE-FEELING SCROLLBARS
+   NATIVE-FEELING SCROLLBARS — EXPANDABLE HIT AREA & THUMB
    ============================================================ */
-::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb {
-  background: rgba(128, 128, 128, 0.2);
-  border-radius: 4px;
+/* Main scrollbar geometry: constant 12px width/height prevents layout shifts */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
 }
-::-webkit-scrollbar-thumb:hover { background: rgba(128, 128, 128, 0.32); }
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+/* REST: 4px transparent border each side gives a clean, quiet 4px visible thumb */
+::-webkit-scrollbar-thumb {
+  background-color: var(--lucid-scrollbar-thumb, rgba(128, 128, 128, 0.22));
+  background-clip: padding-box;
+  border: 4px solid transparent;
+  border-radius: 7px;
+  transition: background-color 0.15s ease, border-width 0.15s ease;
+}
+/* HOVER: border shrinks to 2px, expanding visible thumb to 8px for easy acquisition */
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--lucid-scrollbar-thumb-hover, rgba(128, 128, 128, 0.48));
+  background-clip: padding-box;
+  border: 2px solid transparent;
+}
+/* ACTIVE DRAG: border shrinks to 1px, expanding visible thumb to 10px with maximum contrast */
+::-webkit-scrollbar-thumb:active {
+  background-color: var(--lucid-scrollbar-thumb-active, rgba(128, 128, 128, 0.72));
+  background-clip: padding-box;
+  border: 1px solid transparent;
+}
 
 /* ============================================================
    PRINT / "Save as PDF"
