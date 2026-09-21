@@ -33,6 +33,216 @@
   };
   window.LucidPerf = LucidPerf;
 
+  // Preprocess Mermaid flowchart source to ensure unquoted node labels containing parentheses
+  // (e.g. A[Reference Input r(t)]) are safely quoted for Mermaid parsing compatibility without
+  // mutating valid modern Mermaid, directives, edge labels, or other diagram types.
+  function sanitizeMermaidSource(source) {
+    if (!source || typeof source !== 'string') return source;
+
+    const clean = source.replace(/%%\{[\s\S]*?\}%%/g, '').replace(/%%.*$/gm, '').trim();
+    if (!clean.startsWith('flowchart') && !clean.startsWith('graph')) {
+      return source;
+    }
+
+    let result = '';
+    let i = 0;
+    const len = source.length;
+
+    while (i < len) {
+      // 1. Skip comments: %% ...
+      if (source[i] === '%' && source[i + 1] === '%') {
+        if (source[i + 2] === '{') {
+          const endDir = source.indexOf('}%%', i + 3);
+          if (endDir !== -1) {
+            result += source.slice(i, endDir + 3);
+            i = endDir + 3;
+            continue;
+          }
+        }
+        const endLine = source.indexOf('\n', i);
+        if (endLine !== -1) {
+          result += source.slice(i, endLine + 1);
+          i = endLine + 1;
+        } else {
+          result += source.slice(i);
+          break;
+        }
+        continue;
+      }
+
+      // 2. Skip already quoted strings: " ... "
+      if (source[i] === '"') {
+        let j = i + 1;
+        while (j < len && (source[j] !== '"' || source[j - 1] === '\\')) {
+          j++;
+        }
+        if (j < len) j++;
+        result += source.slice(i, j);
+        i = j;
+        continue;
+      }
+
+      // 3. Skip edge labels: | ... |
+      if (source[i] === '|') {
+        let j = i + 1;
+        while (j < len && source[j] !== '|' && source[j] !== '\n') {
+          j++;
+        }
+        if (j < len && source[j] === '|') {
+          j++;
+          result += source.slice(i, j);
+          i = j;
+          continue;
+        }
+      }
+
+      // 4. Check for node shapes starting with bracket: [
+      if (source[i] === '[') {
+        const prevChar = i > 0 ? source[i - 1] : '';
+        const nextChar = i + 1 < len ? source[i + 1] : '';
+
+        // Subroutine [[ ... ]]
+        if (nextChar === '[') {
+          let j = i + 2;
+          while (j < len && !(source[j] === ']' && source[j + 1] === ']') && source[j] !== '\n') {
+            j++;
+          }
+          if (j < len && source[j] === ']' && source[j + 1] === ']') {
+            const inner = source.slice(i + 2, j);
+            const trimmed = inner.trim();
+            if ((inner.includes('(') || inner.includes(')')) && !(trimmed.startsWith('"') && trimmed.endsWith('"'))) {
+              const escaped = inner.replace(/\\"/g, '"').replace(/"/g, '\\"');
+              result += '[["' + escaped + '"]]';
+            } else {
+              result += source.slice(i, j + 2);
+            }
+            i = j + 2;
+            continue;
+          }
+        }
+
+        // Cylinder [( ... )]
+        if (nextChar === '(') {
+          let j = i + 2;
+          while (j < len && !(source[j] === ')' && source[j + 1] === ']') && source[j] !== '\n') {
+            j++;
+          }
+          if (j < len && source[j] === ')' && source[j + 1] === ']') {
+            const inner = source.slice(i + 2, j);
+            const trimmed = inner.trim();
+            if ((inner.includes('(') || inner.includes(')')) && !(trimmed.startsWith('"') && trimmed.endsWith('"'))) {
+              const escaped = inner.replace(/\\"/g, '"').replace(/"/g, '\\"');
+              result += '[("' + escaped + '")]';
+            } else {
+              result += source.slice(i, j + 2);
+            }
+            i = j + 2;
+            continue;
+          }
+        }
+
+        // Parallelogram or trapezoid: [/ or [\
+        if (nextChar === '/' || nextChar === '\\') {
+          result += source[i];
+          i++;
+          continue;
+        }
+
+        // Stadium: ([ ... ])
+        if (prevChar === '(') {
+          let j = i + 1;
+          while (j < len && !(source[j] === ']' && source[j + 1] === ')') && source[j] !== '\n') {
+            j++;
+          }
+          if (j < len && source[j] === ']' && source[j + 1] === ')') {
+            const inner = source.slice(i + 1, j);
+            const trimmed = inner.trim();
+            if ((inner.includes('(') || inner.includes(')')) && !(trimmed.startsWith('"') && trimmed.endsWith('"'))) {
+              const escaped = inner.replace(/\\"/g, '"').replace(/"/g, '\\"');
+              result += '["' + escaped + '"])';
+            } else {
+              result += source.slice(i, j + 2);
+            }
+            i = j + 2;
+            continue;
+          }
+        }
+
+        // Standard rectangle: [ ... ]
+        let j = i + 1;
+        while (j < len && source[j] !== ']' && source[j] !== '\n') {
+          j++;
+        }
+        if (j < len && source[j] === ']') {
+          const nextAfterClose = j + 1 < len ? source[j + 1] : '';
+          if (nextAfterClose !== ')' && nextAfterClose !== ']') {
+            const inner = source.slice(i + 1, j);
+            const trimmed = inner.trim();
+            if ((inner.includes('(') || inner.includes(')')) && !(trimmed.startsWith('"') && trimmed.endsWith('"'))) {
+              const escaped = inner.replace(/\\"/g, '"').replace(/"/g, '\\"');
+              result += '["' + escaped + '"]';
+            } else {
+              result += source.slice(i, j + 1);
+            }
+            i = j + 1;
+            continue;
+          }
+        }
+      }
+
+      // 5. Check for curly braces: { ... } or {{ ... }}
+      if (source[i] === '{') {
+        const nextChar = i + 1 < len ? source[i + 1] : '';
+
+        // Hexagon {{ ... }}
+        if (nextChar === '{') {
+          let j = i + 2;
+          while (j < len && !(source[j] === '}' && source[j + 1] === '}') && source[j] !== '\n') {
+            j++;
+          }
+          if (j < len && source[j] === '}' && source[j + 1] === '}') {
+            const inner = source.slice(i + 2, j);
+            const trimmed = inner.trim();
+            if ((inner.includes('(') || inner.includes(')')) && !(trimmed.startsWith('"') && trimmed.endsWith('"'))) {
+              const escaped = inner.replace(/\\"/g, '"').replace(/"/g, '\\"');
+              result += '{{"' + escaped + '"}}';
+            } else {
+              result += source.slice(i, j + 2);
+            }
+            i = j + 2;
+            continue;
+          }
+        }
+
+        // Rhombus { ... }
+        let j = i + 1;
+        while (j < len && source[j] !== '}' && source[j] !== '\n') {
+          j++;
+        }
+        if (j < len && source[j] === '}') {
+          const nextAfterClose = j + 1 < len ? source[j + 1] : '';
+          if (nextAfterClose !== '}') {
+            const inner = source.slice(i + 1, j);
+            const trimmed = inner.trim();
+            if ((inner.includes('(') || inner.includes(')')) && !(trimmed.startsWith('"') && trimmed.endsWith('"'))) {
+              const escaped = inner.replace(/\\"/g, '"').replace(/"/g, '\\"');
+              result += '{"' + escaped + '"}';
+            } else {
+              result += source.slice(i, j + 1);
+            }
+            i = j + 1;
+            continue;
+          }
+        }
+      }
+
+      result += source[i];
+      i++;
+    }
+
+    return result;
+  }
+
   // Initialize Markdown-it
   const md = window.markdownit({
     html: true,
@@ -40,6 +250,7 @@
     typographer: true,
     highlight: function(str, lang) {
       if (lang === 'mermaid') {
+        const preparedStr = sanitizeMermaidSource(str);
         const escapedRaw = encodeURIComponent(str);
         return '<div class="mermaid-container" data-raw-mermaid="' + escapedRaw + '">' +
                '<div class="mermaid-toolbar">' +
@@ -55,7 +266,7 @@
                '</div>' +
                '<div class="mermaid-viewport" onpointerdown="window.lucid.handleDiagramPointerDown(event, this)">' +
                '<div class="mermaid-canvas">' +
-               '<div class="mermaid">' + md.utils.escapeHtml(str) + '</div>' +
+               '<div class="mermaid">' + md.utils.escapeHtml(preparedStr) + '</div>' +
                '</div>' +
                '</div>' +
                '</div>';
@@ -767,9 +978,34 @@
     };
   }
 
-  function formatMermaidContainer(c) {
+  function formatMermaidContainer(c, optErr) {
     if (!c) return;
     const svg = c.querySelector('.mermaid-canvas svg') || c.querySelector('.mermaid svg');
+    const isError = !!optErr ||
+                    !!c.querySelector('.error-icon') ||
+                    !!c.querySelector('.error-text') ||
+                    (svg && svg.textContent && svg.textContent.includes('Syntax error'));
+    if (isError) {
+      const viewport = c.querySelector('.mermaid-viewport');
+      const canvas = c.querySelector('.mermaid-canvas');
+      if (viewport && canvas) {
+        viewport.style.height = 'auto';
+        viewport.style.minHeight = '60px';
+        canvas.style.transform = 'none';
+        let errorMsg = optErr ? (optErr.message || String(optErr)) : 'Syntax error';
+        if (!optErr && svg) {
+          const errTextEl = svg.querySelector('.error-text') || svg.querySelector('text');
+          if (errTextEl && errTextEl.textContent) {
+            errorMsg = errTextEl.textContent.trim();
+          }
+        }
+        canvas.innerHTML = '<div class="lucid-mermaid-error" style="padding: 16px; font-family: var(--lucid-font-family, system-ui); color: #e06c75; font-size: 13px;">' +
+                           '<div style="font-weight: 600; margin-bottom: 4px;">Mermaid couldn\'t render this diagram.</div>' +
+                           '<div style="opacity: 0.85; font-size: 12px; font-family: monospace;">' + md.utils.escapeHtml(errorMsg) + '</div>' +
+                           '</div>';
+      }
+      return;
+    }
     if (!svg) return;
     const viewBox = svg.viewBox && svg.viewBox.baseVal;
     if (viewBox && viewBox.width > 0) {
@@ -1296,12 +1532,14 @@
               if (rawAttr && canvas) {
                 let rawCode = '';
                 try { rawCode = decodeURIComponent(rawAttr); } catch (_) { rawCode = rawAttr; }
+                const preparedCode = sanitizeMermaidSource(rawCode);
                 const id = 'mermaid-dyn-' + Math.random().toString(36).substring(2, 9);
-                mermaid.render(id, rawCode).then(function(res) {
+                mermaid.render(id, preparedCode).then(function(res) {
                   canvas.innerHTML = res.svg;
                   formatMermaidContainer(c);
                 }).catch(function(err) {
                   console.warn('Mermaid dynamic re-render error:', err);
+                  formatMermaidContainer(c, err);
                 });
               }
             });
