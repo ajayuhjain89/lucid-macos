@@ -461,7 +461,7 @@ moved** once published.
 
 ```
 foundation-v1   functional-integrity-v1   performance-v1     # milestones
-v1.0.0   v1.0.1   v1.0.2                                      # releases
+v1.0.0   v1.0.1   v1.0.2   v1.0.3                             # releases
 ```
 
 ---
@@ -485,6 +485,89 @@ Configured at the GitHub level (not merely advisory):
 
 `Require linear history` is **not** enabled on any branch — Lucid intentionally
 uses merge commits for PR integration.
+
+---
+
+## 19. Release procedure (v1.0.3+)
+
+Lucid uses Sparkle 2 with EdDSA (Ed25519) signatures for in-app updates. Every release must follow this exact sequence to ensure update integrity, prevent broken feed entries, and preserve repository invariants.
+
+### Prerequisites
+- macOS Keychain contains the private EdDSA signing key (`ed25519` account).
+- A secure offline backup exists outside the repository. The private key is **never** committed to Git or logged in CI.
+- The `Sparkle.framework` build tools (`sign_update`, `generate_appcast`) are accessible.
+
+### Step-by-step Release Sequence
+
+1. **Category Implementation & Integration**
+   - Implement functionality, UI, or documentation on `logic`, `design`, or `docs`.
+   - Update `Info.plist` on `logic`:
+     - `CFBundleShortVersionString` (e.g. `1.0.4`)
+     - `CFBundleVersion` (integer build number, strictly monotonically increasing, e.g. `5`)
+   - Merge category PRs into `develop`: `logic → develop`, `design → develop`, `docs → develop`.
+   - Verify `develop` end-to-end (build, renderer conformance, branch policy, website tests).
+
+2. **Promote `develop` to `main`**
+   - Open PR: `develop → main`.
+   - Ensure all CI checks pass (`Build (macOS, Apple Silicon)`, `Branch Flow Policy`).
+   - Merge PR using a standard merge commit (`gh pr merge <PR> --merge`).
+   - Switch to `main`: `git checkout main && git pull --ff-only origin main`.
+
+3. **Build Canonical Release Artifact**
+   - On `main`, run the clean release build:
+     ```bash
+     ./build.sh --release
+     ```
+   - This compiles `Lucid.app`, embeds `Sparkle.framework`, performs inside-out ad-hoc codesigning on all XPC services, helpers, framework, and app bundle, and packages `Lucid-<version>.dmg`.
+
+4. **Cryptographic EdDSA Signing**
+   - Run the Sparkle signing script:
+     ```bash
+     ./scripts/sparkle-sign-release.sh Lucid-<version>.dmg
+     ```
+   - The script runs `sign_update` using the Keychain private key and prints:
+     - Exact file size in bytes
+     - SHA-256 hash
+     - Sparkle EdDSA signature (`sparkle:edSignature`)
+   - Record these values.
+
+5. **Tag & Publish GitHub Release**
+   - Create and push the annotated Git tag on `main`:
+     ```bash
+     git tag -a v<version> -m "Lucid <version>"
+     git push origin v<version>
+     ```
+     *(Remember: tags are never moved once pushed.)*
+   - Create the GitHub Release for `v<version>`:
+     ```bash
+     gh release create v<version> Lucid-<version>.dmg --title "Lucid <version>" --notes-file release-notes.md
+     ```
+   - **Crucial verification step**: Download the uploaded DMG from GitHub to a temporary directory and verify byte-for-byte that its size and SHA-256 match the canonical local build:
+     ```bash
+     curl -sL -o /tmp/verify.dmg "https://github.com/ajayuhjain89/lucid-macos/releases/download/v<version>/Lucid-<version>.dmg"
+     shasum -a 256 /tmp/verify.dmg
+     ```
+
+6. **Activate In-App Update Feed (Staged Activation)**
+   - The production appcast feed at `https://website-phi-umber-70.vercel.app/api/appcast` gates release publication on `sparklePublished: true` in `website/lib/release.ts`.
+   - On `logic`, update `website/lib/release.ts`:
+     - Set `version`, `buildNumber`, `releaseDate`, `sizeBytes`, `sha256`, and `sparkleEdSignature`.
+     - Set `sparklePublished: true` (only after the GitHub asset is confirmed live and verified).
+   - Commit on `logic`:
+     ```bash
+     git add website/lib/release.ts
+     git commit -m "release: publish v<version> to Sparkle appcast feed"
+     git push origin logic
+     ```
+   - Promote forward: `logic → develop` (PR) → `develop → main` (PR).
+   - Once Vercel deploys `main`, verify the live feed:
+     ```bash
+     curl -s https://website-phi-umber-70.vercel.app/api/appcast | grep sparkle:edSignature
+     ```
+
+7. **End-to-End Verification**
+   - Launch the previous release of `Lucid.app` and select **Lucid → Check for Updates…**.
+   - Verify it detects the new version, downloads the DMG, verifies the EdDSA signature, prompts to install and relaunch, and completes the update cleanly.
 
 ---
 
