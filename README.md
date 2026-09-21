@@ -2,40 +2,86 @@
   <img src="assets/icon.png" width="128" height="128" alt="Lucid" />
 </p>
 
-<h1 align="center">Lucid for macOS</h1>
+<h1 align="center">Lucid</h1>
 
 <p align="center">
-  <strong>A quiet, premium, native Markdown reader &amp; editor for macOS.</strong><br>
-  Built with Swift &amp; SwiftUI. No Electron. Apple-Silicon native.
+  <strong>A native macOS Markdown reader and editor built for technical documents.</strong><br>
+  Markdown, made lucid. Built with Swift &amp; SwiftUI. Apple Silicon native.
 </p>
 
 <p align="center">
+  <a href="https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.1"><img src="https://img.shields.io/badge/release-v1.0.1--beta-blue?style=flat-square" alt="v1.0.1 Public Beta"></a>
   <img src="https://img.shields.io/badge/platform-macOS%2014.0%2B-black?style=flat-square&logo=apple" alt="macOS 14+">
-  <img src="https://img.shields.io/badge/arch-Apple%20Silicon%20(arm64)-orange?style=flat-square" alt="arm64">
+  <img src="https://img.shields.io/badge/arch-Apple%20Silicon%20(arm64)-orange?style=flat-square" alt="Apple Silicon (arm64)">
   <img src="https://img.shields.io/badge/Swift-5.9%2B-F05138?style=flat-square&logo=swift&logoColor=white" alt="Swift 5.9+">
-  <img src="https://img.shields.io/badge/UI-SwiftUI%20%2B%20AppKit-1575F9?style=flat-square" alt="SwiftUI + AppKit">
+  <a href="https://github.com/ajayuhjain89/lucid-macos/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ajayuhjain89/lucid-macos/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-purple?style=flat-square" alt="MIT License"></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/ajayuhjain89/lucid-macos/releases/download/v1.0.1/Lucid-1.0.1.dmg"><strong>Download Lucid (5.0 MB)</strong></a> &nbsp;•&nbsp;
+  <a href="https://website-phi-umber-70.vercel.app"><strong>Official Website</strong></a> &nbsp;•&nbsp;
+  <a href="https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.1">Release Notes</a>
 </p>
 
 ---
 
-Lucid renders Markdown with an editorial identity and wraps it in a genuinely native macOS shell: a floating glass toolbar that content scrolls *beneath*, scroll-responsive depth, and motion tuned to feel deliberate and quiet. The document is always the star.
+Lucid renders Markdown with an editorial identity and wraps it in a genuinely native macOS shell: a floating glass toolbar that content scrolls beneath, scroll-responsive depth, and motion tuned to feel deliberate and quiet. It provides offline mathematics (KaTeX), chemistry (`mhchem`), interactive Mermaid diagrams, code syntax highlighting, and wide technical tables — designed for technical notes, research papers, and system documentation.
 
-## Highlights
+## Install
 
-- ⚡️ **Native &amp; instant** — a pure Swift/AppKit/WebKit binary. No Electron runtime, no bundled Chromium; launches immediately and stays light on memory.
-- 🪟 **Floating glass chrome** — a translucent `NSVisualEffectView` toolbar that content scrolls underneath. The glass is near-transparent at the top of a document and frosts subtly as content passes beneath it.
-- 📖 **Reader / Split / Editor** — three modes (`⌘1` / `⌘2` / `⌘3`) with a distraction-free reading canvas, a live side-by-side editor with synchronized scrolling, and a focused source editor.
-- 🎯 **Focus &amp; Typewriter modes** — dim inactive blocks (`⌘⇧D`) and keep the active line centered (`⌘⇧T`).
-- 🎨 **Curated themes** — System Dynamic, Lucid Studio Dark, Editorial Light, and Warm Book Sepia, each tuned separately (not just inverted) with a user-customizable accent color.
-- 🔔 **GitHub / Obsidian alerts** — `[!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`, `[!CAUTION]`, and more, with iconography and collapsible variants.
-- 📐 **KaTeX math** — offline inline (`$…$`) and block (`$$…$$`) rendering, with `mhchem` for chemistry.
-- 📊 **Mermaid diagrams** — flowcharts and diagrams rendered inline with zoom and SVG copy/export.
-- 🧭 **Live outline &amp; command palette** — a heading outline sidebar (`⌘⌥T`) with scroll-spy, and a fuzzy command palette (`⌘K`).
-- 🔎 **In-document find** — a floating find bar (`⌘F`) with match navigation.
-- 👁 **Live file watching** — edit in Neovim, VS Code, or Obsidian and Lucid updates on save without losing your place.
-- 🖨 **Pro export** — vector PDF, self-contained standalone HTML (assets embedded), and formatted rich-text copy.
-- ♿️ **Accessibility-aware** — honors Reduce Transparency, Reduce Motion, and Increased Contrast.
+1. Download [**Lucid-1.0.1.dmg**](https://github.com/ajayuhjain89/lucid-macos/releases/download/v1.0.1/Lucid-1.0.1.dmg) (5.0 MB).
+2. Open `Lucid-1.0.1.dmg` in your Downloads folder.
+3. Drag `Lucid.app` into your `Applications` folder.
+4. Launch Lucid from Applications or Spotlight.
+
+### First Launch (macOS Gatekeeper Notice)
+
+Lucid is currently in **Public Beta** and is ad-hoc signed rather than Apple Developer ID notarized. On first launch, macOS Gatekeeper may present a dialog stating that Apple cannot verify the developer.
+
+To open Lucid:
+- **Primary**: In Finder, open your `Applications` folder, right-click (or Control-click) `Lucid.app`, select **Open**, and click **Open** in the confirmation prompt.
+- **Alternative**: Navigate to **System Settings → Privacy & Security**, scroll down to the Security section, and click **Open Anyway** next to the notification for Lucid.
+
+Official Apple Developer ID signing and notarization will be configured for the stable release.
+
+## System Requirements
+
+- **Operating System**: macOS 14.0 (Sonoma) or later
+- **Architecture**: Apple Silicon (`arm64`)
+- **Intel (x86_64)**: Not currently supported by the distributed Public Beta binary
+
+## Release Integrity
+
+| Property | Value |
+| :--- | :--- |
+| **Release** | Lucid 1.0.1 Public Beta (`v1.0.1`) |
+| **Artifact** | `Lucid-1.0.1.dmg` |
+| **File Size** | 5,246,936 bytes (~5.0 MB) |
+| **SHA-256** | `3e21388d85a42316fc60e6e060c2b7834949755746ed4826528b05b8af0b82a5` |
+
+To verify the checksum of your download in Terminal:
+
+```bash
+shasum -a 256 ~/Downloads/Lucid-1.0.1.dmg
+```
+
+The output should match the SHA-256 hash above. Authoritative release assets and release notes are published on [GitHub Releases](https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.1).
+
+## Features
+
+- 📖 **Reader, Split, and Editor modes** (`⌘1` / `⌘2` / `⌘3`) — a distraction-free reading canvas, a synchronized side-by-side editor/reader, and a focused source editor.
+- 📐 **KaTeX mathematics & mhchem** — offline inline (`$…$`) and block (`$$…$$`) formula rendering, with full chemistry notation (`\ce{…}`).
+- 📊 **Interactive Mermaid diagrams** — flowcharts, sequence diagrams, state machines, and class diagrams with pan, zoom, fit-to-view, reset, and SVG export.
+- 💻 **Syntax-highlighted code & wide tables** — syntax highlighting across 180+ languages with code block copy, plus horizontally scrollable technical tables.
+- 🔔 **GitHub-style callouts** — `[!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`, and `[!CAUTION]` alerts with native styling and collapsible variants.
+- 🧭 **Document outline & navigation** — real-time heading outline sidebar (`⌘⌥T` / `⌃⌘S`) with scroll-spy tracking, plus in-document find (`⌘F`).
+- ⚡️ **Fuzzy command palette** — quick command execution (`⌘K`) for actions, view switching, and settings.
+- 🎯 **Focus & Typewriter modes** — dim inactive Markdown blocks (`⌘⇧D`) and keep the active cursor line vertically centered (`⌘⇧T`).
+- 🎨 **Curated typography & themes** — System Dynamic, Lucid Studio Dark, Editorial Light, and Warm Book Sepia, each calibrated with a customizable accent color.
+- 👁 **Live file watching** — edit documents in external editors (Neovim, VS Code, Obsidian) and Lucid updates automatically on save without losing scroll position.
+- 🖨 **Vector export** — export to high-resolution vector PDF, standalone self-contained HTML (all assets embedded offline), and rich text copy (`⌥⌘C`).
+- ♿️ **Accessibility-aware** — respects system settings for Reduce Transparency, Reduce Motion, and Increase Contrast.
 
 ## Keyboard Shortcuts
 
@@ -55,67 +101,82 @@ Lucid renders Markdown with an editorial identity and wraps it in a genuinely na
 
 > Export as PDF and the full theme/preset list are available from the command palette (`⌘K`) and the toolbar's overflow menu.
 
-## Requirements
+## Local-First & Privacy
 
-- macOS 14.0 (Sonoma) or later
-- Apple Silicon (arm64)
-- Xcode Command Line Tools (`xcode-select --install`) — provides the Swift toolchain
+Lucid is designed to respect document privacy:
+- **Zero telemetry**: No analytics, no tracking pixels, and no network requests for document parsing.
+- **Offline rendering**: KaTeX, Mermaid, highlight.js, and markdown-it run entirely locally inside a sandboxed WebKit instance.
+- **Local files**: Documents never leave your Mac.
+
+Read our full [Privacy Policy](https://website-phi-umber-70.vercel.app/privacy).
 
 ## Building from Source
+
+### Prerequisites
+
+- macOS 14.0 (Sonoma) or later on Apple Silicon
+- Xcode Command Line Tools (`xcode-select --install`) — provides the Swift compiler (`swiftc`)
+
+### Build Steps
 
 ```bash
 git clone https://github.com/ajayuhjain89/lucid-macos.git
 cd lucid-macos
 
-# Compile, bundle, sign Lucid.app, and produce the DMG
+# Compile, bundle, ad-hoc sign Lucid.app, and produce Lucid-1.0.0.dmg
 ./build.sh
 
-# Run it
+# Launch the built application
 open Lucid.app
 ```
 
-The build script compiles an optimized arm64 binary, assembles `Lucid.app`, ad-hoc code-signs it, and creates `Lucid-1.0.0.dmg`.
+The build script compiles an optimized arm64 binary, assembles `Lucid.app`, ad-hoc code-signs it, and creates the disk image (`Lucid-1.0.2.dmg` with `--release`).
 
-> A `Package.swift` is included for editor/tooling integration. `swift build`
-> requires a full Xcode toolchain; the supported build path is `./build.sh`.
+> Note: A `Package.swift` is included for Swift Package Manager and editor tooling integration. For complete development guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Architecture
 
-Lucid is a document-based SwiftUI app with a WebKit rendering surface for Markdown.
+Lucid pairs a native document-based SwiftUI/AppKit application shell with a high-performance, offline WebKit rendering engine:
 
 ```
 Sources/Lucid/
-├── LucidApp.swift            # App entry, DocumentGroup, menu commands
-├── DesignSystem/             # Spacing, radius, motion, materials, reusable controls
-├── Models/                   # Preferences, document, commands, heading outline
-├── Views/                    # Main window, toolbar, editor, preview, sidebar,
-│                             #   status bar, command palette, find, settings
+├── LucidApp.swift            # App entry, DocumentGroup, native menu commands
+├── DesignSystem/             # Tokens (spacing, radius, motion, materials) & controls
+├── Models/                   # Preferences, document state, commands, outline model
+├── Views/                    # Main window, floating glass toolbar, editor, preview,
+│                             #   sidebar, status bar, command palette, find, settings
 ├── Services/                 # Render coordination, file watching, export, metrics
-└── Resources/WebEngine/      # HTML/CSS/JS reader (markdown-it, KaTeX, Mermaid,
-                              #   highlight.js) — the visual source of truth
+└── Resources/WebEngine/      # Bundled offline HTML/CSS/JS reader (markdown-it,
+                              #   KaTeX, Mermaid, highlight.js)
 ```
 
-**How rendering works:** editing happens only in the native Markdown source editor (`NSTextView`). The rendered preview is a strictly read-only `WKWebView` running a bundled, fully offline engine (`markdown-it` + plugins, KaTeX/mhchem, Mermaid, highlight.js). A `PreviewRenderCoordinator` debounces updates and enforces revision equality so renders never race. Native chrome (the floating glass toolbar) is layered over the full-height content so the document scrolls beneath it; the toolbar height and the content's top inset are coupled through `LucidChrome` in the design system.
+- **Native editing**: Text editing runs in a native macOS text view (`NSTextView`).
+- **Offline WebEngine**: The reading canvas is a read-only `WKWebView` running a bundled, offline engine. A `PreviewRenderCoordinator` coordinates updates with debouncing and revision equality to guarantee deterministic rendering.
+- **Floating glass chrome**: Translucent `NSVisualEffectView` toolbar where content scrolls underneath, dynamically adjusting depth and hairline borders based on scroll offset.
 
-The `Resources/WebEngine` reader is ported from the companion **Lucid** VS Code extension, which remains the visual source of truth for rendered Markdown content.
+## Documentation & Links
 
-## Documentation
-
-Application and project documentation lives in [`docs/`](docs/):
-
-- [docs/github_workflow.md](docs/github_workflow.md) — the canonical Git/GitHub branching, verification, and release workflow.
-- [docs/Engineering_Showcase.md](docs/Engineering_Showcase.md) — engineering/architecture showcase.
-- [docs/Sample.md](docs/Sample.md) — sample Markdown for exercising the reader.
-
-Community, legal, and meta files stay in the repository root: this README,
-[LICENSE](LICENSE), [CHANGELOG.md](CHANGELOG.md), [CONTRIBUTING.md](CONTRIBUTING.md),
-and [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+- **Official Website**: [website-phi-umber-70.vercel.app](https://website-phi-umber-70.vercel.app)
+- **Features Overview**: [website-phi-umber-70.vercel.app/features](https://website-phi-umber-70.vercel.app/features)
+- **Documentation Hub**: [website-phi-umber-70.vercel.app/docs](https://website-phi-umber-70.vercel.app/docs)
+- **Getting Started Guide**: [website-phi-umber-70.vercel.app/docs/getting-started](https://website-phi-umber-70.vercel.app/docs/getting-started)
+- **Download Page**: [website-phi-umber-70.vercel.app/download](https://website-phi-umber-70.vercel.app/download)
+- **Changelog**: [website-phi-umber-70.vercel.app/changelog](https://website-phi-umber-70.vercel.app/changelog) or repository [CHANGELOG.md](CHANGELOG.md)
+- **Support & Help**: [website-phi-umber-70.vercel.app/support](https://website-phi-umber-70.vercel.app/support)
+- **Privacy Policy**: [website-phi-umber-70.vercel.app/privacy](https://website-phi-umber-70.vercel.app/privacy)
+- **Engineering Showcase**: [docs/Engineering_Showcase.md](docs/Engineering_Showcase.md)
+- **Reader Sample Document**: [docs/Sample.md](docs/Sample.md)
+- **Git & GitHub Workflow**: [docs/github_workflow.md](docs/github_workflow.md)
 
 ## Contributing
 
-Issues and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) and the
-[workflow guide](docs/github_workflow.md). Please keep changes aligned with the app's design principles: quiet, native, and document-first.
+Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/github_workflow.md](docs/github_workflow.md) before opening pull requests.
+
+Lucid uses a strictly unidirectional category-branch workflow:
+- Permanent branches: `main`, `develop`, `logic`, `design`, `docs`
+- Work flows strictly forward: `category → develop → main`
+- Work directly on the appropriate category branch; no ordinary task branches and no backwards merges from `develop`.
 
 ## License
 
-MIT © [Ayush Jain](https://github.com/ajayuhjain89) — see [LICENSE](LICENSE).
+Lucid is released under the [MIT License](LICENSE). Copyright © 2026 Ayush Jain.

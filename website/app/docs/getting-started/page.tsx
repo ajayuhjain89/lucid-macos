@@ -9,7 +9,6 @@ export const metadata: Metadata = {
 };
 
 export default function GettingStartedPage() {
-  const quarantineCommand = `xattr -d com.apple.quarantine /Applications/Lucid.app`;
   const cliOpenCommand = `open -a Lucid path/to/document.md`;
 
   return (
@@ -36,34 +35,71 @@ export default function GettingStartedPage() {
             1
           </span>
           <h2 className="text-2xl font-semibold tracking-tight text-text-primary">
-            Installation & First Launch
+            Installation &amp; First Launch
           </h2>
         </div>
 
-        <div className="pl-11 space-y-4 text-sm text-text-secondary leading-relaxed">
-          <p>
-            Download the latest disk image from our <Link href="/download" className="text-accent hover:underline">Download page</Link>. Open <strong className="text-text-primary">Lucid-1.0.0.dmg</strong> and drag <strong className="text-text-primary">Lucid.app</strong> into your Applications folder.
-          </p>
-
-          <div className="p-4 rounded-window border border-border-subtle bg-surface space-y-3">
-            <h3 className="font-semibold text-text-primary text-sm">
-              Handling the macOS Gatekeeper Beta Prompt
-            </h3>
-            <p className="text-xs text-text-secondary">
-              Because Lucid is in public beta and ad-hoc signed, macOS may display a notice stating that the developer cannot be verified. To open:
-            </p>
-            <ol className="list-decimal list-inside text-xs space-y-1.5 text-text-secondary">
-              <li>Open your <strong className="text-text-primary">Applications</strong> folder in Finder.</li>
-              <li>Right-click (or Control-click) <strong className="text-text-primary">Lucid.app</strong> and select <strong className="text-text-primary">Open</strong>.</li>
-              <li>Click <strong className="text-text-primary">Open</strong> in the confirmation dialog.</li>
-            </ol>
-            <div className="pt-2 border-t border-border-subtle flex items-center justify-between">
-              <span className="text-xs font-mono text-text-tertiary">Or remove quarantine via Terminal:</span>
-              <CopyButton text={quarantineCommand} label="Copy Command" />
+        <div className="pl-11 space-y-6 text-sm text-text-secondary leading-relaxed">
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <h3 className="font-semibold text-text-primary text-base">Step 1: Download Lucid</h3>
+              <p>
+                Click the <strong className="text-text-primary">Download Lucid</strong> button on the website. The disk image (<code className="font-mono text-xs px-1.5 py-0.5 rounded bg-surface-elevated text-accent">Lucid-1.0.2.dmg</code>) begins downloading directly to your Mac.
+              </p>
+              <p className="text-xs text-text-tertiary">
+                Optional fallback: You can also inspect the release notes or browse the verified DMG artifact directly on{" "}
+                <a
+                  href="https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.2"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:text-text-secondary"
+                >
+                  GitHub Releases
+                </a>.
+              </p>
             </div>
-            <pre className="p-2.5 rounded bg-code-bg border border-code-border font-mono text-xs text-code-fg overflow-x-auto">
-              {quarantineCommand}
-            </pre>
+
+            <div className="space-y-2">
+              <h3 className="font-semibold text-text-primary text-base">Step 2: Open the Disk Image</h3>
+              <p>
+                Once downloaded, double-click <strong className="text-text-primary">Lucid-1.0.2.dmg</strong> in your Downloads folder to mount the disk image.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="font-semibold text-text-primary text-base">Step 3: Install Lucid</h3>
+              <p>
+                Drag <strong className="text-text-primary">Lucid.app</strong> into your <strong className="text-text-primary">Applications</strong> folder (or copy it to your preferred location).
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <h3 className="font-semibold text-text-primary text-base">Step 4: First Launch &amp; macOS Gatekeeper</h3>
+              <div className="p-4 rounded-window border border-border-subtle bg-surface space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-mono uppercase tracking-wider px-2 py-0.5 rounded bg-surface-elevated border border-border-subtle text-accent">
+                    Public Beta Notice
+                  </span>
+                </div>
+                <p className="text-xs text-text-secondary leading-relaxed">
+                  Lucid is currently in public beta and is ad-hoc signed rather than Developer ID notarized. On first launch, macOS Gatekeeper may display a prompt stating that Apple cannot verify the developer.
+                </p>
+                <div className="space-y-2 pt-2 border-t border-border-subtle">
+                  <p className="text-xs font-medium text-text-primary">Primary Launch Flow:</p>
+                  <ol className="list-decimal list-inside text-xs space-y-1 text-text-secondary">
+                    <li>In Finder, open your <strong className="text-text-primary">Applications</strong> folder.</li>
+                    <li>Right-click (or Control-click) <strong className="text-text-primary">Lucid.app</strong> and select <strong className="text-text-primary">Open</strong>.</li>
+                    <li>Click <strong className="text-text-primary">Open</strong> in the confirmation dialog.</li>
+                  </ol>
+                </div>
+                <div className="space-y-1 pt-2 border-t border-border-subtle">
+                  <p className="text-xs font-medium text-text-primary">Alternative (System Settings):</p>
+                  <p className="text-xs text-text-secondary">
+                    If macOS still prevents opening, navigate to <strong className="text-text-primary">System Settings → Privacy &amp; Security</strong>, scroll down to the Security section, and click <strong className="text-text-primary">Open Anyway</strong> next to the notification for Lucid.
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
