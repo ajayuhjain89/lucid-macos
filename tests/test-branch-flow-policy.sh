@@ -304,6 +304,22 @@ t21_cherrypick_limitation() {
   return 1
 }
 
+t22_pr_hotfix_main() {          # hotfix/* -> main PR -> FAIL (no direct path to main)
+  mkbase
+  git checkout -q -b hotfix/urgent logic
+  echo fix > fix.txt; git add fix.txt; git commit -qm "urgent fix"
+  H="$(git rev-parse hotfix/urgent)"; B="$(git rev-parse main)"
+  validate --pr --head "$H" --base "$B" --head-branch hotfix/urgent --base-branch main
+}
+
+t23_pr_hotfix_into_category() { # hotfix/* -> logic PR -> PASS (routes through category)
+  mkbase
+  git checkout -q -b hotfix/urgent logic
+  echo fix > fix.txt; git add fix.txt; git commit -qm "urgent fix"
+  H="$(git rev-parse hotfix/urgent)"; B="$(git rev-parse logic)"
+  validate --pr --head "$H" --base "$B" --head-branch hotfix/urgent --base-branch logic
+}
+
 # ---- run matrix -----------------------------------------------------------
 
 echo "Lucid branch-flow policy — regression suite"
@@ -331,6 +347,8 @@ run_case "18 PR develop -> docs"                                FAIL t18_pr_deve
 run_case "19 PR main -> logic"                                  FAIL t19_pr_main_logic
 run_case "20 PR logic -> main"                                  FAIL t20_pr_logic_main
 run_case "21 cherry-pick limitation demonstration"             PASS t21_cherrypick_limitation
+run_case "22 PR hotfix/* -> main (no direct path to main)"     FAIL t22_pr_hotfix_main
+run_case "23 PR hotfix/* -> logic (routes through category)"    PASS t23_pr_hotfix_into_category
 
 echo "Result | Scenario                                                   | Expected | Actual"
 echo "-------+------------------------------------------------------------+----------+--------"

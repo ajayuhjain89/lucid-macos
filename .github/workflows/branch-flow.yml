@@ -116,14 +116,15 @@ jobs:
           echo "::warning::Running inline direction-only check."
           is_temp=0
           case "$HEAD_REF" in
-            experiment/*|prototype/*|migration/*|refactor/*) is_temp=1 ;;
+            experiment/*|prototype/*|migration/*|refactor/*|hotfix/*) is_temp=1 ;;
           esac
           allowed=0
           case "$BASE_REF" in
             develop)
               [[ "$HEAD_REF" == "logic" || "$HEAD_REF" == "design" || "$HEAD_REF" == "docs" ]] && allowed=1 ;;
             main)
-              [[ "$HEAD_REF" == "develop" || "$HEAD_REF" == hotfix/* ]] && allowed=1 ;;
+              # develop is the ONLY branch that may merge into main.
+              [[ "$HEAD_REF" == "develop" ]] && allowed=1 ;;
             logic|design|docs)
               [ "$is_temp" = "1" ] && allowed=1 ;;
           esac
@@ -137,8 +138,7 @@ jobs:
             logic     -> develop
             design    -> develop
             docs      -> develop
-            develop   -> main
-            experiment/… | prototype/… | migration/… | refactor/…  -> logic | design | docs
-            hotfix/…  -> main   (emergency)
+            develop   -> main   (the ONLY path into main)
+            experiment/… | prototype/… | migration/… | refactor/… | hotfix/…  -> logic | design | docs
           EOF
           exit 1
