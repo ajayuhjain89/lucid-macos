@@ -42,7 +42,7 @@ export default function GettingStartedPage() {
 
         <div className="pl-11 space-y-4 text-sm text-text-secondary leading-relaxed">
           <p>
-            Download the latest disk image from our <Link href="/download" className="text-accent hover:underline">Download page</Link>. Open <strong className="text-text-primary">Lucid-1.0.0.dmg</strong> and drag <strong className="text-text-primary">Lucid.app</strong> into your Applications folder.
+            Download the latest disk image from our <Link href="/download" className="text-accent hover:underline">Download page</Link>. Open <strong className="text-text-primary">Lucid-1.0.1.dmg</strong> and drag <strong className="text-text-primary">Lucid.app</strong> into your Applications folder.
           </p>
 
           <div className="p-4 rounded-window border border-border-subtle bg-surface space-y-3">
