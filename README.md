@@ -130,7 +130,7 @@ cd lucid-macos
 open Lucid.app
 ```
 
-The `./build.sh` script compiles an optimized `arm64` binary, bundles resources (including the offline WebEngine), ad-hoc code-signs `Lucid.app`, and packages `Lucid-1.0.0.dmg`.
+The build script compiles an optimized arm64 binary, assembles `Lucid.app`, ad-hoc code-signs it, and creates the disk image (`Lucid-1.0.2.dmg` with `--release`).
 
 > Note: A `Package.swift` is included for Swift Package Manager and editor tooling integration. For complete development guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
 

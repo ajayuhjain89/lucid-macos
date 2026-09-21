@@ -21,6 +21,7 @@ public struct MainWindowView: View {
     @State private var scrollIntensity: Double = 0
     /// Dynamic clearance for the native traffic-light cluster, derived from NSWindow geometry.
     @State private var trafficLightReservedWidth: CGFloat = 77
+    @AppStorage("lucid.sidebarWidth") private var sidebarWidth: Double = 220
     @Namespace private var modeSelectorNamespace
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
@@ -85,7 +86,7 @@ public struct MainWindowView: View {
             // scrolls beneath the floating glass toolbar rather than starting below
             // a reserved opaque band.
             VStack(spacing: 0) {
-                HSplitView {
+                HStack(spacing: 0) {
                     if preferences.showOutline {
                         // Outline Sidebar — owns its own compact top row with traffic light clearance and toggle
                         OutlineSidebarView(
@@ -104,8 +105,13 @@ public struct MainWindowView: View {
                         ) { id in
                             scrollToHeadingId = id
                         }
-                        .frame(minWidth: 180, idealWidth: 220, maxWidth: 320)
-                        .transition(.move(edge: .leading).combined(with: .opacity))
+                        .frame(width: CGFloat(sidebarWidth))
+                        .clipped()
+                        .transition(.move(edge: .leading))
+
+                        // Draggable divider between sidebar and canvas
+                        SidebarDivider(width: $sidebarWidth, minWidth: 180, maxWidth: 320)
+                            .transition(.opacity)
                     }
 
                     // Document Canvas — fills remaining space, continuously mounted across sidebar toggles
@@ -857,6 +863,72 @@ private struct WindowConfigurator: NSViewRepresentable {
             if let window = window {
                 onWindowAttached?(window)
             }
+        }
+    }
+}
+
+// MARK: - Draggable Sidebar Divider
+
+private struct SidebarDivider: View {
+    @Binding var width: Double
+    var minWidth: Double = 180
+    var maxWidth: Double = 320
+
+    @State private var dragStartWidth: Double? = nil
+
+    var body: some View {
+        ZStack {
+            Rectangle()
+                .fill(LucidColors.subtleSeparator)
+                .frame(width: 1)
+
+            CursorTrackingView(cursor: .resizeLeftRight)
+                .frame(width: 8)
+                .contentShape(Rectangle())
+        }
+        .frame(width: 1)
+        .zIndex(10)
+        .gesture(
+            DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                .onChanged { value in
+                    if dragStartWidth == nil {
+                        dragStartWidth = width
+                        NSCursor.resizeLeftRight.push()
+                    }
+                    if let start = dragStartWidth {
+                        let newWidth = start + Double(value.translation.width)
+                        width = min(maxWidth, max(minWidth, newWidth))
+                    }
+                }
+                .onEnded { _ in
+                    if dragStartWidth != nil {
+                        NSCursor.pop()
+                        dragStartWidth = nil
+                    }
+                }
+        )
+    }
+}
+
+private struct CursorTrackingView: NSViewRepresentable {
+    let cursor: NSCursor
+
+    func makeNSView(context: Context) -> TrackingNSView {
+        let view = TrackingNSView()
+        view.cursor = cursor
+        return view
+    }
+
+    func updateNSView(_ nsView: TrackingNSView, context: Context) {
+        nsView.cursor = cursor
+    }
+
+    final class TrackingNSView: NSView {
+        var cursor: NSCursor = .resizeLeftRight
+
+        override func resetCursorRects() {
+            super.resetCursorRects()
+            addCursorRect(bounds, cursor: cursor)
         }
     }
 }
