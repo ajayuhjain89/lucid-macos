@@ -50,7 +50,7 @@ export const currentRelease: ReleaseMetadata = {
   // Exact properties from local artifact Lucid-1.0.1.dmg
   fileName: "Lucid-1.0.1.dmg",
   fileSize: "5.0 MB",
-  sha256: "3c06c6bceb96b7ce3b9d7e196fd2f16ec04c56d79172120332d37ec035decd1b",
+  sha256: "3e21388d85a42316fc60e6e060c2b7834949755746ed4826528b05b8af0b82a5",
   
   // Environment requirements verified from Info.plist (LSMinimumSystemVersion 14.0) and build.sh (arm64-apple-macosx14.0)
   minimumMacOS: "14.0",

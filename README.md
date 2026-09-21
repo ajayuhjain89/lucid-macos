@@ -55,18 +55,18 @@ Official Apple Developer ID signing and notarization will be configured for the 
 
 | Property | Value |
 | :--- | :--- |
-| **Release** | Lucid 1.0.0 Public Beta (`v1.0.0`) |
-| **Artifact** | `Lucid-1.0.0.dmg` |
-| **File Size** | 5,255,061 bytes (~5.0 MB) |
-| **SHA-256** | `3c06c6bceb96b7ce3b9d7e196fd2f16ec04c56d79172120332d37ec035decd1b` |
+| **Release** | Lucid 1.0.1 Public Beta (`v1.0.1`) |
+| **Artifact** | `Lucid-1.0.1.dmg` |
+| **File Size** | 5,246,936 bytes (~5.0 MB) |
+| **SHA-256** | `3e21388d85a42316fc60e6e060c2b7834949755746ed4826528b05b8af0b82a5` |
 
 To verify the checksum of your download in Terminal:
 
 ```bash
-shasum -a 256 ~/Downloads/Lucid-1.0.0.dmg
+shasum -a 256 ~/Downloads/Lucid-1.0.1.dmg
 ```
 
-The output should match the SHA-256 hash above. Authoritative release assets and release notes are published on [GitHub Releases](https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.0).
+The output should match the SHA-256 hash above. Authoritative release assets and release notes are published on [GitHub Releases](https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.1).
 
 ## Features
 
