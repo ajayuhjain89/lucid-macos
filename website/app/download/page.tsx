@@ -206,13 +206,25 @@ export default function DownloadPage() {
       </div>
 
       {/* Release Notes Link */}
-      <div className="text-center pt-8 border-t border-border-subtle">
-        <p className="text-sm text-text-secondary">
+      <div className="text-center pt-8 border-t border-border-subtle flex flex-wrap items-center justify-center gap-4 text-sm text-text-secondary">
+        <p>
           Looking for past changes, bug fixes, or release notes?{" "}
           <Link href="/changelog" className="text-accent hover:underline font-medium">
             Read the v{currentRelease.version} Changelog →
           </Link>
         </p>
+        <span className="text-text-tertiary hidden sm:inline">•</span>
+        <a
+          href={currentRelease.githubReleaseUrl || siteConfig.githubUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-text-secondary hover:text-text-primary hover:underline font-medium inline-flex items-center gap-1"
+        >
+          <span>View Release on GitHub</span>
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+          </svg>
+        </a>
       </div>
     </div>
   );
