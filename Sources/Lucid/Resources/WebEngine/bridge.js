@@ -53,7 +53,7 @@
                '<button class="lucid-mermaid-btn" title="Copy SVG" onclick="window.lucid.copySvg(this)">Copy SVG</button>' +
                '<button class="lucid-mermaid-btn" title="Export SVG…" onclick="window.lucid.saveSvg(this)">Export SVG…</button>' +
                '</div>' +
-               '<div class="mermaid-viewport" onmousedown="window.lucid.handleDiagramMouseDown(event, this)">' +
+               '<div class="mermaid-viewport" onpointerdown="window.lucid.handleDiagramPointerDown(event, this)">' +
                '<div class="mermaid-canvas">' +
                '<div class="mermaid">' + md.utils.escapeHtml(str) + '</div>' +
                '</div>' +
@@ -882,35 +882,82 @@
       viewport.classList.toggle('is-panning', isPanning);
     },
 
-    handleDiagramMouseDown: function(e, viewport) {
+    handleDiagramPointerDown: function(e, viewport) {
       const isPanActive = viewport.classList.contains('is-panning') || e.spaceKey || e.button === 1;
       if (!isPanActive) return;
+      if (e.button !== 0 && e.button !== 1) return;
       e.preventDefault();
-      viewport.classList.add('is-dragging');
+
       const canvas = viewport.querySelector('.mermaid-canvas');
       if (!canvas) return;
 
-      let tx = parseFloat(canvas.dataset.tx || '0');
-      let ty = parseFloat(canvas.dataset.ty || '0');
-      let scale = parseFloat(canvas.dataset.scale || '1.0');
-      const startX = e.clientX;
-      const startY = e.clientY;
-
-      function onMouseMove(moveEvent) {
-        const dx = moveEvent.clientX - startX;
-        const dy = moveEvent.clientY - startY;
-        const currentTx = tx + dx;
-        const currentTy = ty + dy;
-        canvas.style.transform = 'translate(' + currentTx + 'px, ' + currentTy + 'px) scale(' + scale + ')';
-        canvas.dataset.tempTx = currentTx;
-        canvas.dataset.tempTy = currentTy;
+      const pointerId = e.pointerId;
+      if (typeof viewport.setPointerCapture === 'function' && pointerId !== undefined) {
+        try {
+          viewport.setPointerCapture(pointerId);
+        } catch (err) {}
       }
 
-      function onMouseUp() {
+      viewport.classList.add('is-dragging');
+      document.body.classList.add('lucid-diagram-dragging');
+
+      const panStartX = parseFloat(canvas.dataset.tx || '0');
+      const panStartY = parseFloat(canvas.dataset.ty || '0');
+      const scale = parseFloat(canvas.dataset.scale || '1.0');
+      const pointerStartX = e.clientX;
+      const pointerStartY = e.clientY;
+
+      let nextTx = panStartX;
+      let nextTy = panStartY;
+      let rafId = null;
+
+      function renderTransform() {
+        rafId = null;
+        canvas.style.transform = 'translate(' + nextTx + 'px, ' + nextTy + 'px) scale(' + scale + ')';
+        canvas.dataset.tempTx = nextTx;
+        canvas.dataset.tempTy = nextTy;
+      }
+
+      function onPointerMove(moveEvent) {
+        if (pointerId !== undefined && moveEvent.pointerId !== undefined && moveEvent.pointerId !== pointerId) return;
+        const dx = moveEvent.clientX - pointerStartX;
+        const dy = moveEvent.clientY - pointerStartY;
+        nextTx = panStartX + dx;
+        nextTy = panStartY + dy;
+
+        if (!rafId) {
+          rafId = requestAnimationFrame(renderTransform);
+        }
+      }
+
+      function cleanup() {
+        if (rafId) {
+          cancelAnimationFrame(rafId);
+          renderTransform();
+        }
         viewport.classList.remove('is-dragging');
-        window.removeEventListener('mousemove', onMouseMove);
-        window.removeEventListener('mouseup', onMouseUp);
-        if (canvas.dataset.tempTx) {
+        document.body.classList.remove('lucid-diagram-dragging');
+
+        if (typeof viewport.releasePointerCapture === 'function' && pointerId !== undefined) {
+          try {
+            if (viewport.hasPointerCapture(pointerId)) {
+              viewport.releasePointerCapture(pointerId);
+            }
+          } catch (err) {}
+        }
+
+        viewport.removeEventListener('pointermove', onPointerMove);
+        viewport.removeEventListener('pointerup', onPointerUp);
+        viewport.removeEventListener('pointercancel', onPointerCancel);
+        viewport.removeEventListener('lostpointercapture', onPointerCancel);
+        window.removeEventListener('pointermove', onPointerMove);
+        window.removeEventListener('pointerup', onPointerUp);
+        window.removeEventListener('pointercancel', onPointerCancel);
+        window.removeEventListener('mousemove', onPointerMove);
+        window.removeEventListener('mouseup', onPointerUp);
+        window.removeEventListener('blur', onPointerCancel);
+
+        if (canvas.dataset.tempTx !== undefined) {
           canvas.dataset.tx = canvas.dataset.tempTx;
           canvas.dataset.ty = canvas.dataset.tempTy;
           delete canvas.dataset.tempTx;
@@ -918,8 +965,30 @@
         }
       }
 
-      window.addEventListener('mousemove', onMouseMove);
-      window.addEventListener('mouseup', onMouseUp);
+      function onPointerUp(upEvent) {
+        if (pointerId !== undefined && upEvent.pointerId !== undefined && upEvent.pointerId !== pointerId) return;
+        cleanup();
+      }
+
+      function onPointerCancel(cancelEvent) {
+        if (pointerId !== undefined && cancelEvent && cancelEvent.pointerId !== undefined && cancelEvent.pointerId !== pointerId) return;
+        cleanup();
+      }
+
+      viewport.addEventListener('pointermove', onPointerMove);
+      viewport.addEventListener('pointerup', onPointerUp);
+      viewport.addEventListener('pointercancel', onPointerCancel);
+      viewport.addEventListener('lostpointercapture', onPointerCancel);
+      window.addEventListener('pointermove', onPointerMove);
+      window.addEventListener('pointerup', onPointerUp);
+      window.addEventListener('pointercancel', onPointerCancel);
+      window.addEventListener('mousemove', onPointerMove);
+      window.addEventListener('mouseup', onPointerUp);
+      window.addEventListener('blur', onPointerCancel);
+    },
+
+    handleDiagramMouseDown: function(e, viewport) {
+      window.lucid.handleDiagramPointerDown(e, viewport);
     },
 
     zoomDiagramAtPoint: function(targetEl, factor, clientX, clientY) {
@@ -1045,7 +1114,7 @@
                 '<button class="lucid-mermaid-btn" title="Close (Esc)" onclick="window.lucid.closeDiagramModal()">✕</button>' +
               '</div>' +
             '</div>' +
-            '<div class="lucid-mermaid-modal-body" onmousedown="window.lucid.handleDiagramMouseDown(event, this)">' +
+            '<div class="lucid-mermaid-modal-body" onpointerdown="window.lucid.handleDiagramPointerDown(event, this)">' +
               '<div class="mermaid-canvas" id="lucid-modal-canvas"></div>' +
             '</div>' +
           '</div>';
