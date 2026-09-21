@@ -294,6 +294,68 @@
     return text;
   }
 
+  function getRepresentativeFontSize(svg) {
+    if (!svg) return 16;
+    try {
+      const labelEls = svg.querySelectorAll('.nodeLabel, .label, .node text, text, span');
+      const fontSizes = [];
+      for (let i = 0; i < labelEls.length; i++) {
+        const fs = parseFloat(window.getComputedStyle(labelEls[i]).fontSize);
+        if (!isNaN(fs) && fs > 0) {
+          fontSizes.push(fs);
+        }
+      }
+      if (fontSizes.length > 0) {
+        fontSizes.sort(function(a, b) { return a - b; });
+        return fontSizes[Math.floor(fontSizes.length / 2)];
+      }
+    } catch (e) {}
+    return 16;
+  }
+
+  function computeSmartDiagramLayout(intrinsicWidth, intrinsicHeight, availWidth, maxAvailHeight, representativeFontSize, targetReadableFontSize) {
+    const rf = (typeof representativeFontSize === 'number' && representativeFontSize > 0) ? representativeFontSize : 16;
+    const tf = (typeof targetReadableFontSize === 'number' && targetReadableFontSize > 0) ? targetReadableFontSize : 13.5;
+
+    if (!intrinsicWidth || intrinsicWidth <= 0 || !intrinsicHeight || intrinsicHeight <= 0 || !availWidth || availWidth <= 0) {
+      return {
+        scale: 1.0,
+        isComplete: false,
+        mode: 'fallback',
+        targetHeight: 320
+      };
+    }
+
+    const widthFitScale = availWidth / intrinsicWidth;
+    const heightFitScale = (maxAvailHeight && maxAvailHeight > 0) ? (maxAvailHeight / intrinsicHeight) : 1.0;
+    const completeFitScale = Math.min(1.0, widthFitScale, heightFitScale);
+
+    const readableMinimumScale = Math.min(1.0, tf / rf);
+
+    let initialScale = 1.0;
+    let mode = 'complete';
+
+    if (completeFitScale >= readableMinimumScale) {
+      initialScale = completeFitScale;
+      mode = 'complete';
+    } else {
+      initialScale = readableMinimumScale;
+      mode = 'readableWorking';
+    }
+
+    const scaledHeight = intrinsicHeight * initialScale;
+    const verticalPadding = 48; // 24px top + 24px bottom
+    const cappedMaxHeight = (maxAvailHeight && maxAvailHeight > 0) ? (maxAvailHeight + verticalPadding) : 840;
+    const targetHeight = Math.round(Math.min(cappedMaxHeight, Math.max(180, scaledHeight + verticalPadding)));
+
+    return {
+      scale: initialScale,
+      isComplete: (mode === 'complete'),
+      mode: mode,
+      targetHeight: targetHeight
+    };
+  }
+
   function formatMermaidContainer(c) {
     if (!c) return;
     const svg = c.querySelector('.mermaid-canvas svg') || c.querySelector('.mermaid svg');
@@ -307,33 +369,30 @@
       const viewport = c.querySelector('.mermaid-viewport');
       const canvas = c.querySelector('.mermaid-canvas');
       if (viewport && canvas) {
-        const availWidth = Math.max(100, viewport.clientWidth - 48);
+        // Horizontal padding: 20px left + 20px right = 40px
+        const availWidth = Math.max(100, (viewport.clientWidth || 800) - 40);
+
+        // Maximum inline viewport height: min(840px, 80vh)
+        const maxInlineHeight = Math.min(840, Math.max(480, Math.round((window.innerHeight || 800) * 0.8)));
+        const maxContentHeight = Math.max(100, maxInlineHeight - 48);
 
         // 1. Inspect real SVG label typography geometry
-        let baseFontSize = 14;
-        const labelEl = svg.querySelector('.nodeLabel, .label, text, span');
-        if (labelEl) {
-          const fs = parseFloat(window.getComputedStyle(labelEl).fontSize);
-          if (!isNaN(fs) && fs > 0) baseFontSize = fs;
-        }
+        const baseFontSize = getRepresentativeFontSize(svg);
 
-        // 2. Readability-first scale: target ~13.5px effective label size
-        const readabilityFloor = Math.min(1.0, 13.5 / baseFontSize);
-        const widthFitScale = availWidth / viewBox.width;
-
-        let initialScale = 1.0;
-        if (viewBox.width > availWidth) {
-          // Diagram is wider than viewport: do NOT aggressively shrink to fit!
-          // Prioritize readability so labels are readable without immediate zooming
-          initialScale = Math.min(1.0, Math.max(widthFitScale, readabilityFloor));
-        } else {
-          // Small or medium diagram: keep at natural readable size (~1.0x)
-          initialScale = 1.0;
-        }
+        // 2. Smart layout: DEFAULT = SMART READABLE COMPLETE VIEW WHEN POSSIBLE
+        const layout = computeSmartDiagramLayout(
+          viewBox.width,
+          viewBox.height,
+          availWidth,
+          maxContentHeight,
+          baseFontSize,
+          13.5
+        );
+        const initialScale = layout.scale;
 
         // 3. Dynamic bounded viewport height based on diagram aspect ratio
         const scaledHeight = viewBox.height * initialScale;
-        const targetHeight = Math.round(Math.min(640, Math.max(180, scaledHeight + 64)));
+        const targetHeight = Math.round(Math.min(maxInlineHeight, Math.max(180, scaledHeight + 48)));
         viewport.style.height = targetHeight + 'px';
 
         // 4. Meaningful centering translation
@@ -1072,7 +1131,7 @@
       const unscaledWidth = (viewBox && viewBox.width > 0) ? viewBox.width : (svg.clientWidth || 300);
       const unscaledHeight = (viewBox && viewBox.height > 0) ? viewBox.height : (svg.clientHeight || 200);
 
-      const availWidth = Math.max(100, viewport.clientWidth - 48);
+      const availWidth = Math.max(100, viewport.clientWidth - 40);
       const availHeight = Math.max(100, viewport.clientHeight - 48);
 
       const fitScale = Math.min(availWidth / unscaledWidth, availHeight / unscaledHeight, 1.5);
@@ -1150,6 +1209,8 @@
       let modalInitialScale = 1.0;
       let modalTx = 0;
       let modalTy = 0;
+      let contentOffsetX = 0;
+      let contentOffsetY = 0;
       if (modalSvg) {
         modalSvg.style.maxWidth = 'none';
         modalSvg.style.display = 'block';
@@ -1159,24 +1220,17 @@
           modalSvg.style.height = viewBox.height + 'px';
           const availWidth = Math.max(100, (modalViewport ? modalViewport.clientWidth : 800) - 64);
           const availHeight = Math.max(100, (modalViewport ? modalViewport.clientHeight : 600) - 80);
-          const fitScale = Math.min(availWidth / viewBox.width, availHeight / viewBox.height);
+          const baseFontSize = getRepresentativeFontSize(modalSvg);
+          const layout = computeSmartDiagramLayout(
+            viewBox.width,
+            viewBox.height,
+            availWidth,
+            availHeight,
+            baseFontSize,
+            13.5
+          );
+          modalInitialScale = layout.scale;
 
-          let baseFontSize = 14;
-          const labelEl = modalSvg.querySelector('.nodeLabel, .label, text, span');
-          if (labelEl) {
-            const fs = parseFloat(window.getComputedStyle(labelEl).fontSize);
-            if (!isNaN(fs) && fs > 0) baseFontSize = fs;
-          }
-          const readabilityFloor = Math.min(1.0, 13.5 / baseFontSize);
-
-          if (fitScale >= readabilityFloor) {
-            modalInitialScale = Math.min(1.2, fitScale);
-          } else {
-            modalInitialScale = Math.min(1.0, Math.max(fitScale, readabilityFloor));
-          }
-
-          let contentOffsetX = 0;
-          let contentOffsetY = 0;
           try {
             const bbox = modalSvg.getBBox();
             if (bbox && bbox.width > 0) {
@@ -1195,6 +1249,8 @@
       modalCanvas.dataset.initialScale = modalInitialScale;
       modalCanvas.dataset.initialTx = modalTx;
       modalCanvas.dataset.initialTy = modalTy;
+      modalCanvas.dataset.contentOffsetX = contentOffsetX;
+      modalCanvas.dataset.contentOffsetY = contentOffsetY;
       modalCanvas.dataset.scale = modalInitialScale;
       modalCanvas.dataset.tx = modalTx;
       modalCanvas.dataset.ty = modalTy;
@@ -1400,7 +1456,10 @@
 
     getStandaloneHTML: function() {
       return document.documentElement.outerHTML;
-    }
+    },
+
+    computeSmartDiagramLayout: computeSmartDiagramLayout,
+    getRepresentativeFontSize: getRepresentativeFontSize
   };
 
   function notifyBridgeReady() {
