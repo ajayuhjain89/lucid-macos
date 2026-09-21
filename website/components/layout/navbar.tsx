@@ -52,13 +52,13 @@ export function Navbar() {
             href={siteConfig.githubUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="w-8 h-8 flex items-center justify-center rounded-[6px] text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="w-9 h-9 flex items-center justify-center rounded-[6px] text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             aria-label="View Lucid on GitHub"
             title="View Lucid on GitHub"
           >
             <svg
-              width="16"
-              height="16"
+              width="18"
+              height="18"
               viewBox="0 0 24 24"
               fill="currentColor"
               aria-hidden="true"
