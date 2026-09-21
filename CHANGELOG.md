@@ -23,6 +23,18 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   showcase, sample), keeping README/LICENSE/CHANGELOG/CONTRIBUTING/THIRD-PARTY-NOTICES
   in the repository root.
 
+## [1.0.1] - 2026-09-21
+
+### Added
+- Smart adaptive initial Mermaid diagram layout: normal and medium diagrams fit completely on first render when readable, with dynamic viewport height up to `min(840px, 80vh)`.
+
+### Improved
+- Mermaid Hand/Pan interaction: visible `grab`/`grabbing` cursor states, Pointer Events with pointer capture, stable drag origin, requestAnimationFrame transform coalescing, and smooth 1:1 panning with no CSS transition fight.
+- Huge Mermaid diagrams retain a comfortable working scale (targeting ≥ 13.5px effective typography) with pan navigation, while Fit provides a full-diagram overview and Reset restores the exact smart initial view.
+
+### Fixed
+- Outline sidebar toggle no longer causes a brief Reader/WKWebView blank flash or Markdown rerender; scroll position and Mermaid transform states are preserved across sidebar toggles.
+
 ## [1.0.0] - 2026-09-20
 
 ### Added
@@ -34,4 +46,5 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Live external file watching and PDF / standalone-HTML / rich-text export.
 - Pre-packaged `Lucid-1.0.0.dmg` release artifact with verified SHA-256 checksum.
 
+[1.0.1]: https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.1
 [1.0.0]: https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.0
