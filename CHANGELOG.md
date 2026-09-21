@@ -6,6 +6,28 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-09-21
+
+### Added
+- Native built-in update mechanism powered by Sparkle 2 (v2.10.0).
+- "Check for Updates…" menu command in the Lucid application menu.
+- Dedicated Updates tab in Settings (`⌘,` → Updates) displaying installed version, build number, last check timestamp, and update controls.
+- User-configurable automatic update preferences: toggle automatic background checks and automatic background downloads.
+- Cryptographic EdDSA archive signing and verification (`SUPublicEDKey`) ensuring update integrity and authenticity.
+- Production HTTPS update feed endpoint at `/api/appcast` with strict staged-vs-published gating to prevent broken update links.
+- Helper script `scripts/sparkle-sign-release.sh` for deterministic EdDSA release signing.
+- Runtime disk image detection alerting users to move Lucid to `/Applications` for automatic updates if launched from a read-only DMG.
+
+### Security
+- Update archives are cryptographically verified using EdDSA signatures before extraction.
+- Telemetry and system profiling remain disabled (`sendsSystemProfile = false`).
+- Ad-hoc signed public beta; Developer ID signing and Apple notarization remain deferred until enrollment in the Apple Developer Program and a future release.
+
+### Migration Note
+- Lucid v1.0.0, v1.0.1, and v1.0.2 do not contain an in-app updater and cannot automatically receive v1.0.3.
+- Existing users must manually install v1.0.3 once by downloading `Lucid-1.0.3.dmg`.
+- Once verified, subsequent releases such as v1.0.4 can be checked and downloaded directly from inside Lucid.
+
 ## [1.0.2] - 2026-09-21
 
 ### Added
@@ -47,6 +69,7 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Live external file watching and PDF / standalone-HTML / rich-text export.
 - Pre-packaged `Lucid-1.0.0.dmg` release artifact with verified SHA-256 checksum.
 
+[1.0.3]: https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.3
 [1.0.2]: https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.2
 [1.0.1]: https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.1
 [1.0.0]: https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.0

@@ -75,21 +75,16 @@ else
   fi
 fi
 
+FRAMEWORKS="$CONTENTS/Frameworks"
+
 echo "==> Compiling $APP_NAME for macOS (arm64)..."
-mkdir -p "$DIR/scratch/ModuleCache"
-# Pin the Swift 5 language mode so the build is deterministic across toolchains
-# (newer Xcode defaults `swiftc` to Swift 6 mode, whose stricter actor isolation
-# the codebase is not written against).
-swiftc -parse-as-library -target arm64-apple-macosx14.0 -O -swift-version 5 \
-  -module-cache-path "$DIR/scratch/ModuleCache" \
-  -o "$DIR/$APP_NAME" \
-  $(find "$DIR/Sources/Lucid" -name "*.swift")
+swift build -c release --arch arm64 -Xlinker -rpath -Xlinker @executable_path/../Frameworks
 
 echo "==> Creating application bundle at $APP_BUNDLE..."
 rm -rf "$APP_BUNDLE"
-mkdir -p "$MACOS" "$RESOURCES"
+mkdir -p "$MACOS" "$RESOURCES" "$FRAMEWORKS"
 
-cp "$DIR/$APP_NAME" "$MACOS/$APP_NAME"
+cp "$DIR/.build/arm64-apple-macosx/release/$APP_NAME" "$MACOS/$APP_NAME"
 cp "$DIR/Info.plist" "$CONTENTS/Info.plist"
 echo "APPL????" > "$CONTENTS/PkgInfo"
 
@@ -100,8 +95,20 @@ fi
 echo "==> Copying WebEngine resources..."
 cp -R "$DIR/Sources/Lucid/Resources/WebEngine" "$RESOURCES/WebEngine"
 
-echo "==> Signing application bundle..."
-codesign --force --deep -s - "$APP_BUNDLE"
+echo "==> Copying Sparkle framework..."
+cp -R "$DIR/.build/arm64-apple-macosx/release/Sparkle.framework" "$FRAMEWORKS/"
+
+echo "==> Signing application bundle (inside-out)..."
+SPARKLE_DIR="$FRAMEWORKS/Sparkle.framework"
+if [ -d "$SPARKLE_DIR" ]; then
+  codesign --force -s - "$SPARKLE_DIR/Versions/B/XPCServices/Downloader.xpc"
+  codesign --force -s - "$SPARKLE_DIR/Versions/B/XPCServices/Installer.xpc"
+  codesign --force -s - "$SPARKLE_DIR/Versions/B/Autoupdate"
+  codesign --force -s - "$SPARKLE_DIR/Versions/B/Updater.app"
+  codesign --force -s - "$SPARKLE_DIR/Versions/B"
+fi
+codesign --force -s - "$APP_BUNDLE"
+codesign --verify --deep --strict "$APP_BUNDLE"
 
 echo "==> Done! $APP_BUNDLE is ready."
 
