@@ -232,7 +232,7 @@ struct EditorSettingsTab: View {
     @ObservedObject var preferences: LucidPreferences
 
     var body: some View {
-        ScrollView {
+        ScrollView(.vertical) {
             VStack(alignment: .leading, spacing: LucidSpacing.sectionSpacing) {
                 // Typography Section
                 VStack(alignment: .leading, spacing: LucidSpacing.medium) {
@@ -248,11 +248,16 @@ struct EditorSettingsTab: View {
 
                         Picker("Font Family", selection: $preferences.fontFamily) {
                             ForEach(FontFamily.allCases) { family in
-                                Text(family.displayName).tag(family)
+                                Text(family.shortDisplayName).tag(family)
                             }
                         }
                         .pickerStyle(.segmented)
                         .labelsHidden()
+
+                        Text(preferences.fontFamily.description)
+                            .font(LucidTypography.caption)
+                            .foregroundColor(LucidColors.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
 
                         if preferences.fontFamily == .custom {
                             TextField("Custom Font Name (e.g. Fira Code)", text: $preferences.customFontName)
@@ -332,6 +337,7 @@ struct EditorSettingsTab: View {
                 }
             }
             .padding(LucidSpacing.small)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }
