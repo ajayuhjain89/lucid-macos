@@ -628,6 +628,139 @@
   const katexLRU = new SimpleLRU(500);
   const mermaidLRU = new SimpleLRU(50);
   let currentMermaidTheme = 'dark';
+  let desiredMermaidTheme = 'dark';
+  let mermaidThemeGeneration = 0;
+  let isMermaidWorkerRunning = false;
+
+  function yieldToBrowser() {
+    return new Promise(function(resolve) {
+      if (typeof requestIdleCallback === 'function') {
+        requestIdleCallback(function() { resolve(); }, { timeout: 50 });
+      } else if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(function() {
+          setTimeout(resolve, 0);
+        });
+      } else {
+        setTimeout(resolve, 0);
+      }
+    });
+  }
+
+  async function runSerializedMermaidWorker() {
+    if (isMermaidWorkerRunning) return;
+    isMermaidWorkerRunning = true;
+
+    try {
+      while (true) {
+        const targetTheme = desiredMermaidTheme;
+        const currentGen = mermaidThemeGeneration;
+
+        if (typeof mermaid === 'undefined') break;
+
+        const containers = Array.prototype.slice.call(document.querySelectorAll('.mermaid-container'));
+        if (containers.length === 0) break;
+
+        // Check if any container needs rendering
+        let uncachedContainers = [];
+        for (let i = 0; i < containers.length; i++) {
+          const c = containers[i];
+          const canvas = c.querySelector('.mermaid-canvas');
+          if (!canvas) continue;
+
+          c._lucidRenderedThemes = c._lucidRenderedThemes || {};
+          if (c._lucidRenderedThemes[targetTheme]) {
+            if (c._lucidCurrentTheme !== targetTheme) {
+              canvas.innerHTML = c._lucidRenderedThemes[targetTheme];
+              c._lucidCurrentTheme = targetTheme;
+              formatMermaidContainer(c);
+            }
+          } else {
+            uncachedContainers.push(c);
+          }
+        }
+
+        if (uncachedContainers.length === 0) {
+          // All diagrams are now displaying targetTheme
+          currentMermaidTheme = targetTheme;
+          invalidateHeadingPositions('mermaid-theme');
+          break;
+        }
+
+        // Initialize Mermaid for targetTheme if needed
+        if (currentMermaidTheme !== targetTheme) {
+          currentMermaidTheme = targetTheme;
+          try {
+            mermaid.initialize(getMermaidConfigForTheme(targetTheme));
+          } catch (e) {
+            console.warn('Failed to initialize mermaid for theme:', targetTheme, e);
+          }
+        }
+
+        // Render ONE uncached diagram at a time
+        const c = uncachedContainers[0];
+        const rawAttr = c.getAttribute('data-raw-mermaid');
+        const canvas = c.querySelector('.mermaid-canvas');
+
+        if (rawAttr && canvas) {
+          let rawCode = '';
+          try { rawCode = decodeURIComponent(rawAttr); } catch (_) { rawCode = rawAttr; }
+          const preparedCode = sanitizeMermaidSource(rawCode);
+          const id = 'mermaid-dyn-' + Math.random().toString(36).substring(2, 9);
+
+          const genAtStart = currentGen;
+          const themeAtStart = targetTheme;
+
+          try {
+            const res = await mermaid.render(id, preparedCode);
+
+            // Stale check before mutating DOM or cache
+            if (mermaidThemeGeneration === genAtStart && desiredMermaidTheme === themeAtStart) {
+              canvas.innerHTML = res.svg;
+              c._lucidRenderedThemes = c._lucidRenderedThemes || {};
+              c._lucidRenderedThemes[targetTheme] = res.svg;
+              // Bounded cache: max 3 entries (dark, light, sepia)
+              const themeKeys = Object.keys(c._lucidRenderedThemes);
+              if (themeKeys.length > 3) {
+                delete c._lucidRenderedThemes[themeKeys[0]];
+              }
+              c._lucidCurrentTheme = targetTheme;
+              formatMermaidContainer(c);
+            }
+          } catch (err) {
+            console.warn('Mermaid dynamic re-render error:', err);
+            if (mermaidThemeGeneration === genAtStart && desiredMermaidTheme === themeAtStart) {
+              formatMermaidContainer(c, err);
+            }
+          }
+        }
+
+        // Check if generation changed while rendering
+        if (mermaidThemeGeneration !== currentGen || desiredMermaidTheme !== targetTheme) {
+          continue;
+        }
+
+        // Yield to browser between diagrams
+        await yieldToBrowser();
+      }
+    } finally {
+      isMermaidWorkerRunning = false;
+      // If desired theme changed while loop was exiting, restart
+      if (desiredMermaidTheme !== currentMermaidTheme && typeof mermaid !== 'undefined') {
+        const remainingContainers = document.querySelectorAll('.mermaid-container');
+        let needsWork = false;
+        for (let i = 0; i < remainingContainers.length; i++) {
+          const c = remainingContainers[i];
+          if (c._lucidCurrentTheme !== desiredMermaidTheme) {
+            needsWork = true;
+            break;
+          }
+        }
+        if (needsWork) {
+          runSerializedMermaidWorker();
+        }
+      }
+    }
+  }
 
   // ============================================================
   // MERMAID BLUE-TINT THEME CONFIGURATION
@@ -1529,6 +1662,8 @@
     updateContent: function(rawMarkdown, renderId) {
       renderId = String(renderId || '0');
       currentRenderRevision = renderId;
+      mermaidThemeGeneration++;
+      desiredMermaidTheme = currentMermaidTheme;
       pruneOldRegistries(renderId);
       LucidPerf.mark(renderId, 't4_js_received', { length: rawMarkdown ? rawMarkdown.length : 0 });
       const container = document.getElementById('lucid-content');
@@ -1756,8 +1891,16 @@
             mermaid.run({ nodes: mermaidNodes, suppressErrors: true }).then(function() {
               if (currentRenderRevision !== renderId) return;
               for (let i = 0; i < mermaidNodes.length; i++) {
-                const c = mermaidNodes[i].closest('.mermaid-container');
-                if (c) formatMermaidContainer(c);
+                const c = (mermaidNodes[i] && typeof mermaidNodes[i].closest === 'function') ? mermaidNodes[i].closest('.mermaid-container') : null;
+                if (c) {
+                  formatMermaidContainer(c);
+                  const canvas = c.querySelector('.mermaid-canvas');
+                  if (canvas && canvas.innerHTML) {
+                    c._lucidRenderedThemes = c._lucidRenderedThemes || {};
+                    c._lucidRenderedThemes[currentMermaidTheme] = canvas.innerHTML;
+                    c._lucidCurrentTheme = currentMermaidTheme;
+                  }
+                }
               }
               LucidPerf.mark(renderId, 't16_mermaid_end', { count: mermaidCount });
               mermaidDone = true;
@@ -1766,8 +1909,16 @@
               console.warn('Mermaid batch render error:', err);
               if (currentRenderRevision !== renderId) return;
               for (let i = 0; i < mermaidNodes.length; i++) {
-                const c = mermaidNodes[i].closest('.mermaid-container');
-                if (c) formatMermaidContainer(c);
+                const c = (mermaidNodes[i] && typeof mermaidNodes[i].closest === 'function') ? mermaidNodes[i].closest('.mermaid-container') : null;
+                if (c) {
+                  formatMermaidContainer(c);
+                  const canvas = c.querySelector('.mermaid-canvas');
+                  if (canvas && canvas.innerHTML) {
+                    c._lucidRenderedThemes = c._lucidRenderedThemes || {};
+                    c._lucidRenderedThemes[currentMermaidTheme] = canvas.innerHTML;
+                    c._lucidCurrentTheme = currentMermaidTheme;
+                  }
+                }
               }
               LucidPerf.mark(renderId, 't16_mermaid_end', { count: mermaidCount });
               mermaidDone = true;
@@ -1800,16 +1951,32 @@
               mermaid.run({ nodes: currentChunk, suppressErrors: true }).then(function() {
                 if (currentRenderRevision !== renderId) return;
                 for (let i = 0; i < currentChunk.length; i++) {
-                  const c = currentChunk[i].closest('.mermaid-container');
-                  if (c) formatMermaidContainer(c);
+                  const c = (currentChunk[i] && typeof currentChunk[i].closest === 'function') ? currentChunk[i].closest('.mermaid-container') : null;
+                  if (c) {
+                    formatMermaidContainer(c);
+                    const canvas = c.querySelector('.mermaid-canvas');
+                    if (canvas && canvas.innerHTML) {
+                      c._lucidRenderedThemes = c._lucidRenderedThemes || {};
+                      c._lucidRenderedThemes[currentMermaidTheme] = canvas.innerHTML;
+                      c._lucidCurrentTheme = currentMermaidTheme;
+                    }
+                  }
                 }
                 setTimeout(processMermaidChunk, 0);
               }).catch(function(err) {
                 console.warn('Mermaid chunk render error:', err);
                 if (currentRenderRevision !== renderId) return;
                 for (let i = 0; i < currentChunk.length; i++) {
-                  const c = currentChunk[i].closest('.mermaid-container');
-                  if (c) formatMermaidContainer(c);
+                  const c = (currentChunk[i] && typeof currentChunk[i].closest === 'function') ? currentChunk[i].closest('.mermaid-container') : null;
+                  if (c) {
+                    formatMermaidContainer(c);
+                    const canvas = c.querySelector('.mermaid-canvas');
+                    if (canvas && canvas.innerHTML) {
+                      c._lucidRenderedThemes = c._lucidRenderedThemes || {};
+                      c._lucidRenderedThemes[currentMermaidTheme] = canvas.innerHTML;
+                      c._lucidCurrentTheme = currentMermaidTheme;
+                    }
+                  }
                 }
                 setTimeout(processMermaidChunk, 0);
               });
@@ -1837,30 +2004,42 @@
         body.setAttribute('data-theme', prefs.theme);
         body.className = 'vscode-body ' + (prefs.theme === 'dark' ? 'vscode-dark' : (prefs.theme === 'light' ? 'vscode-light' : 'vscode-sepia'));
         const newThemeName = (prefs.theme === 'light' || prefs.theme === 'sepia') ? prefs.theme : 'dark';
-        if (typeof mermaid !== 'undefined' && currentMermaidTheme !== newThemeName) {
-          currentMermaidTheme = newThemeName;
-          try {
-            mermaid.initialize(getMermaidConfigForTheme(currentMermaidTheme));
-            // Re-render Mermaid diagrams with new theme without full document re-render
-            const containers = document.querySelectorAll('.mermaid-container');
-            containers.forEach(function(c) {
-              const rawAttr = c.getAttribute('data-raw-mermaid');
-              const canvas = c.querySelector('.mermaid-canvas');
-              if (rawAttr && canvas) {
-                let rawCode = '';
-                try { rawCode = decodeURIComponent(rawAttr); } catch (_) { rawCode = rawAttr; }
-                const preparedCode = sanitizeMermaidSource(rawCode);
-                const id = 'mermaid-dyn-' + Math.random().toString(36).substring(2, 9);
-                mermaid.render(id, preparedCode).then(function(res) {
-                  canvas.innerHTML = res.svg;
-                  formatMermaidContainer(c);
-                }).catch(function(err) {
-                  console.warn('Mermaid dynamic re-render error:', err);
-                  formatMermaidContainer(c, err);
-                });
+
+        if (typeof mermaid !== 'undefined') {
+          desiredMermaidTheme = newThemeName;
+          mermaidThemeGeneration++;
+
+          // Immediately restore any cached SVGs
+          const containers = document.querySelectorAll('.mermaid-container');
+          let hasUncached = false;
+          for (let i = 0; i < containers.length; i++) {
+            const c = containers[i];
+            const canvas = c.querySelector('.mermaid-canvas');
+            if (!canvas) continue;
+            if (c._lucidRenderedThemes && c._lucidRenderedThemes[newThemeName]) {
+              if (c._lucidCurrentTheme !== newThemeName) {
+                canvas.innerHTML = c._lucidRenderedThemes[newThemeName];
+                c._lucidCurrentTheme = newThemeName;
+                formatMermaidContainer(c);
               }
-            });
-          } catch (e) {}
+            } else {
+              hasUncached = true;
+            }
+          }
+
+          if (hasUncached) {
+            // Explicitly yield to WebKit so base theme paints first
+            if (typeof requestAnimationFrame === 'function') {
+              requestAnimationFrame(function() {
+                runSerializedMermaidWorker();
+              });
+            } else {
+              setTimeout(runSerializedMermaidWorker, 0);
+            }
+          } else {
+            currentMermaidTheme = newThemeName;
+            invalidateHeadingPositions('mermaid-theme');
+          }
         }
       }
       if (prefs.fontFamily) root.style.setProperty('--lucid-font-family', prefs.fontFamily);

@@ -62,6 +62,24 @@ public enum FontFamily: String, CaseIterable, Identifiable, Codable {
         }
     }
 
+    public var shortDisplayName: String {
+        switch self {
+        case .sans: return "SF Pro"
+        case .serif: return "New York"
+        case .mono: return "SF Mono"
+        case .custom: return "Custom…"
+        }
+    }
+
+    public var description: String {
+        switch self {
+        case .sans: return "System sans serif · clean, neutral, and native to macOS."
+        case .serif: return "Editorial serif · warm, classic type calibrated for extended reading."
+        case .mono: return "Monospaced code · precise character alignment and tabular figures."
+        case .custom: return "Custom system font resolved by PostScript or family name."
+        }
+    }
+
     public func cssValue(customName: String) -> String {
         switch self {
         case .sans:
