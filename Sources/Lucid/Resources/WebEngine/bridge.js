@@ -1077,6 +1077,7 @@
         };
       }
     }
+    invalidateHeadingPositions('mermaid');
   }
 
 
@@ -1158,9 +1159,7 @@
       const id = decodeURIComponent(href.slice(1));
       const el = document.getElementById(id) || document.querySelector('[name="' + CSS.escape(id) + '"]');
       if (el) {
-        isProgrammaticScroll = true;
-        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        setTimeout(function() { isProgrammaticScroll = false; }, 400);
+        startProgrammaticScroll(id, el);
       }
       return;
     }
@@ -1171,42 +1170,359 @@
     }
   });
 
-  // Scroll Spy
-  let isProgrammaticScroll = false;
-  let activeHeadingTimer = null;
-  window.addEventListener('scroll', function() {
-    if (isProgrammaticScroll) return;
+  // Scroll Spy, Heading Cache & Anchor Restoration
+  let programmaticScrollActive = false;
+  let programmaticTargetHeadingId = null;
+  let lastProgrammaticScrollEventTime = 0;
+  let programmaticSettleTimer = null;
+  const supportsScrollEnd = (typeof window !== 'undefined' && 'onscrollend' in window);
+  let anchorRestoreActive = false;
+  let anchorRestoreSettleTimer = null;
+  let lastUserScrollTimestamp = 0;
+  let lastResolvedScrollY = 0;
+  let lastReportedHeadingId = null;
+  let cachedHeadings = null; // Array of { id: string, top: number } sorted ascending
+  let headingPositionsDirty = false;
+  let headingRefreshTimer = null;
+  let headingRefreshMaxTimer = null;
+  const HEADING_REFRESH_SETTLE_MS = 60;
+  const HEADING_REFRESH_MAX_MS = 250;
+  let isScrollSpyPending = false;
+  let lastScrollSpyTime = 0;
+  const SCROLL_SPY_THROTTLE_MS = 100;
+  let scrollSpyTrailingTimer = null;
+  let currentActiveAnchor = null;
 
+  function startProgrammaticScroll(id, targetEl) {
+    programmaticTargetHeadingId = id;
+    programmaticScrollActive = true;
+    lastReportedHeadingId = id;
+    lastProgrammaticScrollEventTime = (typeof performance !== 'undefined') ? performance.now() : Date.now();
+
+    clearTimeout(programmaticSettleTimer);
+    programmaticSettleTimer = setTimeout(onProgrammaticScrollSettled, 120);
+
+    if (supportsScrollEnd) {
+      window.addEventListener('scrollend', onScrollEndOnce, { once: true });
+    }
+
+    targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function onScrollEndOnce() {
+    clearTimeout(programmaticSettleTimer);
+    onProgrammaticScrollSettled();
+  }
+
+  function handleProgrammaticScrollEvent() {
+    lastProgrammaticScrollEventTime = (typeof performance !== 'undefined') ? performance.now() : Date.now();
+    clearTimeout(programmaticSettleTimer);
+    programmaticSettleTimer = setTimeout(onProgrammaticScrollSettled, 120);
+  }
+
+  function onProgrammaticScrollSettled() {
+    if (supportsScrollEnd) {
+      window.removeEventListener('scrollend', onScrollEndOnce);
+    }
+    clearTimeout(programmaticSettleTimer);
+    programmaticScrollActive = false;
+    programmaticTargetHeadingId = null;
+    evaluateActiveHeading();
+  }
+
+  function rebuildHeadingPositionCache() {
+    const elements = document.querySelectorAll('h1, h2, h3, h4, h5, h6');
+    const list = [];
+    const scrollY = window.scrollY || 0;
+    for (let i = 0; i < elements.length; i++) {
+      const el = elements[i];
+      if (!el.id) continue;
+      const rect = el.getBoundingClientRect();
+      list.push({
+        id: el.id,
+        top: rect.top + scrollY
+      });
+    }
+    list.sort(function(a, b) { return a.top - b.top; });
+    cachedHeadings = list;
+  }
+
+  function invalidateHeadingPositions(reason) {
+    headingPositionsDirty = true;
+
+    clearTimeout(headingRefreshTimer);
+    headingRefreshTimer = setTimeout(function() {
+      performHeadingRefreshIfDirty();
+    }, HEADING_REFRESH_SETTLE_MS);
+
+    if (!headingRefreshMaxTimer) {
+      headingRefreshMaxTimer = setTimeout(function() {
+        performHeadingRefreshIfDirty();
+      }, HEADING_REFRESH_MAX_MS);
+    }
+  }
+
+  function performHeadingRefreshIfDirty() {
+    clearTimeout(headingRefreshTimer);
+    clearTimeout(headingRefreshMaxTimer);
+    headingRefreshTimer = null;
+    headingRefreshMaxTimer = null;
+
+    if (!headingPositionsDirty) return;
+    headingPositionsDirty = false;
+
+    if (typeof requestAnimationFrame !== 'undefined') {
+      requestAnimationFrame(function() {
+        rebuildHeadingPositionCache();
+        evaluateActiveHeading();
+      });
+    } else {
+      rebuildHeadingPositionCache();
+      evaluateActiveHeading();
+    }
+  }
+
+  function resolveActiveHeading(options) {
+    const headings = options.headings;
+    if (!headings || headings.length === 0) return null;
+
+    const scrollY = options.scrollY;
+    const viewportHeight = options.viewportHeight;
+    const documentHeight = options.documentHeight;
+    const previousActiveId = options.previousActiveId;
+    const previousScrollY = options.previousScrollY;
+    const referenceY = (options.referenceY !== undefined) ? options.referenceY : 120;
+    const hysteresis = (options.hysteresis !== undefined) ? options.hysteresis : 15;
+
+    // 1. Top of document rule
+    if (scrollY <= 50) {
+      const firstTopViewport = headings[0].top - scrollY;
+      if (firstTopViewport <= viewportHeight * 0.5) {
+        return headings[0].id;
+      }
+      return null;
+    }
+
+    // 2. Bottom of document rule
+    if (scrollY + viewportHeight >= documentHeight - 20) {
+      const lastHeading = headings[headings.length - 1];
+      const lastTopViewport = lastHeading.top - scrollY;
+      if (lastTopViewport <= viewportHeight) {
+        return lastHeading.id;
+      }
+    }
+
+    // 3. Direction determination with deadband for sub-pixel noise
+    const deltaY = scrollY - (previousScrollY !== null && previousScrollY !== undefined ? previousScrollY : scrollY);
+    const direction = Math.abs(deltaY) < 1 ? 'stationary' : (deltaY > 0 ? 'downward' : 'upward');
+
+    // 4. Binary search for natural candidate where heading.top <= scrollY + referenceY
+    const targetDocY = scrollY + referenceY;
+    let low = 0;
+    let high = headings.length - 1;
+    let candidateIndex = -1;
+
+    while (low <= high) {
+      const mid = (low + high) >> 1;
+      if (headings[mid].top <= targetDocY) {
+        candidateIndex = mid;
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
+    }
+
+    if (candidateIndex < 0) return null;
+    const candidate = headings[candidateIndex];
+
+    // 5. Stateful Hysteresis (applied between adjacent headings)
+    if (previousActiveId && candidate.id !== previousActiveId) {
+      let prevIndex = -1;
+      for (let i = 0; i < headings.length; i++) {
+        if (headings[i].id === previousActiveId) {
+          prevIndex = i;
+          break;
+        }
+      }
+      if (prevIndex !== -1 && Math.abs(candidateIndex - prevIndex) === 1) {
+        if (candidateIndex > prevIndex && direction !== 'upward') {
+          const bViewportTop = candidate.top - scrollY;
+          if (bViewportTop > referenceY - hysteresis) {
+            return previousActiveId;
+          }
+        } else if (candidateIndex < prevIndex && direction !== 'downward') {
+          const bHeading = headings[prevIndex];
+          const bViewportTop = bHeading.top - scrollY;
+          if (bViewportTop <= referenceY + hysteresis) {
+            return previousActiveId;
+          }
+        }
+      }
+    }
+
+    return candidate.id;
+  }
+
+  function evaluateActiveHeading() {
+    if (programmaticScrollActive && programmaticTargetHeadingId) {
+      return;
+    }
+
+    if (!cachedHeadings) {
+      rebuildHeadingPositionCache();
+    }
+    if (!cachedHeadings || cachedHeadings.length === 0) return;
+
+    const scrollY = window.scrollY || 0;
+    const viewportHeight = window.innerHeight || 800;
+    const documentHeight = (document.documentElement && document.documentElement.scrollHeight) || 1000;
+
+    const activeId = resolveActiveHeading({
+      headings: cachedHeadings,
+      scrollY: scrollY,
+      viewportHeight: viewportHeight,
+      documentHeight: documentHeight,
+      previousActiveId: lastReportedHeadingId,
+      previousScrollY: lastResolvedScrollY,
+      referenceY: 120,
+      hysteresis: 15
+    });
+
+    lastResolvedScrollY = scrollY;
+
+    if (activeId !== lastReportedHeadingId) {
+      lastReportedHeadingId = activeId;
+      if (activeId) {
+        const el = document.getElementById(activeId);
+        if (el && window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.lucidActiveHeading) {
+          window.webkit.messageHandlers.lucidActiveHeading.postMessage({
+            id: el.id,
+            text: el.textContent.trim(),
+            level: parseInt(el.tagName.substring(1), 10)
+          });
+        }
+      } else {
+        if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.lucidActiveHeading) {
+          window.webkit.messageHandlers.lucidActiveHeading.postMessage({
+            id: '',
+            text: '',
+            level: 0
+          });
+        }
+      }
+    }
+  }
+
+  function captureReadingAnchor() {
+    const READING_REFERENCE_Y = 120;
+    const hit = document.elementFromPoint ? document.elementFromPoint(window.innerWidth / 2, READING_REFERENCE_Y) : null;
+    const block = hit ? hit.closest('h1, h2, h3, h4, h5, h6, p, pre, blockquote, table, .mermaid-container, .lucid-math-block, li') : null;
+    const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+    const scrollRatio = maxScroll > 0 ? window.scrollY / maxScroll : 0;
+
+    if (block && block.isConnected) {
+      const rect = block.getBoundingClientRect();
+      currentActiveAnchor = {
+        element: block,
+        viewportOffset: rect.top - READING_REFERENCE_Y,
+        scrollRatioFallback: scrollRatio
+      };
+    } else {
+      currentActiveAnchor = {
+        element: null,
+        viewportOffset: 0,
+        scrollRatioFallback: scrollRatio
+      };
+    }
+    return currentActiveAnchor;
+  }
+
+  function restoreReadingAnchor(anchorToRestore) {
+    const anchor = anchorToRestore || currentActiveAnchor;
+    if (!anchor) return;
+    const READING_REFERENCE_Y = 120;
+
+    const now = (typeof performance !== 'undefined') ? performance.now() : Date.now();
+    const isActivelyScrolling = (now - lastUserScrollTimestamp < 150);
+    if (isActivelyScrolling) return;
+
+    let delta = 0;
+    if (anchor.element && anchor.element.isConnected) {
+      const rect = anchor.element.getBoundingClientRect();
+      delta = rect.top - (READING_REFERENCE_Y + anchor.viewportOffset);
+    } else if (anchor.scrollRatioFallback !== undefined) {
+      const newMaxScroll = document.documentElement.scrollHeight - window.innerHeight;
+      const targetY = anchor.scrollRatioFallback * newMaxScroll;
+      delta = targetY - (window.scrollY || 0);
+    }
+
+    if (Math.abs(delta) > 1) {
+      anchorRestoreActive = true;
+      clearTimeout(anchorRestoreSettleTimer);
+
+      function clearAnchorRestore() {
+        clearTimeout(anchorRestoreSettleTimer);
+        if (supportsScrollEnd) {
+          window.removeEventListener('scrollend', clearAnchorRestore);
+        }
+        anchorRestoreActive = false;
+      }
+
+      if (supportsScrollEnd) {
+        window.addEventListener('scrollend', clearAnchorRestore, { once: true });
+      }
+      anchorRestoreSettleTimer = setTimeout(clearAnchorRestore, 100);
+
+      window.scrollBy(0, delta);
+    }
+  }
+
+  window.addEventListener('scroll', function() {
     const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
     const fraction = maxScroll > 0 ? window.scrollY / maxScroll : 0;
-    // Graduated 0..1 intensity so the chrome can fade its glass and fade out document
-    // metadata smoothly over the first ~28px of travel.
     const intensity = Math.max(0, Math.min(1, window.scrollY / 28));
     if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.lucidScroll) {
       window.webkit.messageHandlers.lucidScroll.postMessage({ fraction: fraction, scrolled: window.scrollY > 6, intensity: intensity });
     }
 
-    clearTimeout(activeHeadingTimer);
-    activeHeadingTimer = setTimeout(function() {
-      const headings = document.querySelectorAll('h1, h2, h3, h4, h5, h6');
-      let currentHeading = null;
-      for (let i = 0; i < headings.length; i++) {
-        const rect = headings[i].getBoundingClientRect();
-        if (rect.top <= 120) {
-          currentHeading = headings[i];
+    if (anchorRestoreActive) {
+      return;
+    }
+
+    if (programmaticScrollActive) {
+      handleProgrammaticScrollEvent();
+    } else {
+      lastUserScrollTimestamp = (typeof performance !== 'undefined') ? performance.now() : Date.now();
+
+      if (!isScrollSpyPending) {
+        isScrollSpyPending = true;
+        if (typeof requestAnimationFrame !== 'undefined') {
+          requestAnimationFrame(function(timestamp) {
+            isScrollSpyPending = false;
+            const now = (typeof performance !== 'undefined') ? performance.now() : Date.now();
+            if (now - lastScrollSpyTime >= SCROLL_SPY_THROTTLE_MS) {
+              lastScrollSpyTime = now;
+              evaluateActiveHeading();
+            } else {
+              scheduleTrailingScrollSpy();
+            }
+          });
         } else {
-          break;
+          isScrollSpyPending = false;
+          evaluateActiveHeading();
         }
       }
-      if (currentHeading && window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.lucidActiveHeading) {
-        window.webkit.messageHandlers.lucidActiveHeading.postMessage({
-          id: currentHeading.id,
-          text: currentHeading.textContent.trim(),
-          level: parseInt(currentHeading.tagName.substring(1), 10)
-        });
-      }
-    }, 100);
+
+      scheduleTrailingScrollSpy();
+    }
   }, { passive: true });
+
+  function scheduleTrailingScrollSpy() {
+    clearTimeout(scrollSpyTrailingTimer);
+    scrollSpyTrailingTimer = setTimeout(function() {
+      evaluateActiveHeading();
+    }, SCROLL_SPY_THROTTLE_MS + 20);
+  }
 
   // Public API
   window.lucid = {
@@ -1510,6 +1826,7 @@
 
       // 3. Immediate completion check if nothing is deferred
       checkFullEnhancement();
+      invalidateHeadingPositions('updateContent');
     },
 
     updatePreferences: function(prefs) {
@@ -1944,18 +2261,19 @@
     scrollToHeading: function(id) {
       const el = document.getElementById(id);
       if (el) {
-        isProgrammaticScroll = true;
-        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        setTimeout(function() { isProgrammaticScroll = false; }, 400);
+        startProgrammaticScroll(id, el);
       }
     },
 
     setScrollFraction: function(fraction) {
       const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
       if (maxScroll > 0) {
-        isProgrammaticScroll = true;
+        programmaticScrollActive = true;
         window.scrollTo({ top: fraction * maxScroll, behavior: 'instant' });
-        setTimeout(function() { isProgrammaticScroll = false; }, 50);
+        setTimeout(function() {
+          programmaticScrollActive = false;
+          evaluateActiveHeading();
+        }, 50);
       }
     },
 
@@ -2149,7 +2467,17 @@
     },
 
     computeSmartDiagramLayout: computeSmartDiagramLayout,
-    getRepresentativeFontSize: getRepresentativeFontSize
+    getRepresentativeFontSize: getRepresentativeFontSize,
+    resolveActiveHeading: resolveActiveHeading,
+    captureReadingAnchor: captureReadingAnchor,
+    restoreReadingAnchor: restoreReadingAnchor,
+    invalidateHeadingPositions: invalidateHeadingPositions,
+    rebuildHeadingPositionCache: rebuildHeadingPositionCache,
+    evaluateActiveHeading: evaluateActiveHeading,
+    getCachedHeadings: function() { return cachedHeadings; },
+    getLastReportedHeadingId: function() { return lastReportedHeadingId; },
+    setLastReportedHeadingId: function(id) { lastReportedHeadingId = id; },
+    isProgrammaticScrollActive: function() { return programmaticScrollActive; }
   };
 
   let resizeTimer = null;

@@ -22,6 +22,9 @@ public struct MainWindowView: View {
     /// Dynamic clearance for the native traffic-light cluster, derived from NSWindow geometry.
     @State private var trafficLightReservedWidth: CGFloat = 77
     @AppStorage("lucid.sidebarWidth") private var sidebarWidth: Double = 220
+    @State private var isSidebarTransitioning: Bool = false
+    @State private var sidebarTransitionToken: UUID? = nil
+    @State private var sidebarTransitionTask: Task<Void, Never>? = nil
     @Namespace private var modeSelectorNamespace
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
@@ -88,35 +91,39 @@ public struct MainWindowView: View {
             VStack(spacing: 0) {
                 HStack(spacing: 0) {
                     if preferences.showOutline {
-                        // Outline Sidebar — owns its own compact top row with traffic light clearance and toggle
-                        OutlineSidebarView(
-                            headings: headings,
-                            activeHeadingId: activeHeading?.id,
-                            preferences: preferences,
-                            wordCount: wordCount,
-                            charCount: charCount,
-                            readingTimeMinutes: readingTimeMinutes,
-                            trafficLightWidth: trafficLightReservedWidth,
-                            onToggleSidebar: {
-                                withAnimation(LucidMotion.respecting(reduceMotion, LucidMotion.panel)) {
+                        HStack(spacing: 0) {
+                            // Outline Sidebar — owns its own compact top row with traffic light clearance and toggle
+                            OutlineSidebarView(
+                                headings: headings,
+                                activeHeadingId: activeHeading?.id,
+                                preferences: preferences,
+                                wordCount: wordCount,
+                                charCount: charCount,
+                                readingTimeMinutes: readingTimeMinutes,
+                                trafficLightWidth: trafficLightReservedWidth,
+                                onToggleSidebar: {
                                     preferences.showOutline = false
                                 }
+                            ) { id in
+                                activeHeading = headings.first(where: { $0.id == id })
+                                scrollToHeadingId = id
+                                DispatchQueue.main.async {
+                                    scrollToHeadingId = nil
+                                }
                             }
-                        ) { id in
-                            scrollToHeadingId = id
+                            .frame(width: CGFloat(sidebarWidth))
+
+                            // Draggable divider between sidebar and canvas
+                            SidebarDivider(width: $sidebarWidth, minWidth: 180, maxWidth: 320)
                         }
-                        .frame(width: CGFloat(sidebarWidth))
                         .clipped()
                         .transition(.move(edge: .leading))
-
-                        // Draggable divider between sidebar and canvas
-                        SidebarDivider(width: $sidebarWidth, minWidth: 180, maxWidth: 320)
-                            .transition(.opacity)
                     }
 
                     // Document Canvas — fills remaining space, continuously mounted across sidebar toggles
                     documentCanvas(sidebarOpen: preferences.showOutline)
                 }
+                .animation(LucidMotion.respecting(reduceMotion, LucidMotion.panel), value: preferences.showOutline)
 
                 // Minimal, Serene Status Bar
                 if preferences.showStatusBar {
@@ -183,8 +190,23 @@ public struct MainWindowView: View {
             }
         }
         .preferredColorScheme(colorSchemeForTheme)
-        .animation(LucidMotion.respecting(reduceMotion, LucidMotion.panel), value: preferences.showOutline)
         .animation(LucidMotion.respecting(reduceMotion, LucidMotion.panel), value: preferences.showStatusBar)
+        .onChange(of: preferences.showOutline) { oldValue, newValue in
+            let token = UUID()
+            sidebarTransitionToken = token
+            if reduceMotion {
+                isSidebarTransitioning = false
+            } else {
+                isSidebarTransitioning = true
+                sidebarTransitionTask?.cancel()
+                sidebarTransitionTask = Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 210_000_000)
+                    if !Task.isCancelled && sidebarTransitionToken == token {
+                        isSidebarTransitioning = false
+                    }
+                }
+            }
+        }
         .ignoresSafeArea()
         // Configure the window: hide the native title bar so our custom top bar
         // sits flush at the top, and keep it draggable.
@@ -455,7 +477,11 @@ public struct MainWindowView: View {
                     scrollToHeadingId: scrollToHeadingId,
                     webViewInstance: $webViewInstance,
                     documentFileURL: fileURL,
-                    onScrollIntensityChanged: { scrollIntensity = $0 }
+                    onScrollIntensityChanged: { scrollIntensity = $0 },
+                    isSidebarTransitioning: isSidebarTransitioning,
+                    sidebarWidth: CGFloat(sidebarWidth),
+                    transitionToken: sidebarTransitionToken,
+                    isSidebarOpen: preferences.showOutline
                 )
                 .transition(.opacity)
             case .split:
@@ -489,7 +515,11 @@ public struct MainWindowView: View {
                         targetScrollFraction: previewTargetFraction,
                         webViewInstance: $webViewInstance,
                         documentFileURL: fileURL,
-                        onScrollIntensityChanged: { scrollIntensity = $0 }
+                        onScrollIntensityChanged: { scrollIntensity = $0 },
+                        isSidebarTransitioning: isSidebarTransitioning,
+                        sidebarWidth: CGFloat(sidebarWidth),
+                        transitionToken: sidebarTransitionToken,
+                        isSidebarOpen: preferences.showOutline
                     )
                     .frame(minWidth: 260)
                 }
@@ -534,9 +564,7 @@ public struct MainWindowView: View {
                             helpText: "Toggle Outline Sidebar",
                             shortcutText: "⌃⌘S"
                         ) {
-                            withAnimation(LucidMotion.respecting(reduceMotion, LucidMotion.panel)) {
-                                preferences.showOutline = true
-                            }
+                            preferences.showOutline = true
                         }
                         .background(controlGlassBackground(cornerRadius: 6))
                     }

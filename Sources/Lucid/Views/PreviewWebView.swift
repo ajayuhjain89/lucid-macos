@@ -2,6 +2,103 @@ import SwiftUI
 import WebKit
 import AppKit
 
+/// A custom NSView container that hosts WKWebView with strict layout clipping and
+/// geometry freeze-and-settle control during sidebar open/close transitions.
+///
+/// Prevents WebKit from reflowing document contents (Markdown, tables, KaTeX, Mermaid)
+/// on every animation frame by freezing or pre-sizing the WKWebView frame while the outer
+/// container animates smoothly via SwiftUI.
+public final class LucidWebContainerView: NSView {
+    public let webView: WKWebView
+    private var isTransitioning: Bool = false
+    private var activeTransitionToken: UUID? = nil
+    private var frozenWidth: CGFloat? = nil
+
+    public init(webView: WKWebView) {
+        self.webView = webView
+        super.init(frame: .zero)
+        autoresizesSubviews = false
+        wantsLayer = true
+        layer?.masksToBounds = true
+        webView.autoresizingMask = []
+        addSubview(webView)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    public override func layout() {
+        super.layout()
+        guard bounds.width > 0, bounds.height > 0 else { return }
+
+        if isTransitioning, let frozen = frozenWidth {
+            // During transition, maintain the frozen width and match container height
+            webView.frame = CGRect(x: 0, y: 0, width: frozen, height: bounds.height)
+        } else {
+            // Normal layout: match container bounds exactly
+            webView.frame = bounds
+        }
+    }
+
+    public func handleSidebarTransition(
+        isTransitioning: Bool,
+        isSidebarOpen: Bool,
+        sidebarWidth: CGFloat,
+        token: UUID?
+    ) {
+        if self.isTransitioning == isTransitioning && self.activeTransitionToken == token {
+            return
+        }
+
+        let previousTransitioning = self.isTransitioning
+        self.isTransitioning = isTransitioning
+        self.activeTransitionToken = token
+
+        if isTransitioning && !previousTransitioning {
+            // Transition is starting
+            if isSidebarOpen {
+                // OPENING: Container starts wide and will narrow.
+                // Freeze current wide bounds so the document does not reflow during the slide.
+                let currentWidth = bounds.width > 0 ? bounds.width : (webView.frame.width > 0 ? webView.frame.width : 800)
+                self.frozenWidth = currentWidth
+                webView.frame = CGRect(x: 0, y: 0, width: currentWidth, height: bounds.height)
+            } else {
+                // CLOSING: Container starts narrow and will widen.
+                // Pre-resize WKWebView to wide width so newly exposed space reveals already-rendered content.
+                let currentWidth = bounds.width > 0 ? bounds.width : 600
+                let wideWidth = currentWidth + sidebarWidth
+                self.frozenWidth = wideWidth
+
+                webView.evaluateJavaScript("if (window.lucid && window.lucid.captureReadingAnchor) { window.lucid.captureReadingAnchor(); }") { [weak self] _, _ in
+                    guard let self = self else { return }
+                    self.webView.frame = CGRect(x: 0, y: 0, width: wideWidth, height: self.bounds.height)
+                    self.webView.evaluateJavaScript("if (window.lucid && window.lucid.restoreReadingAnchor) { window.lucid.restoreReadingAnchor(); }")
+                }
+            }
+        } else if !isTransitioning && previousTransitioning {
+            // Transition has settled
+            self.frozenWidth = nil
+
+            if isSidebarOpen {
+                // OPENING SETTLE:
+                // Capture anchor before committing narrow geometry
+                webView.evaluateJavaScript("if (window.lucid && window.lucid.captureReadingAnchor) { window.lucid.captureReadingAnchor(); }") { [weak self] _, _ in
+                    guard let self = self else { return }
+                    self.webView.frame = self.bounds
+                    DispatchQueue.main.async {
+                        self.webView.evaluateJavaScript("if (window.lucid && window.lucid.restoreReadingAnchor) { window.lucid.restoreReadingAnchor(); }")
+                    }
+                }
+            } else {
+                // CLOSING SETTLE:
+                // Commit exact final bounds
+                self.webView.frame = bounds
+            }
+        }
+    }
+}
+
 public struct PreviewWebView: NSViewRepresentable {
     @ObservedObject var preferences: LucidPreferences
     let markdown: String
@@ -18,13 +115,17 @@ public struct PreviewWebView: NSViewRepresentable {
     /// Reports a graduated 0…1 intensity of how far the content has scrolled away
     /// from the top, so the chrome can raise its glass depth almost subconsciously.
     var onScrollIntensityChanged: ((Double) -> Void)? = nil
+    var isSidebarTransitioning: Bool = false
+    var sidebarWidth: CGFloat = 240
+    var transitionToken: UUID? = nil
+    var isSidebarOpen: Bool = false
     @Environment(\.colorScheme) var colorScheme
 
     public func makeCoordinator() -> Coordinator {
         Coordinator(self)
     }
 
-    public func makeNSView(context: Context) -> WKWebView {
+    public func makeNSView(context: Context) -> LucidWebContainerView {
         let config = WKWebViewConfiguration()
         let userContent = WKUserContentController()
 
@@ -94,18 +195,30 @@ public struct PreviewWebView: NSViewRepresentable {
             webView.loadFileURL(indexURL, allowingReadAccessTo: indexURL.deletingLastPathComponent())
         }
 
-        return webView
+        return LucidWebContainerView(webView: webView)
     }
 
-    public func updateNSView(_ webView: WKWebView, context: Context) {
+    public func updateNSView(_ containerView: LucidWebContainerView, context: Context) {
+        let webView = containerView.webView
         context.coordinator.parent = self
+
+        // Forward sidebar transition state to container view
+        containerView.handleSidebarTransition(
+            isTransitioning: isSidebarTransitioning,
+            isSidebarOpen: isSidebarOpen,
+            sidebarWidth: sidebarWidth,
+            token: transitionToken
+        )
 
         let tokens = preferences.theme.themeTokens
         webView.underPageBackgroundColor = NSColor(Color(hex: tokens.previewBackground))
 
-        // Update preferences
+        // Update preferences only when payload changes to avoid IPC thrashing
         let prefsJSON = preferences.jsonPayload(systemColorScheme: colorScheme)
-        webView.evaluateJavaScript("if (window.lucid) { window.lucid.updatePreferences(\(prefsJSON)); }")
+        if prefsJSON != context.coordinator.lastAppliedPrefsJSON {
+            context.coordinator.lastAppliedPrefsJSON = prefsJSON
+            webView.evaluateJavaScript("if (window.lucid) { window.lucid.updatePreferences(\(prefsJSON)); }")
+        }
 
         // Schedule render: immediate on first load or file change, debounced on interactive typing
         let isFirstRender = !context.coordinator.hasRenderedFirstContent
@@ -119,9 +232,13 @@ public struct PreviewWebView: NSViewRepresentable {
         }
 
         // Scroll to heading if requested
-        if let headingId = scrollToHeadingId, headingId != context.coordinator.lastScrolledHeadingId {
-            context.coordinator.lastScrolledHeadingId = headingId
-            webView.evaluateJavaScript("if (window.lucid) { window.lucid.scrollToHeading('\(headingId)'); }")
+        if let headingId = scrollToHeadingId {
+            if headingId != context.coordinator.lastScrolledHeadingId {
+                context.coordinator.lastScrolledHeadingId = headingId
+                webView.evaluateJavaScript("if (window.lucid) { window.lucid.scrollToHeading('\(headingId)'); }")
+            }
+        } else {
+            context.coordinator.lastScrolledHeadingId = nil
         }
 
         // Sync scroll fraction if requested
@@ -138,6 +255,10 @@ public struct PreviewWebView: NSViewRepresentable {
         var lastRenderedMarkdown = ""
         var lastScrolledHeadingId: String?
         var lastAppliedFraction: Double = -1
+        var lastAppliedPrefsJSON: String?
+        var lastReportedIntensity: Double = -1
+        var lastReportedFraction: Double = -1
+        var lastActiveHeadingId: String?
         /// Whether any revision-tagged heading echo has been seen. Once tagging is
         /// active, an untagged (legacy) echo must not bypass revision safety.
         var hasSeenTaggedHeadings: Bool = false
@@ -152,6 +273,7 @@ public struct PreviewWebView: NSViewRepresentable {
             renderCoordinator.setWebView(webView)
 
             let prefsJSON = parent.preferences.jsonPayload(systemColorScheme: parent.colorScheme)
+            lastAppliedPrefsJSON = prefsJSON
             webView.evaluateJavaScript("if (window.lucid) { window.lucid.updatePreferences(\(prefsJSON)); }")
 
             // Check if window.lucid is already defined (e.g. from inline script)
@@ -171,12 +293,28 @@ public struct PreviewWebView: NSViewRepresentable {
                 renderCoordinator.scheduleRender(markdown: parent.markdown, immediate: true)
             } else if message.name == "lucidScroll", let body = message.body as? [String: Any] {
                 if let fraction = body["fraction"] as? Double {
-                    parent.onScrollFractionChanged?(fraction)
+                    if abs(fraction - self.lastReportedFraction) >= 0.005 {
+                        self.lastReportedFraction = fraction
+                        self.parent.onScrollFractionChanged?(fraction)
+                    }
                 }
+
+                let rawIntensity: Double
                 if let intensity = body["intensity"] as? Double {
-                    parent.onScrollIntensityChanged?(intensity)
+                    rawIntensity = intensity
                 } else if let scrolled = body["scrolled"] as? Bool {
-                    parent.onScrollIntensityChanged?(scrolled ? 1 : 0)
+                    rawIntensity = scrolled ? 1.0 : 0.0
+                } else {
+                    rawIntensity = 0.0
+                }
+
+                // Filter sub-pixel jitter: notify only if delta > 0.04 or crosses 0.05 threshold
+                let delta = abs(rawIntensity - self.lastReportedIntensity)
+                let thresholdCrossing = (rawIntensity >= 0.05 && self.lastReportedIntensity < 0.05) ||
+                                       (rawIntensity < 0.05 && self.lastReportedIntensity >= 0.05)
+                if delta > 0.04 || thresholdCrossing {
+                    self.lastReportedIntensity = rawIntensity
+                    self.parent.onScrollIntensityChanged?(rawIntensity)
                 }
             } else if message.name == "lucidHeadings" {
                 // Accept the tagged shape { renderId, headings }; tolerate the
@@ -215,9 +353,18 @@ public struct PreviewWebView: NSViewRepresentable {
                     self.parent.headings = parsed
                 }
             } else if message.name == "lucidActiveHeading", let body = message.body as? [String: Any] {
-                if let id = body["id"] as? String,
-                   let text = body["text"] as? String,
-                   let level = body["level"] as? Int {
+                let id = body["id"] as? String ?? ""
+                if id.isEmpty {
+                    if self.lastActiveHeadingId != nil {
+                        self.lastActiveHeadingId = nil
+                        DispatchQueue.main.async {
+                            self.parent.activeHeading = nil
+                        }
+                    }
+                } else if id != self.lastActiveHeadingId {
+                    self.lastActiveHeadingId = id
+                    let text = body["text"] as? String ?? ""
+                    let level = body["level"] as? Int ?? 1
                     DispatchQueue.main.async {
                         self.parent.activeHeading = HeadingItem(id: id, level: level, text: text)
                     }
