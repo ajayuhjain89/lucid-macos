@@ -376,20 +376,45 @@ public struct LucidSidebarRow: View {
         self.action = action
     }
 
+    private var activeIndicator: some View {
+        RoundedRectangle(cornerRadius: 1.5)
+            .fill(Color.accentColor)
+            .frame(width: 2.5, height: 14)
+    }
+
     public var body: some View {
         Button(action: action) {
             HStack(spacing: LucidSpacing.xSmall) {
+                // Active indicator pill
+                if isActive {
+                    activeIndicator
+                        .transition(.scale.combined(with: .opacity))
+                }
+
                 // Quiet level indicator
                 Text("H\(level)")
-                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                    .foregroundColor(isActive ? Color.accentColor : LucidColors.textTertiary)
+                    .font(.system(size: 9, weight: isActive ? .semibold : .medium, design: .monospaced))
+                    .foregroundColor(isActive ? Color.accentColor : (isHovered ? LucidColors.textSecondary : LucidColors.textTertiary))
                     .frame(width: 18, alignment: .leading)
 
-                Text(title)
-                    .font(.system(size: 12, weight: isActive ? .medium : (level <= 2 ? .medium : .regular)))
-                    .foregroundColor(isActive ? LucidColors.textPrimary : LucidColors.textSecondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                // Dual-layer ghost geometry anchor:
+                // The invisible ghost layer at maximum font weight (.semibold) sets the exact layout width and height,
+                // ensuring the visible layer never causes horizontal or vertical layout shifting (0px shift)
+                // when changing between regular, medium, and semibold.
+                ZStack(alignment: .leading) {
+                    Text(title)
+                        .font(.system(size: 12, weight: .semibold))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .opacity(0)
+                        .accessibilityHidden(true)
+
+                    Text(title)
+                        .font(.system(size: 12, weight: isActive ? .semibold : (isHovered ? .medium : (level <= 2 ? .medium : .regular))))
+                        .foregroundColor(isActive ? LucidColors.textPrimary : (isHovered ? LucidColors.textPrimary : LucidColors.textSecondary))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
 
                 Spacer()
             }
@@ -398,7 +423,11 @@ public struct LucidSidebarRow: View {
             .frame(height: 26)
             .background(
                 RoundedRectangle(cornerRadius: LucidRadius.xSmall)
-                    .fill(isActive ? LucidColors.softSelection : (isHovered ? LucidColors.hoverSurface : Color.clear))
+                    .fill(
+                        isActive
+                            ? LucidColors.softSelection
+                            : (isHovered ? LucidColors.hoverSurface : Color.clear)
+                    )
             )
             .contentShape(Rectangle())
             .animation(LucidMotion.hover, value: isHovered)
@@ -689,6 +718,14 @@ public struct LucidSelectableCard<Content: View>: View {
     }
 }
 
+/// 12a. LucidAppearance: Maps ThemeMode to semantic AppKit NSAppearance for native vibrancy.
+public enum LucidAppearance {
+    public static func appearance(for theme: ThemeMode) -> NSAppearance? {
+        guard let isDark = theme.explicitDarkness else { return nil }
+        return NSAppearance(named: isDark ? .darkAqua : .aqua)
+    }
+}
+
 /// 12b. LucidVisualEffectView: Real macOS vibrancy (NSVisualEffectView) for chrome
 /// surfaces. Prefer this over `.ultraThinMaterial` for the toolbar and floating
 /// panels so blur, blending, and the automatic Reduce Transparency fallback all
@@ -699,17 +736,20 @@ public struct LucidVisualEffectView: NSViewRepresentable {
     var blendingMode: NSVisualEffectView.BlendingMode
     var state: NSVisualEffectView.State
     var emphasized: Bool
+    var appearance: NSAppearance?
 
     public init(
         material: NSVisualEffectView.Material = .headerView,
         blendingMode: NSVisualEffectView.BlendingMode = .behindWindow,
         state: NSVisualEffectView.State = .followsWindowActiveState,
-        emphasized: Bool = false
+        emphasized: Bool = false,
+        appearance: NSAppearance? = nil
     ) {
         self.material = material
         self.blendingMode = blendingMode
         self.state = state
         self.emphasized = emphasized
+        self.appearance = appearance
     }
 
     public func makeNSView(context: Context) -> NSVisualEffectView {
@@ -718,6 +758,7 @@ public struct LucidVisualEffectView: NSViewRepresentable {
         view.blendingMode = blendingMode
         view.state = state
         view.isEmphasized = emphasized
+        view.appearance = appearance
         return view
     }
 
@@ -726,6 +767,7 @@ public struct LucidVisualEffectView: NSViewRepresentable {
         nsView.blendingMode = blendingMode
         nsView.state = state
         nsView.isEmphasized = emphasized
+        nsView.appearance = appearance
     }
 }
 
