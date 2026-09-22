@@ -192,6 +192,7 @@ public struct PreviewWebView: NSViewRepresentable {
         }()
 
         if let indexURL = engineURL {
+            context.coordinator.allowedFileURL = indexURL
             webView.loadFileURL(indexURL, allowingReadAccessTo: indexURL.deletingLastPathComponent())
         }
 
@@ -262,10 +263,44 @@ public struct PreviewWebView: NSViewRepresentable {
         /// Whether any revision-tagged heading echo has been seen. Once tagging is
         /// active, an untagged (legacy) echo must not bypass revision safety.
         var hasSeenTaggedHeadings: Bool = false
+        /// The only document the WebView is permitted to navigate to (the bundled
+        /// `index.html`). Any other navigation is refused as a defense-in-depth
+        /// guard so document/script content cannot drive the reader off-page.
+        var allowedFileURL: URL?
         let renderCoordinator = PreviewRenderCoordinator()
 
         init(_ parent: PreviewWebView) {
             self.parent = parent
+        }
+
+        public func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+            guard let url = navigationAction.request.url else {
+                decisionHandler(.cancel)
+                return
+            }
+            let scheme = url.scheme?.lowercased() ?? ""
+
+            // Allow only the app's own bundled preview document — the initial
+            // load, reloads, and same-document fragment navigation.
+            if url.isFileURL, let allowed = allowedFileURL,
+               url.standardizedFileURL.path == allowed.standardizedFileURL.path {
+                decisionHandler(.allow)
+                return
+            }
+
+            // Internal WebKit navigations (e.g. about:blank) are harmless.
+            if scheme == "about" {
+                decisionHandler(.allow)
+                return
+            }
+
+            // Anything else only reaches here if the in-page link interceptor was
+            // bypassed. Hand genuine web/mail links to the system handler and
+            // refuse every other navigation so the reader never leaves index.html.
+            if ["http", "https", "mailto", "tel", "ftp"].contains(scheme) {
+                NSWorkspace.shared.open(url)
+            }
+            decisionHandler(.cancel)
         }
 
         public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {

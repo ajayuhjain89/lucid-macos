@@ -16,6 +16,10 @@ public struct MainWindowView: View {
     @State private var webViewInstance: WKWebView?
     @State private var editorTextView: NSTextView?
     @State private var fileWatcher: FileWatcher?
+    /// The document text as of the last point buffer and disk were known to
+    /// agree (initial load or a save). Used to tell an innocent external change
+    /// apart from a genuine conflict with unsaved edits.
+    @State private var lastSyncedText: String = ""
     /// Graduated 0…1 depth of the content beneath the toolbar, driving the
     /// scroll-responsive glass almost subconsciously.
     @State private var scrollIntensity: Double = 0
@@ -798,14 +802,42 @@ public struct MainWindowView: View {
 
     private func setupFileWatcher() {
         guard let url = fileURL else { return }
+        lastSyncedText = document.text
         fileWatcher = FileWatcher(url: url) {
-            if let updatedText = try? String(contentsOf: url, encoding: .utf8),
-               updatedText != document.text {
-                DispatchQueue.main.async {
+            guard let updatedText = try? String(contentsOf: url, encoding: .utf8) else { return }
+            DispatchQueue.main.async {
+                if updatedText == self.document.text {
+                    // Already in sync (e.g. Lucid's own save): refresh the baseline.
+                    self.lastSyncedText = updatedText
+                    return
+                }
+                if self.document.text == self.lastSyncedText {
+                    // No unsaved local edits: safe to live-reload from disk.
                     self.document.text = updatedText
+                    self.lastSyncedText = updatedText
+                } else {
+                    // Disk and buffer both diverged from the last sync point:
+                    // never silently discard the user's unsaved edits.
+                    self.presentExternalChangeConflict(url: url, diskText: updatedText)
                 }
             }
         }
+    }
+
+    private func presentExternalChangeConflict(url: URL, diskText: String) {
+        let alert = NSAlert()
+        alert.messageText = "“\(url.lastPathComponent)” changed on disk"
+        alert.informativeText = "This file was modified by another application, but you have unsaved changes here. Reload the version on disk (discarding your changes) or keep your version?"
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Keep My Changes")
+        alert.addButton(withTitle: "Reload from Disk")
+        let response = alert.runModal()
+        if response == .alertSecondButtonReturn {
+            document.text = diskText
+            lastSyncedText = diskText
+        }
+        // "Keep My Changes": leave the buffer untouched; the baseline is left as
+        // is so a further on-disk change prompts again instead of silently losing edits.
     }
 }
 
