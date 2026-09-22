@@ -176,8 +176,14 @@ public struct OutlineSidebarView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(
             ZStack {
-                LucidVisualEffectView(material: .sidebar, blendingMode: .behindWindow)
-                Color(hex: preferences.theme.themeTokens.sidebarBackground).opacity(0.85)
+                LucidVisualEffectView(
+                    material: .sidebar,
+                    blendingMode: .behindWindow,
+                    appearance: LucidAppearance.appearance(for: preferences.theme)
+                )
+                // Translucent theme tint calibrated to preserve theme personality
+                // without flattening native Liquid Glass vibrancy.
+                Color(hex: preferences.theme.themeTokens.sidebarBackground).opacity(0.12)
             }
             .ignoresSafeArea()
         )

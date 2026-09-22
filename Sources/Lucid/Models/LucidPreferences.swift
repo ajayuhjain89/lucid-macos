@@ -30,6 +30,19 @@ public enum ThemeMode: String, CaseIterable, Identifiable, Codable {
     public static var curatedThemes: [ThemeMode] {
         [.system, .dark, .light, .sepia]
     }
+
+    /// Returns true if the theme is explicitly dark, false if explicitly light,
+    /// or nil if the theme is .system (meaning appearance follows the OS/window).
+    public var explicitDarkness: Bool? {
+        switch self {
+        case .system:
+            return nil
+        case .dark, .oled, .nord, .dracula:
+            return true
+        case .light, .sepia:
+            return false
+        }
+    }
 }
 
 public enum FontFamily: String, CaseIterable, Identifiable, Codable {
