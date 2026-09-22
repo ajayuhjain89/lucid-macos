@@ -243,13 +243,33 @@
     return result;
   }
 
+  // Runtime engine toggles (mirror LucidPreferences STEM & Math settings).
+  // Declared here so the markdown-it highlight callback and math plugin close
+  // over them; values are refreshed by updatePreferences.
+  const enginePrefs = {
+    enableKaTeX: true,
+    enableMhchem: true,
+    enableMermaid: true,
+    enableSyntaxHighlighting: true
+  };
+
+  function usesChemistryNotation(source) {
+    return /\\(ce|pu|cf)\b/.test(source || '');
+  }
+
   // Initialize Markdown-it
+  //
+  // Raw HTML from the document is intentionally disabled (html: false): the
+  // preview renders untrusted Markdown, and passing raw HTML through to
+  // innerHTML would allow inline event handlers (e.g. <img onerror>) to execute
+  // in the WebView. All rich output (code toolbars, math, diagrams, alerts) is
+  // produced by trusted renderer callbacks below, not by document HTML.
   const md = window.markdownit({
-    html: true,
+    html: false,
     linkify: true,
     typographer: true,
     highlight: function(str, lang) {
-      if (lang === 'mermaid') {
+      if (lang === 'mermaid' && enginePrefs.enableMermaid) {
         const preparedStr = sanitizeMermaidSource(str);
         const escapedRaw = encodeURIComponent(str);
         return '<div class="mermaid-container" data-raw-mermaid="' + escapedRaw + '">' +
@@ -273,7 +293,7 @@
       }
 
       let highlighted = '';
-      if (lang && typeof hljs !== 'undefined' && hljs.getLanguage(lang)) {
+      if (lang && enginePrefs.enableSyntaxHighlighting && typeof hljs !== 'undefined' && hljs.getLanguage(lang)) {
         try {
           highlighted = hljs.highlight(str, { language: lang, ignoreIllegals: true }).value;
         } catch (__) {
@@ -336,6 +356,7 @@
 
   function lucidMathPlugin(md) {
     function mathInline(state, silent) {
+      if (!enginePrefs.enableKaTeX) return false;
       const start = state.pos;
       const max = state.posMax;
       const src = state.src;
@@ -438,6 +459,7 @@
     }
 
     function mathBlock(state, startLine, endLine, silent) {
+      if (!enginePrefs.enableKaTeX) return false;
       let start = state.bMarks[startLine] + state.tShift[startLine];
       let max = state.eMarks[startLine];
       const src = state.src;
@@ -557,19 +579,35 @@
 
   md.use(lucidMathPlugin);
 
+  // Must stay byte-for-byte compatible with the native
+  // MarkdownOutlineParser.slugify (Swift), so sidebar entries produced off the
+  // native outline resolve to the exact DOM ids produced here. Unicode letters
+  // and numbers are preserved (not stripped to ASCII), and separators collapse
+  // to single hyphens.
   function slugify(text) {
-    return text.toLowerCase().trim()
-      .replace(/[^\w\s-]/g, '')
-      .replace(/[\s_-]+/g, '-')
-      .replace(/^-+|-+$/g, '');
+    const lower = (text || '').toLowerCase().trim();
+    let kept = '';
+    for (const ch of lower) {
+      if (/[\p{L}\p{N}]/u.test(ch) || ch === ' ' || ch === '-' || ch === '_') {
+        kept += ch;
+      }
+    }
+    return kept.split(/[\s_-]+/u).filter(Boolean).join('-');
   }
 
   md.core.ruler.push('lucid-heading-ids', function(state) {
+    // Deduplicate collisions exactly as the native parser does:
+    // first occurrence keeps the base slug, later ones get "-1", "-2", …
+    const seen = Object.create(null);
     for (let i = 0; i < state.tokens.length; i++) {
       if (state.tokens[i].type === 'heading_open') {
         const next = state.tokens[i + 1];
         if (next && next.type === 'inline') {
-          const id = slugify(next.content);
+          let base = slugify(next.content);
+          if (!base) base = 'heading';
+          const count = seen[base] || 0;
+          seen[base] = count + 1;
+          const id = count === 0 ? base : base + '-' + count;
           state.tokens[i].attrSet('id', id);
         }
       }
@@ -625,6 +663,9 @@
   };
 
   let currentRenderRevision = '0';
+  // Last Markdown source handed to updateContent, so an engine-toggle change in
+  // updatePreferences can re-render the current document with the new flags.
+  let lastMarkdownSource = '';
   const katexLRU = new SimpleLRU(500);
   const mermaidLRU = new SimpleLRU(50);
   let currentMermaidTheme = 'dark';
@@ -920,7 +961,9 @@
       theme: cfg.theme,
       themeVariables: cfg.themeVariables,
       themeCSS: cfg.themeCSS,
-      securityLevel: 'loose',
+      // Diagram source is untrusted document content; keep Mermaid's own
+      // sanitizer active (labels are HTML-escaped, click directives disabled).
+      securityLevel: 'strict',
       layout: 'dagre',
       flowchart: { defaultRenderer: 'dagre' }
     };
@@ -938,6 +981,9 @@
   }
 
   function renderKaTeXBlock(trimmed, mathId, renderId) {
+    if (!enginePrefs.enableMhchem && usesChemistryNotation(trimmed)) {
+      return '<div class="lucid-math-error"><span class="lucid-error-msg">Chemistry notation (mhchem) is disabled</span><pre>' + md.utils.escapeHtml(trimmed) + '</pre></div>';
+    }
     const cacheKey = 'disp:' + trimmed;
     const cached = katexLRU.get(cacheKey);
     const mathAttr = (mathId ? ' data-math-id="' + mathId + '"' : '') +
@@ -959,6 +1005,11 @@
   }
 
   function renderKaTeXDisplayInline(trimmed, originalMarkup, mathId, renderId) {
+    if (!enginePrefs.enableMhchem && usesChemistryNotation(trimmed)) {
+      const o = originalMarkup || '\\[';
+      const c = (o === '\\[' ? '\\]' : '$$');
+      return '<span class="lucid-math-error" title="Chemistry notation (mhchem) is disabled">' + md.utils.escapeHtml(o + trimmed + c) + '</span>';
+    }
     const cacheKey = 'disp_inline:' + trimmed;
     const cached = katexLRU.get(cacheKey);
     const mathAttr = (mathId ? ' data-math-id="' + mathId + '"' : '') +
@@ -979,6 +1030,11 @@
   }
 
   function renderKaTeXInline(trimmed, originalMarkup, mathId, renderId) {
+    if (!enginePrefs.enableMhchem && usesChemistryNotation(trimmed)) {
+      const o = originalMarkup || '$';
+      const c = (o === '\\(' ? '\\)' : '$');
+      return '<span class="lucid-math-error" title="Chemistry notation (mhchem) is disabled">' + md.utils.escapeHtml(o + trimmed + c) + '</span>';
+    }
     const cacheKey = 'inline:' + trimmed;
     const cached = katexLRU.get(cacheKey);
     if (cached) return cached;
@@ -1662,6 +1718,7 @@
     updateContent: function(rawMarkdown, renderId) {
       renderId = String(renderId || '0');
       currentRenderRevision = renderId;
+      lastMarkdownSource = rawMarkdown || '';
       mermaidThemeGeneration++;
       desiredMermaidTheme = currentMermaidTheme;
       pruneOldRegistries(renderId);
@@ -2000,6 +2057,17 @@
       const root = document.documentElement;
       const body = document.body;
 
+      // Sync STEM & Math engine toggles. When any of them actually changes, the
+      // document must be re-parsed/re-rendered for the new flags to take effect
+      // (they gate parse-time behavior in the highlight callback and math rules).
+      let engineFlagsChanged = false;
+      ['enableKaTeX', 'enableMhchem', 'enableMermaid', 'enableSyntaxHighlighting'].forEach(function(key) {
+        if (typeof prefs[key] !== 'undefined' && enginePrefs[key] !== prefs[key]) {
+          enginePrefs[key] = prefs[key];
+          engineFlagsChanged = true;
+        }
+      });
+
       if (prefs.theme) {
         body.setAttribute('data-theme', prefs.theme);
         body.className = 'vscode-body ' + (prefs.theme === 'dark' ? 'vscode-dark' : (prefs.theme === 'light' ? 'vscode-light' : 'vscode-sepia'));
@@ -2081,6 +2149,13 @@
       if (prefs.mathScale) root.style.setProperty('--lucid-math-scale', prefs.mathScale);
       if (prefs.mermaidScale) root.style.setProperty('--lucid-mermaid-scale', prefs.mermaidScale);
       if (prefs.tableDensity) body.setAttribute('data-table-density', prefs.tableDensity);
+
+      // A changed engine toggle requires a full re-render of the current
+      // document so the new flags apply. Kept last so theme/typography updates
+      // above are committed first.
+      if (engineFlagsChanged) {
+        window.lucid.updateContent(lastMarkdownSource, 'engine-' + Date.now());
+      }
     },
 
     handleMessage: function(msg) {
