@@ -4,6 +4,8 @@ import AppKit
 public struct EditorView: NSViewRepresentable {
     @Binding var text: String
     @ObservedObject var preferences: LucidPreferences
+    /// This window's Focus Mode (WindowViewState), not the app-wide default.
+    var focusMode: Bool
     var onScrollFractionChanged: ((Double) -> Void)?
     var onCursorPositionChanged: ((Int, Int) -> Void)? // (line, column)
     var onTextViewCreated: ((NSTextView) -> Void)?
@@ -12,6 +14,7 @@ public struct EditorView: NSViewRepresentable {
     public init(
         text: Binding<String>,
         preferences: LucidPreferences = .shared,
+        focusMode: Bool = false,
         onScrollFractionChanged: ((Double) -> Void)? = nil,
         onCursorPositionChanged: ((Int, Int) -> Void)? = nil,
         onTextViewCreated: ((NSTextView) -> Void)? = nil,
@@ -19,6 +22,7 @@ public struct EditorView: NSViewRepresentable {
     ) {
         self._text = text
         self.preferences = preferences
+        self.focusMode = focusMode
         self.onScrollFractionChanged = onScrollFractionChanged
         self.onCursorPositionChanged = onCursorPositionChanged
         self.onTextViewCreated = onTextViewCreated
@@ -149,7 +153,7 @@ public struct EditorView: NSViewRepresentable {
                 textContainer.containerSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
             }
 
-            textView.layoutManager?.invalidateLayout(forCharacterRange: NSRange(location: 0, length: textView.string.count), actualCharacterRange: nil)
+            textView.layoutManager?.invalidateLayout(forCharacterRange: NSRange(location: 0, length: (textView.string as NSString).length), actualCharacterRange: nil)
             textView.selectedRanges = savedSelectedRanges
             scrollView.contentView.bounds.origin = savedVisibleOrigin
             context.coordinator.gutterView?.needsDisplay = true
@@ -201,6 +205,16 @@ public struct EditorView: NSViewRepresentable {
         // Apply updated typography (a no-op unless the font, spacing or theme changed,
         // or the text was replaced and lost its attributes).
         applyTypography(to: textView, coordinator: context.coordinator, force: replacedText)
+
+        // Focus / Typewriter mode: refresh when toggled, re-themed or the text was replaced.
+        textView.focusModeEnabled = focusMode
+        let modesKey = "\(focusMode)|\(preferences.typewriterMode)|\(themeKey)"
+        if replacedText || context.coordinator.appliedModesKey != modesKey {
+            let typewriterTurnedOn = preferences.typewriterMode && !(context.coordinator.appliedModesKey?.contains("|true|") ?? false)
+            context.coordinator.appliedModesKey = modesKey
+            textView.invalidateFocus()
+            textView.updateFocusAndTypewriter(scroll: typewriterTurnedOn)
+        }
     }
 
     /// Styles the whole text storage with the current font, color and line spacing.
@@ -262,6 +276,7 @@ public struct EditorView: NSViewRepresentable {
         weak var gutterView: LineNumberGutterView?
         var appliedTypographyKey: String?
         var appliedThemeKey: String?
+        var appliedModesKey: String?
         /// The text most recently pushed to (or received from) the binding. The
         /// binding hands this same string back, and String equality on shared
         /// storage returns immediately instead of normalizing the whole document.
@@ -278,12 +293,15 @@ public struct EditorView: NSViewRepresentable {
             parent.text = newText
             gutterView?.needsDisplay = true
             updateCursorInfo(textView)
+            textView.invalidateFocus()
+            textView.updateFocusAndTypewriter(scroll: true)
         }
 
         public func textViewDidChangeSelection(_ notification: Notification) {
             guard let textView = notification.object as? LucidTextView else { return }
             updateCursorInfo(textView)
             textView.updateCurrentLineHighlight()
+            textView.updateFocusAndTypewriter(scroll: true)
         }
 
         private func updateCursorInfo(_ textView: NSTextView) {
@@ -330,6 +348,100 @@ public final class LucidTextView: NSTextView {
     public var preferences: LucidPreferences?
     public var strongTextStorage: NSTextStorage?
     private var previousActiveLineRect: NSRect?
+    /// Whether this window's Focus Mode is on (set by EditorView).
+    public var focusModeEnabled = false
+    /// The paragraph Focus Mode currently leaves undimmed (nil = nothing dimmed).
+    private var focusedParagraph: NSRange?
+
+    // MARK: - Focus & Typewriter Modes
+
+    /// Forget the dimmed state so the next update re-applies it (after the text,
+    /// theme or mode changed).
+    public func invalidateFocus() {
+        guard focusedParagraph != nil else { return }
+        focusedParagraph = nil
+        if let layoutManager {
+            layoutManager.removeTemporaryAttribute(.foregroundColor, forCharacterRange: NSRange(location: 0, length: (string as NSString).length))
+        }
+    }
+
+    /// Focus Mode dims every paragraph except the one holding the caret, as the
+    /// preview does. It uses display-only temporary attributes, so the text and
+    /// its undo history are untouched. Typewriter Mode keeps the caret line near
+    /// the middle of the view.
+    public func updateFocusAndTypewriter(scroll: Bool) {
+        guard let layoutManager else { return }
+        let length = (string as NSString).length
+        if focusModeEnabled {
+            let paragraph = currentParagraphRange()
+            if paragraph != focusedParagraph {
+                let full = NSRange(location: 0, length: length)
+                layoutManager.removeTemporaryAttribute(.foregroundColor, forCharacterRange: full)
+                let dim = (textColor ?? .textColor).withAlphaComponent(0.32)
+                if paragraph.location > 0 {
+                    layoutManager.addTemporaryAttribute(.foregroundColor, value: dim, forCharacterRange: NSRange(location: 0, length: paragraph.location))
+                }
+                let end = NSMaxRange(paragraph)
+                if end < length {
+                    layoutManager.addTemporaryAttribute(.foregroundColor, value: dim, forCharacterRange: NSRange(location: end, length: length - end))
+                }
+                focusedParagraph = paragraph
+            }
+        } else if focusedParagraph != nil {
+            invalidateFocus()
+        }
+        if scroll, preferences?.typewriterMode == true {
+            // After AppKit's own scroll-to-caret for this event has run.
+            DispatchQueue.main.async { [weak self] in self?.centerCaretLine() }
+        }
+    }
+
+    /// The run of non-blank lines around the caret (a blank line alone if the caret is on one).
+    private func currentParagraphRange() -> NSRange {
+        let ns = string as NSString
+        let caret = min(selectedRange().location, ns.length)
+        let line = ns.lineRange(for: NSRange(location: caret, length: 0))
+        func isBlank(_ range: NSRange) -> Bool {
+            ns.substring(with: range).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        if isBlank(line) { return line }
+        var start = line.location
+        while start > 0 {
+            let previous = ns.lineRange(for: NSRange(location: start - 1, length: 0))
+            if isBlank(previous) { break }
+            start = previous.location
+        }
+        var end = NSMaxRange(line)
+        while end < ns.length {
+            let next = ns.lineRange(for: NSRange(location: end, length: 0))
+            if isBlank(next) { break }
+            end = NSMaxRange(next)
+        }
+        return NSRange(location: start, length: end - start)
+    }
+
+    private func centerCaretLine() {
+        guard let layoutManager, let textContainer, let clipView = enclosingScrollView?.contentView else { return }
+        layoutManager.ensureLayout(for: textContainer)
+        let length = (string as NSString).length
+        let caret = min(selectedRange().location, length)
+        var lineRect: NSRect
+        if caret >= length, layoutManager.extraLineFragmentTextContainer != nil {
+            lineRect = layoutManager.extraLineFragmentRect
+        } else if layoutManager.numberOfGlyphs > 0 {
+            let glyph = min(layoutManager.glyphIndexForCharacter(at: caret), layoutManager.numberOfGlyphs - 1)
+            lineRect = layoutManager.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
+        } else {
+            return
+        }
+        lineRect.origin.y += textContainerOrigin.y
+        let visible = clipView.documentVisibleRect
+        let maxY = max(bounds.minY, bounds.maxY - visible.height)
+        let targetY = min(max(bounds.minY, lineRect.midY - visible.height * 0.45), maxY)
+        guard abs(targetY - visible.minY) > 20 else { return }
+        scroll(NSPoint(x: visible.minX, y: targetY))
+        enclosingScrollView?.reflectScrolledClipView(clipView)
+    }
 
     // MARK: - Drawing: Current-Line Highlight
     public func updateCurrentLineHighlight() {
@@ -447,7 +559,7 @@ public final class LucidTextView: NSTextView {
 
             if shouldPair {
                 super.insertText(pair.open + pair.close, replacementRange: selectedRange)
-                setSelectedRange(NSRange(location: selectedRange.location + pair.open.count, length: 0))
+                setSelectedRange(NSRange(location: selectedRange.location + (pair.open as NSString).length, length: 0))
                 return
             }
         }

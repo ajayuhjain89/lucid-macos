@@ -5,6 +5,8 @@ import AppKit
 struct LucidApp: App {
     @StateObject private var preferences = LucidPreferences.shared
     @StateObject private var updateController = LucidUpdateController.shared
+    /// The key document window's view state; view commands act on that window only.
+    @FocusedObject private var windowState: WindowViewState?
 
     init() {
         LaunchUntitledCleanup.markLaunch()
@@ -22,7 +24,7 @@ struct LucidApp: App {
                 Button("Check for Updates…") {
                     updateController.checkForUpdates()
                 }
-                .disabled(!updateController.canCheckForUpdates)
+                .disabled(!updateController.isUpdateCheckAvailable)
                 Divider()
             }
 
@@ -71,15 +73,19 @@ struct LucidApp: App {
 
                 Divider()
 
-                Toggle("Focus Mode", isOn: $preferences.focusMode)
+                Toggle("Focus Mode", isOn: focusModeBinding)
                     .keyboardShortcut("d", modifiers: [.command, .shift])
 
                 Toggle("Typewriter Mode", isOn: $preferences.typewriterMode)
 
                 Divider()
 
-                Button(preferences.showOutline ? "Hide Sidebar" : "Show Sidebar") {
-                    preferences.showOutline.toggle()
+                Button((windowState?.showOutline ?? preferences.showOutline) ? "Hide Sidebar" : "Show Sidebar") {
+                    if let windowState {
+                        windowState.showOutline.toggle()
+                    } else {
+                        preferences.showOutline.toggle()
+                    }
                 }
                 .keyboardShortcut("s", modifiers: [.command, .control])
 
@@ -117,6 +123,19 @@ struct LucidApp: App {
                 Divider()
             }
 
+            // The default Help item only said help isn't available.
+            CommandGroup(replacing: .help) {
+                Button("Lucid on GitHub") {
+                    NSWorkspace.shared.open(URL(string: "https://github.com/ajayuhjain89/lucid-macos")!)
+                }
+                Button("Report an Issue…") {
+                    NSWorkspace.shared.open(URL(string: "https://github.com/ajayuhjain89/lucid-macos/issues/new")!)
+                }
+                Button("Release Notes") {
+                    NSWorkspace.shared.open(URL(string: "https://github.com/ajayuhjain89/lucid-macos/releases")!)
+                }
+            }
+
             CommandMenu("Theme") {
                 ForEach(ThemeMode.curatedThemes) { mode in
                     Toggle(mode.displayName, isOn: Binding(
@@ -132,8 +151,20 @@ struct LucidApp: App {
     /// mode; choosing it selects that mode (choosing the current one keeps it).
     private func viewModeBinding(_ mode: ViewMode) -> Binding<Bool> {
         Binding(
-            get: { preferences.viewMode == mode },
-            set: { if $0 { preferences.viewMode = mode } }
+            get: { (windowState?.viewMode ?? preferences.viewMode) == mode },
+            set: {
+                guard $0 else { return }
+                if let windowState { windowState.viewMode = mode } else { preferences.viewMode = mode }
+            }
+        )
+    }
+
+    private var focusModeBinding: Binding<Bool> {
+        Binding(
+            get: { windowState?.focusMode ?? preferences.focusMode },
+            set: { value in
+                if let windowState { windowState.focusMode = value } else { preferences.focusMode = value }
+            }
         )
     }
 }

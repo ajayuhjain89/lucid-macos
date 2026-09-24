@@ -26,7 +26,7 @@ public struct SettingsView: View {
                 .tabItem { Label("Preview", systemImage: "book") }
 
             STEMSettingsTab(preferences: preferences)
-                .tabItem { Label("STEM & Math", systemImage: "atom") }
+                .tabItem { Label("STEM", systemImage: "atom") }  // "STEM & Math" was truncated in the tab bar
 
             ShortcutsSettingsTab()
                 .tabItem { Label("Shortcuts", systemImage: "command") }
@@ -89,8 +89,8 @@ struct GeneralSettingsTab: View {
                     LucidSectionHeader(title: "Default Canvas")
 
                     LucidSettingRow(
-                        title: "View Mode",
-                        description: "Reader, split or editor. Applies to every open window and to documents you open next."
+                        title: "Default View Mode",
+                        description: "How new windows open. Each window switches on its own (⌘1–⌘3); the last choice becomes the default."
                     ) {
                         Picker("", selection: $preferences.viewMode) {
                             ForEach(ViewMode.allCases) { mode in
@@ -98,7 +98,7 @@ struct GeneralSettingsTab: View {
                             }
                         }
                         .pickerStyle(.segmented)
-                        .accessibilityLabel("View Mode")
+                        .accessibilityLabel("Default View Mode")
                         .fixedSize()
                     }
 
@@ -182,7 +182,7 @@ struct AppearanceSettingsTab: View {
 
                 // Accent Color
                 VStack(alignment: .leading, spacing: LucidSpacing.medium) {
-                    LucidSectionHeader(title: "Accent Color")
+                    LucidSectionHeader(title: "Accent Color", subtitle: "Links and highlights in the rendered document.")
 
                     HStack(spacing: LucidSpacing.large) {
                         ForEach(accentPresets, id: \.0) { hex, name in
@@ -206,7 +206,7 @@ struct AppearanceSettingsTab: View {
 
                     LucidSettingRow(
                         title: "Spacing & Density",
-                        description: "Adjust padding and row heights across sidebar, toolbar, and status bar."
+                        description: "Adjust row heights in the sidebar outline and the status bar."
                     ) {
                         Picker("", selection: $preferences.density) {
                             ForEach(InterfaceDensity.allCases) { d in
@@ -382,7 +382,7 @@ struct PreviewSettingsTab: View {
 
                     LucidSettingRow(
                         title: "Signature Breakout Layout",
-                        description: "Prose remains centered at 720px while wide code blocks, tables, and diagrams expand to the full canvas."
+                        description: "Prose stays at your column width while wide code blocks, tables, and diagrams can extend to the full window width."
                     ) {
                         Toggle("", isOn: $preferences.breakoutEnabled)
                             .toggleStyle(.switch)
@@ -642,10 +642,10 @@ struct UpdatesSettingsTab: View {
                                 .foregroundColor(.orange)
                                 .font(.system(size: 16))
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Running from Disk Image")
+                                Text("Lucid Can't Update Itself Here")
                                     .font(LucidTypography.label)
                                     .foregroundColor(LucidColors.textPrimary)
-                                Text("Lucid is currently running from a mounted disk image. To enable in-app updates, drag Lucid.app to your Applications folder.")
+                                Text("Lucid is running from a disk image or a temporary location. Drag Lucid.app to your Applications folder and open it from there to enable updates.")
                                     .font(LucidTypography.caption)
                                     .foregroundColor(LucidColors.textSecondary)
                             }
@@ -685,7 +685,7 @@ struct UpdatesSettingsTab: View {
                         Button("Check for Updates…") {
                             updateController.checkForUpdates()
                         }
-                        .disabled(!updateController.canCheckForUpdates)
+                        .disabled(!updateController.isUpdateCheckAvailable)
                     }
                 }
 
@@ -699,7 +699,7 @@ struct UpdatesSettingsTab: View {
 
                     LucidSettingRow(
                         title: "Automatically check for updates",
-                        description: "Periodically check the update feed in the background."
+                        description: "On by default. Lucid checks the update feed once a day."
                     ) {
                         Toggle("", isOn: Binding(
                             get: { updateController.automaticallyChecksForUpdates },
@@ -711,7 +711,7 @@ struct UpdatesSettingsTab: View {
 
                     LucidSettingRow(
                         title: "Automatically download updates",
-                        description: "Download updates in the background and notify when ready to install."
+                        description: "On by default. Updates download in the background and install when you quit Lucid."
                     ) {
                         Toggle("", isOn: Binding(
                             get: { updateController.automaticallyDownloadsUpdates },

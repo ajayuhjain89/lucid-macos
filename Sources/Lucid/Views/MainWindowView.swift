@@ -7,6 +7,8 @@ public struct MainWindowView: View {
     var fileURL: URL?
 
     @StateObject private var preferences = LucidPreferences.shared
+    /// This window's own view mode, sidebar and Focus Mode.
+    @StateObject private var viewState = WindowViewState()
     /// Off-main, coalesced document analysis (metrics + outline). Keeps the
     /// synchronous typing path free of the O(n) scan/parse.
     @StateObject private var analyzer = DocumentAnalyzer()
@@ -97,7 +99,7 @@ public struct MainWindowView: View {
             // a reserved opaque band.
             VStack(spacing: 0) {
                 HStack(spacing: 0) {
-                    if preferences.showOutline {
+                    if viewState.showOutline {
                         HStack(spacing: 0) {
                             // Outline Sidebar — owns its own compact top row with traffic light clearance and toggle
                             OutlineSidebarView(
@@ -109,11 +111,11 @@ public struct MainWindowView: View {
                                 readingTimeMinutes: readingTimeMinutes,
                                 trafficLightWidth: trafficLightReservedWidth,
                                 onToggleSidebar: {
-                                    preferences.showOutline = false
+                                    viewState.showOutline = false
                                 }
                             ) { id in
                                 activeHeading = headings.first(where: { $0.id == id })
-                                if preferences.viewMode != .reader {
+                                if viewState.viewMode != .reader {
                                     scrollEditor(toHeadingId: id)
                                 }
                                 scrollToHeadingId = id
@@ -131,9 +133,9 @@ public struct MainWindowView: View {
                     }
 
                     // Document Canvas — fills remaining space, continuously mounted across sidebar toggles
-                    documentCanvas(sidebarOpen: preferences.showOutline)
+                    documentCanvas(sidebarOpen: viewState.showOutline)
                 }
-                .animation(LucidMotion.respecting(reduceMotion, LucidMotion.panel), value: preferences.showOutline)
+                .animation(LucidMotion.respecting(reduceMotion, LucidMotion.panel), value: viewState.showOutline)
 
                 // Minimal, Serene Status Bar
                 if preferences.showStatusBar {
@@ -165,26 +167,13 @@ public struct MainWindowView: View {
                 CommandPaletteView(
                     isPresented: $isCommandPalettePresented,
                     preferences: preferences,
+                    viewState: viewState,
                     webView: webViewInstance,
                     onInsertSnippet: { type in
                         insertSnippet(type)
                     },
-                    onExportPDF: {
-                        if let webView = webViewInstance {
-                            ExportService.shared.exportPDF(
-                                webView: webView,
-                                defaultFilename: documentTitle
-                            )
-                        }
-                    },
-                    onExportHTML: {
-                        if let webView = webViewInstance {
-                            ExportService.shared.exportHTML(
-                                webView: webView,
-                                defaultFilename: documentTitle
-                            )
-                        }
-                    },
+                    onExportPDF: { exportPDF() },
+                    onExportHTML: { exportHTML() },
                     onCopyRichText: {
                         if let webView = webViewInstance {
                             ExportService.shared.copyRichText(webView: webView)
@@ -201,7 +190,7 @@ public struct MainWindowView: View {
         }
         .preferredColorScheme(colorSchemeForTheme)
         .animation(LucidMotion.respecting(reduceMotion, LucidMotion.panel), value: preferences.showStatusBar)
-        .onChange(of: preferences.showOutline) { oldValue, newValue in
+        .onChange(of: viewState.showOutline) { oldValue, newValue in
             let token = UUID()
             sidebarTransitionToken = token
             if reduceMotion {
@@ -229,6 +218,7 @@ public struct MainWindowView: View {
             guard isHostWindow(note.object) else { return }
             trafficLightReservedWidth = 77
         }
+        .focusedSceneObject(viewState)
         .onAppear {
             LaunchUntitledCleanup.closeUntouchedUntitledIfOpeningFile()
             // The Untitled window can appear just after the file's window.
@@ -267,7 +257,7 @@ public struct MainWindowView: View {
                 performFind(findQuery, moveSelection: false)
             }
         }
-        .onChange(of: preferences.viewMode) { _, _ in
+        .onChange(of: viewState.viewMode) { _, _ in
             if isFindBarPresented && !findQuery.isEmpty {
                 performFind(findQuery)
             }
@@ -319,7 +309,7 @@ public struct MainWindowView: View {
     }
 
     private var currentActiveSurface: ActiveSurface {
-        switch preferences.viewMode {
+        switch viewState.viewMode {
         case .reader:
             return .reader
         case .editor:
@@ -334,7 +324,7 @@ public struct MainWindowView: View {
             closeFind()
         } else {
             previousFirstResponder = NSApp.keyWindow?.firstResponder
-            if preferences.viewMode == .split {
+            if viewState.viewMode == .split {
                 if let responder = previousFirstResponder as? NSView, (responder is NSTextView || (editorTextView != nil && responder.isDescendant(of: editorTextView!))) {
                     lastActiveSurface = .editor
                 } else {
@@ -430,6 +420,16 @@ public struct MainWindowView: View {
         restoreFocusAfterFind()
     }
 
+    // Exports render the document text in their own offscreen page, so they
+    // work in every view mode, including Editor mode with no preview.
+    private func exportPDF() {
+        ExportService.shared.exportPDF(markdown: document.text, documentURL: fileURL, preferences: preferences, defaultFilename: documentTitle)
+    }
+
+    private func exportHTML() {
+        ExportService.shared.exportHTML(markdown: document.text, documentURL: fileURL, preferences: preferences, defaultFilename: documentTitle)
+    }
+
     private func focusDocumentIfFieldHasFocus() {
         guard let window = hostWindow.window,
               let fieldEditor = window.firstResponder as? NSTextView,
@@ -457,7 +457,7 @@ public struct MainWindowView: View {
             }
         }
 
-        switch preferences.viewMode {
+        switch viewState.viewMode {
         case .editor:
             if let tv = editorTextView, tv.window != nil {
                 tv.window?.makeFirstResponder(tv)
@@ -494,7 +494,7 @@ public struct MainWindowView: View {
             documentContent
                 .frame(minWidth: 400, maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color(hex: preferences.theme.themeTokens.windowBackground))
-                .animation(LucidMotion.respecting(reduceMotion, LucidMotion.panel), value: preferences.viewMode)
+                .animation(LucidMotion.respecting(reduceMotion, LucidMotion.panel), value: viewState.viewMode)
 
             // Floating glass top chrome, structurally contained in the Document Canvas
             documentTopBar(sidebarOpen: sidebarOpen)
@@ -521,7 +521,7 @@ public struct MainWindowView: View {
 
     private var documentContent: some View {
         Group {
-            switch preferences.viewMode {
+            switch viewState.viewMode {
             case .reader:
                 PreviewWebView(
                     preferences: preferences,
@@ -540,7 +540,8 @@ public struct MainWindowView: View {
                     isSidebarTransitioning: isSidebarTransitioning,
                     sidebarWidth: CGFloat(sidebarWidth),
                     transitionToken: sidebarTransitionToken,
-                    isSidebarOpen: preferences.showOutline
+                    isSidebarOpen: viewState.showOutline,
+                    focusMode: viewState.focusMode
                 )
                 .transition(.opacity)
             case .split:
@@ -548,6 +549,7 @@ public struct MainWindowView: View {
                     EditorView(
                         text: $document.text,
                         preferences: preferences,
+                        focusMode: viewState.focusMode,
                         onScrollFractionChanged: { fraction in
                             previewTargetFraction = fraction
                         },
@@ -579,7 +581,8 @@ public struct MainWindowView: View {
                         isSidebarTransitioning: isSidebarTransitioning,
                         sidebarWidth: CGFloat(sidebarWidth),
                         transitionToken: sidebarTransitionToken,
-                        isSidebarOpen: preferences.showOutline
+                        isSidebarOpen: viewState.showOutline,
+                        focusMode: viewState.focusMode
                     )
                     // 2 × 220 + dividers + the widest sidebar (320) fits the 780 pt window minimum.
                     .frame(minWidth: 220)
@@ -589,6 +592,7 @@ public struct MainWindowView: View {
                 EditorView(
                     text: $document.text,
                     preferences: preferences,
+                    focusMode: viewState.focusMode,
                     onCursorPositionChanged: { line, col in
                         cursorLine = line
                         cursorCol = col
@@ -625,7 +629,7 @@ public struct MainWindowView: View {
                             helpText: "Toggle Outline Sidebar",
                             shortcutText: "⌃⌘S"
                         ) {
-                            preferences.showOutline = true
+                            viewState.showOutline = true
                         }
                         .background(controlGlassBackground(cornerRadius: 6))
                     }
@@ -641,7 +645,7 @@ public struct MainWindowView: View {
                 .padding(.trailing, LucidSpacing.medium)
                 .opacity(toolbarControlsOpacity)
                 .animation(LucidMotion.respecting(reduceMotion, LucidMotion.panel), value: isToolbarHovered)
-                .animation(LucidMotion.respecting(reduceMotion, LucidMotion.panel), value: preferences.focusMode)
+                .animation(LucidMotion.respecting(reduceMotion, LucidMotion.panel), value: viewState.focusMode)
             }
             .frame(height: LucidChrome.toolbarHeight)
             .frame(maxWidth: .infinity)
@@ -687,7 +691,7 @@ public struct MainWindowView: View {
     /// In Focus Mode the toolbar controls recede to keep the document dominant,
     /// then gently return to full presence when the pointer approaches the top.
     private var toolbarControlsOpacity: Double {
-        guard preferences.focusMode else { return 1 }
+        guard viewState.focusMode else { return 1 }
         return isToolbarHovered ? 1 : 0.4
     }
 
@@ -720,10 +724,10 @@ public struct MainWindowView: View {
     private var modeSelector: some View {
         HStack(spacing: 2) {
             ForEach([ViewMode.reader, ViewMode.split, ViewMode.editor], id: \.self) { mode in
-                let isSelected = preferences.viewMode == mode
+                let isSelected = viewState.viewMode == mode
                 Button(action: {
                     withAnimation(LucidMotion.respecting(reduceMotion, LucidMotion.state)) {
-                        preferences.viewMode = mode
+                        viewState.viewMode = mode
                     }
                 }) {
                     Image(systemName: modeIcon(mode))
@@ -746,7 +750,7 @@ public struct MainWindowView: View {
     private var moreMenu: some View {
         Menu {
             Section("Focus & Modes") {
-                Toggle("Focus Mode", isOn: $preferences.focusMode)
+                Toggle("Focus Mode", isOn: $viewState.focusMode)
                 Toggle("Typewriter Mode", isOn: $preferences.typewriterMode)
             }
 
@@ -767,20 +771,12 @@ public struct MainWindowView: View {
                         isFindBarPresented = true
                     }
                 }
-                Button("Export as PDF…") {
-                    if let webView = webViewInstance {
-                        ExportService.shared.exportPDF(webView: webView, defaultFilename: documentTitle)
-                    }
-                }
-                Button("Export as Standalone HTML…") {
-                    if let webView = webViewInstance {
-                        ExportService.shared.exportHTML(webView: webView, defaultFilename: documentTitle)
-                    }
-                }
+                Button("Export as PDF…") { exportPDF() }
+                Button("Export as Standalone HTML…") { exportHTML() }
             }
 
             Section {
-                Button("Preferences…") {
+                Button("Settings…") {
                     SettingsWindowManager.shared.showSettings(preferences: preferences)
                 }
             }
@@ -838,8 +834,8 @@ public struct MainWindowView: View {
         let template = snippetText(type)
         guard !template.isEmpty else { return }
 
-        if preferences.viewMode == .reader {
-            preferences.viewMode = .split
+        if viewState.viewMode == .reader {
+            viewState.viewMode = .split
         }
 
         if let textView = editorTextView {
