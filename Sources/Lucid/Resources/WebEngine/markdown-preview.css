@@ -77,6 +77,10 @@ body.vscode-body {
   font-family: var(--lucid-font-family);
   font-size: var(--lucid-font-size);
   line-height: var(--lucid-line-height);
+  /* Break a word only when it would otherwise run past the column (long URLs,
+     hashes). break-word, unlike anywhere, leaves table column sizing alone;
+     code blocks keep white-space: pre and still scroll. */
+  overflow-wrap: break-word;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   position: relative;
@@ -1250,4 +1254,7 @@ body.lucid-focus-mode #lucid-content > .lucid-active-block {
   body.vscode-body h2, body.vscode-body h3 { page-break-after: avoid; }
   body.vscode-body pre, body.vscode-body table,
   body.vscode-body blockquote, body.vscode-body .katex-display { page-break-inside: avoid; }
+  /* On paper a wide table can't scroll: let cells break long words to fit the page. */
+  body.vscode-body .lucid-table-wrapper { overflow: visible !important; }
+  body.vscode-body th, body.vscode-body td { overflow-wrap: anywhere; }
 }
