@@ -540,7 +540,8 @@ public struct MainWindowView: View {
                         onTextViewCreated: { editorTextView = $0 },
                         onScrollIntensityChanged: { scrollIntensity = $0 }
                     )
-                    .frame(minWidth: 260)
+                    // 2 × 220 + dividers + the widest sidebar (320) fits the 780 pt window minimum.
+                    .frame(minWidth: 220)
 
                     PreviewWebView(
                         preferences: preferences,
@@ -562,7 +563,8 @@ public struct MainWindowView: View {
                         transitionToken: sidebarTransitionToken,
                         isSidebarOpen: preferences.showOutline
                     )
-                    .frame(minWidth: 260)
+                    // 2 × 220 + dividers + the widest sidebar (320) fits the 780 pt window minimum.
+                    .frame(minWidth: 220)
                 }
                 .transition(.opacity)
             case .editor:

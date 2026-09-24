@@ -29,11 +29,14 @@ if [[ ! "$DMG_BASENAME" =~ ^Lucid-[0-9]+\.[0-9]+\.[0-9]+.*\.dmg$ ]]; then
   exit 1
 fi
 
-# Locate sign_update tool
+# Locate sign_update tool. It runs with access to the Keychain signing key, so
+# only trusted locations are searched: an explicit SPARKLE_SIGN_UPDATE path, the
+# SwiftPM-resolved Sparkle artifact, or PATH. Never a world-writable directory
+# such as /tmp, where anyone could plant a binary.
 SIGN_UPDATE=""
 CANDIDATE_PATHS=(
+  "${SPARKLE_SIGN_UPDATE:-}"
   "$ROOT_DIR/.build/artifacts/sparkle/Sparkle/bin/sign_update"
-  "/tmp/sparkle_tools/bin/sign_update"
   "$(which sign_update 2>/dev/null || true)"
 )
 
@@ -46,7 +49,7 @@ done
 
 if [ -z "$SIGN_UPDATE" ]; then
   echo "Error: Sparkle sign_update tool not found." >&2
-  echo "Ensure Sparkle SPM dependencies are resolved or sign_update is in PATH." >&2
+  echo "Ensure Sparkle SPM dependencies are resolved, set SPARKLE_SIGN_UPDATE, or put sign_update in PATH." >&2
   exit 1
 fi
 
