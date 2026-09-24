@@ -326,6 +326,17 @@ public final class LucidPreferences: ObservableObject {
 
     // MARK: - Presets Application
     public func applyPreset(_ preset: LucidPreset) {
+        // A preset defines the whole configuration: start the settings that any
+        // preset controls from their defaults, so nothing from the previous
+        // preset (Focus Mode, a hidden status bar, compact density) lingers.
+        density = Defaults.density
+        focusMode = Defaults.focusMode
+        typewriterMode = Defaults.typewriterMode
+        showStatusBar = Defaults.showStatusBar
+        highlightCurrentLine = Defaults.highlightCurrentLine
+        lineNumbers = Defaults.lineNumbers
+        showOutline = Defaults.showOutline
+
         switch preset {
         case .lucidDefault:
             theme = .dark
