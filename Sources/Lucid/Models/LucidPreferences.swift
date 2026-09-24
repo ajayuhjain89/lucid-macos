@@ -293,10 +293,15 @@ public final class LucidPreferences: ObservableObject {
     }
 
     public func effectiveTheme(systemColorScheme: ColorScheme) -> String {
-        if theme == .system {
+        switch theme {
+        case .system:
             return systemColorScheme == .dark ? "dark" : "light"
+        case .oled, .nord, .dracula:
+            // Legacy themes (no longer offered) have no preview styles: use dark.
+            return "dark"
+        default:
+            return theme.rawValue
         }
-        return theme.rawValue
     }
 
     /// Posted (object: the preferences) after `applyPreset`, so open windows adopt it.

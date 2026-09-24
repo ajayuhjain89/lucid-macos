@@ -153,7 +153,7 @@ public struct EditorView: NSViewRepresentable {
                 textContainer.containerSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
             }
 
-            textView.layoutManager?.invalidateLayout(forCharacterRange: NSRange(location: 0, length: textView.string.count), actualCharacterRange: nil)
+            textView.layoutManager?.invalidateLayout(forCharacterRange: NSRange(location: 0, length: (textView.string as NSString).length), actualCharacterRange: nil)
             textView.selectedRanges = savedSelectedRanges
             scrollView.contentView.bounds.origin = savedVisibleOrigin
             context.coordinator.gutterView?.needsDisplay = true
@@ -559,7 +559,7 @@ public final class LucidTextView: NSTextView {
 
             if shouldPair {
                 super.insertText(pair.open + pair.close, replacementRange: selectedRange)
-                setSelectedRange(NSRange(location: selectedRange.location + pair.open.count, length: 0))
+                setSelectedRange(NSRange(location: selectedRange.location + (pair.open as NSString).length, length: 0))
                 return
             }
         }

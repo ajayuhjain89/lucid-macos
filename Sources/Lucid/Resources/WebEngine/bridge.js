@@ -1551,7 +1551,9 @@
 
     if (href.charAt(0) === '#') {
       e.preventDefault();
-      const id = decodeURIComponent(href.slice(1));
+      // A malformed escape (e.g. "#100%") must not throw out of the click handler.
+      let id = href.slice(1);
+      try { id = decodeURIComponent(id); } catch (err) { /* use the raw fragment */ }
       const el = document.getElementById(id) || document.querySelector('[name="' + CSS.escape(id) + '"]');
       if (el) {
         startProgrammaticScroll(id, el);
@@ -2291,7 +2293,7 @@
 
       if (prefs.theme) {
         body.setAttribute('data-theme', prefs.theme);
-        body.className = 'vscode-body ' + (prefs.theme === 'dark' ? 'vscode-dark' : (prefs.theme === 'light' ? 'vscode-light' : 'vscode-sepia'));
+        body.className = 'vscode-body ' + (prefs.theme === 'light' ? 'vscode-light' : (prefs.theme === 'sepia' ? 'vscode-sepia' : 'vscode-dark'));
         const newThemeName = (prefs.theme === 'light' || prefs.theme === 'sepia') ? prefs.theme : 'dark';
 
         if (typeof mermaid !== 'undefined') {
