@@ -17,8 +17,8 @@ public enum ThemeMode: String, CaseIterable, Identifiable, Codable {
     public var displayName: String {
         switch self {
         case .system: return "System Dynamic"
-        case .dark: return "Lucid Studio Dark (#171717)"
-        case .light: return "Lucid Editorial Light"
+        case .dark: return "Studio Dark"
+        case .light: return "Editorial Light"
         case .sepia: return "Warm Book Sepia"
         case .oled: return "OLED Pure Black"
         case .nord: return "Nord Arctic"
@@ -206,7 +206,7 @@ public enum LucidPreset: String, CaseIterable, Identifiable {
         case .lucidDefault: return "Signature balanced environment with Studio Dark and SF Pro."
         case .minimalWriter: return "Zero-distraction centered writing with no line numbers or sidebar."
         case .technicalDoc: return "Wide canvas with breakout layout, outline sidebar, and full STEM support."
-        case .developer: return "SF Mono editor with line numbers, compact density, and live diagrams."
+        case .developer: return "SF Mono editor with line numbers, split view, and live diagrams."
         case .academic: return "Editorial serif typography, warm paper tones, and comfortable leading."
         case .compact: return "High-density layout optimized for smaller displays or multitasking."
         case .reading: return "Reader-only presentation with large type and warm book sepia."
@@ -318,16 +318,29 @@ public final class LucidPreferences: ObservableObject {
     @AppStorage("lucid.statusLineCol") public var statusLineCol: Bool = Defaults.statusLineCol
     @AppStorage("lucid.statusCharCount") public var statusCharCount: Bool = Defaults.statusCharCount
 
-    public init() {}
-
-    public func effectiveTheme(systemColorScheme: ColorScheme) -> String {
-        if theme == .system {
-            return systemColorScheme == .dark ? "dark" : "light"
-        }
-        return theme.rawValue
+    public init() {
+        // Left behind by an old "click to edit" setting that no longer exists.
+        UserDefaults.standard.removeObject(forKey: "lucid.clickToEdit")
     }
 
-    public func jsonPayload(systemColorScheme: ColorScheme) -> String {
+    public func effectiveTheme(systemColorScheme: ColorScheme) -> String {
+        switch theme {
+        case .system:
+            return systemColorScheme == .dark ? "dark" : "light"
+        case .oled, .nord, .dracula:
+            // Legacy themes (no longer offered) have no preview styles: use dark.
+            return "dark"
+        default:
+            return theme.rawValue
+        }
+    }
+
+    /// Posted (object: the preferences) after `applyPreset`, so open windows adopt it.
+    public static let presetAppliedNotification = Notification.Name("LucidPresetApplied")
+
+    /// The preview's preference payload. `focusMode` overrides the app-wide value
+    /// with the window's own (see WindowViewState).
+    public func jsonPayload(systemColorScheme: ColorScheme, focusMode: Bool? = nil) -> String {
         let dict: [String: Any] = [
             "theme": effectiveTheme(systemColorScheme: systemColorScheme),
             "fontFamily": fontFamily.cssValue(customName: customFontName),
@@ -336,7 +349,7 @@ public final class LucidPreferences: ObservableObject {
             "contentWidth": contentWidth.rawValue,
             "accentColor": accentColor,
             "breakout": breakoutEnabled,
-            "focusMode": focusMode,
+            "focusMode": focusMode ?? self.focusMode,
             "typewriterMode": typewriterMode,
             "tableDensity": tableDensity.rawValue,
             "mathScale": mathScale,
@@ -457,6 +470,7 @@ public final class LucidPreferences: ObservableObject {
             showStatusBar = false
             viewMode = .reader
         }
+        NotificationCenter.default.post(name: Self.presetAppliedNotification, object: self)
     }
 
     // MARK: - Domain Resets

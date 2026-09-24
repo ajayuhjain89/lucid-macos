@@ -11,7 +11,11 @@ public final class SettingsWindowManager: NSObject, NSWindowDelegate {
     }
 
     public func showSettings(preferences: LucidPreferences = .shared) {
-        if let existing = window, existing.isVisible {
+        // Reuse the one Settings window, whether it is open, minimized or was closed
+        // (it is kept, not released): building a new one each time lost its state
+        // and, for a minimized window, left a duplicate in the Dock.
+        if let existing = window {
+            if existing.isMiniaturized { existing.deminiaturize(nil) }
             existing.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return

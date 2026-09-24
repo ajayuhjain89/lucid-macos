@@ -131,6 +131,7 @@ function createBrowserEnvironment() {
         };
         const viewport = { clientWidth: 800, style: {} };
         const container = {
+          classList: { add() {}, remove() {}, contains() { return false; } },
           getAttribute: (name) => (name === 'data-raw-mermaid' ? raw : null),
           querySelector: (sel) => {
             if (sel === '.mermaid-canvas') return canvas;

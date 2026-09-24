@@ -16,8 +16,11 @@
   };
 
   // Performance instrumentation
+  // Render-phase timing marks. Off by default (the app ignores them, and each
+  // mark is an IPC hop); set window.LucidPerf.enabled = true from Web Inspector
+  // while profiling.
   const LucidPerf = {
-    enabled: true,
+    enabled: false,
     mark: function(renderId, phase, data) {
       if (!this.enabled) return;
       const t = performance.now();
@@ -1347,8 +1350,33 @@
     };
   }
 
+  // Mermaid's rendered error only ever says "Syntax error in text". Ask its
+  // parser for the real message (line, what it expected) and show that instead.
+  function fillMermaidErrorDetail(c) {
+    if (c._lucidErrorDetailRequested || typeof mermaid === 'undefined' || typeof mermaid.parse !== 'function') return;
+    c._lucidErrorDetailRequested = true;
+    const rawAttr = c.getAttribute('data-raw-mermaid');
+    if (!rawAttr) return;
+    let source = '';
+    try { source = decodeURIComponent(rawAttr); } catch (_) { source = rawAttr; }
+    Promise.resolve()
+      .then(function() { return mermaid.parse(sanitizeMermaidSource(source)); })
+      .then(function() { /* parses fine: the generic message is all there is */ },
+            function(err) {
+              const detail = c.querySelector('.lucid-mermaid-error-detail');
+              const message = err && (err.message || String(err));
+              if (detail && message) detail.textContent = message.trim().split('\n').slice(0, 6).join('\n');
+            });
+  }
+
   function formatMermaidContainer(c, optErr) {
     if (!c) return;
+    // An error card restored from the cache: keep it, hide the toolbar, add detail.
+    if (!optErr && c.querySelector('.mermaid-canvas .lucid-mermaid-error')) {
+      c.classList.add('is-error');
+      fillMermaidErrorDetail(c);
+      return;
+    }
     const svg = c.querySelector('.mermaid-canvas svg') || c.querySelector('.mermaid svg');
     const isError = !!optErr ||
                     !!c.querySelector('.error-icon') ||
@@ -1370,11 +1398,15 @@
         }
         canvas.innerHTML = '<div class="lucid-mermaid-error" style="padding: 16px; font-family: var(--lucid-font-family, system-ui); color: #e06c75; font-size: 13px;">' +
                            '<div style="font-weight: 600; margin-bottom: 4px;">Mermaid couldn\'t render this diagram.</div>' +
-                           '<div style="opacity: 0.85; font-size: 12px; font-family: monospace;">' + md.utils.escapeHtml(errorMsg) + '</div>' +
+                           '<div class="lucid-mermaid-error-detail" style="opacity: 0.85; font-size: 12px; font-family: monospace; white-space: pre-wrap;">' + md.utils.escapeHtml(errorMsg) + '</div>' +
                            '</div>';
       }
+      // Zoom, pan and SVG export make no sense for an error card.
+      c.classList.add('is-error');
+      if (!optErr) fillMermaidErrorDetail(c);
       return;
     }
+    c.classList.remove('is-error');
     if (!svg) return;
     const viewBox = svg.viewBox && svg.viewBox.baseVal;
     if (viewBox && viewBox.width > 0) {
@@ -1548,7 +1580,9 @@
 
     if (href.charAt(0) === '#') {
       e.preventDefault();
-      const id = decodeURIComponent(href.slice(1));
+      // A malformed escape (e.g. "#100%") must not throw out of the click handler.
+      let id = href.slice(1);
+      try { id = decodeURIComponent(id); } catch (err) { /* use the raw fragment */ }
       const el = document.getElementById(id) || document.querySelector('[name="' + CSS.escape(id) + '"]');
       if (el) {
         startProgrammaticScroll(id, el);
@@ -1869,12 +1903,31 @@
     }
   }
 
-  window.addEventListener('scroll', function() {
+  // Scroll position for the native side (split-mode sync, toolbar glass): at most
+  // one message per frame, and only when it moved enough for the app to act on
+  // (the same thresholds it applies), instead of one IPC hop per scroll event.
+  let scrollReportPending = false;
+  let lastPostedFraction = -1;
+  let lastPostedIntensity = -1;
+  function reportScrollPosition() {
+    scrollReportPending = false;
+    const handlers = window.webkit && window.webkit.messageHandlers;
+    if (!handlers || !handlers.lucidScroll) return;
     const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
     const fraction = maxScroll > 0 ? window.scrollY / maxScroll : 0;
     const intensity = Math.max(0, Math.min(1, window.scrollY / 28));
-    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.lucidScroll) {
-      window.webkit.messageHandlers.lucidScroll.postMessage({ fraction: fraction, scrolled: window.scrollY > 6, intensity: intensity });
+    const crossed = (intensity >= 0.05) !== (lastPostedIntensity >= 0.05);
+    if (Math.abs(fraction - lastPostedFraction) < 0.005 &&
+        Math.abs(intensity - lastPostedIntensity) <= 0.04 && !crossed) return;
+    lastPostedFraction = fraction;
+    lastPostedIntensity = intensity;
+    handlers.lucidScroll.postMessage({ fraction: fraction, scrolled: window.scrollY > 6, intensity: intensity });
+  }
+
+  window.addEventListener('scroll', function() {
+    if (!scrollReportPending) {
+      scrollReportPending = true;
+      requestAnimationFrame(reportScrollPosition);
     }
 
     if (anchorRestoreActive) {
@@ -2269,7 +2322,7 @@
 
       if (prefs.theme) {
         body.setAttribute('data-theme', prefs.theme);
-        body.className = 'vscode-body ' + (prefs.theme === 'dark' ? 'vscode-dark' : (prefs.theme === 'light' ? 'vscode-light' : 'vscode-sepia'));
+        body.className = 'vscode-body ' + (prefs.theme === 'light' ? 'vscode-light' : (prefs.theme === 'sepia' ? 'vscode-sepia' : 'vscode-dark'));
         const newThemeName = (prefs.theme === 'light' || prefs.theme === 'sepia') ? prefs.theme : 'dark';
 
         if (typeof mermaid !== 'undefined') {
@@ -2482,10 +2535,6 @@
       window.addEventListener('mousemove', onPointerMove);
       window.addEventListener('mouseup', onPointerUp);
       window.addEventListener('blur', onPointerCancel);
-    },
-
-    handleDiagramMouseDown: function(e, viewport) {
-      window.lucid.handleDiagramPointerDown(e, viewport);
     },
 
     zoomDiagramAtPoint: function(targetEl, factor, clientX, clientY) {
@@ -2914,8 +2963,35 @@
       }
     },
 
-    getStandaloneHTML: function() {
-      return document.documentElement.outerHTML;
+    // Export runs in a separate, offscreen page (ExportService). Ready once math
+    // placeholders are typeset, every diagram has rendered and images loaded.
+    isExportReady: function() {
+      if (document.querySelector('.lucid-math-placeholder')) return false;
+      const diagrams = document.querySelectorAll('.mermaid-container');
+      for (let i = 0; i < diagrams.length; i++) {
+        if (!diagrams[i]._lucidCurrentTheme) return false;
+      }
+      for (let i = 0; i < document.images.length; i++) {
+        if (!document.images[i].complete) return false;
+      }
+      return true;
+    },
+
+    // Strips interactive chrome (toolbars, copy buttons, hover anchors) from the
+    // export page and returns the parts the native side assembles into a
+    // standalone file, as JSON: root and body attributes plus the content markup.
+    prepareForExport: function() {
+      const content = document.getElementById('lucid-content');
+      content.querySelectorAll('.mermaid-toolbar, .lucid-copy, .lucid-btn-copy-latex, .lucid-anchor')
+        .forEach(function(el) { el.remove(); });
+      const attrs = function(el) {
+        return Array.prototype.map.call(el.attributes, function(a) { return [a.name, a.value]; });
+      };
+      return JSON.stringify({
+        htmlAttrs: attrs(document.documentElement),
+        bodyAttrs: attrs(document.body),
+        content: content.outerHTML
+      });
     },
 
     getCurrentRevision: function() {

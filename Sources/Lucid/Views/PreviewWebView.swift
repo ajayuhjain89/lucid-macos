@@ -120,6 +120,8 @@ public struct PreviewWebView: NSViewRepresentable {
     var sidebarWidth: CGFloat = 240
     var transitionToken: UUID? = nil
     var isSidebarOpen: Bool = false
+    /// This window's Focus Mode (WindowViewState), not the app-wide default.
+    var focusMode: Bool = false
     @Environment(\.colorScheme) var colorScheme
 
     public func makeCoordinator() -> Coordinator {
@@ -181,27 +183,24 @@ public struct PreviewWebView: NSViewRepresentable {
             self.webViewInstance = webView
         }
 
-        let engineURL: URL? = {
-            if let url = Bundle.main.url(forResource: "index", withExtension: "html", subdirectory: "WebEngine") {
-                return url
-            }
-            if let resURL = Bundle.main.resourceURL?.appendingPathComponent("WebEngine/index.html"),
-               FileManager.default.fileExists(atPath: resURL.path) {
-                return resURL
-            }
-            let devURL = URL(fileURLWithPath: "/Users/ayushjain/lucid-macos/Sources/Lucid/Resources/WebEngine/index.html")
-            if FileManager.default.fileExists(atPath: devURL.path) {
-                return devURL
-            }
-            return nil
-        }()
-
-        if let indexURL = engineURL {
+        if let indexURL = Self.engineIndexURL {
             context.coordinator.allowedFileURL = indexURL
             webView.loadFileURL(indexURL, allowingReadAccessTo: indexURL.deletingLastPathComponent())
         }
 
         return LucidWebContainerView(webView: webView)
+    }
+
+    /// The bundled preview engine page (WebEngine/index.html in the app's resources).
+    static var engineIndexURL: URL? {
+        if let url = Bundle.main.url(forResource: "index", withExtension: "html", subdirectory: "WebEngine") {
+            return url
+        }
+        if let resURL = Bundle.main.resourceURL?.appendingPathComponent("WebEngine/index.html"),
+           FileManager.default.fileExists(atPath: resURL.path) {
+            return resURL
+        }
+        return nil
     }
 
     static let messageHandlerNames = [
@@ -241,7 +240,7 @@ public struct PreviewWebView: NSViewRepresentable {
         webView.underPageBackgroundColor = NSColor(Color(hex: tokens.previewBackground))
 
         // Update preferences only when payload changes to avoid IPC thrashing
-        let prefsJSON = preferences.jsonPayload(systemColorScheme: colorScheme)
+        let prefsJSON = preferences.jsonPayload(systemColorScheme: colorScheme, focusMode: focusMode)
         if prefsJSON != context.coordinator.lastAppliedPrefsJSON {
             context.coordinator.lastAppliedPrefsJSON = prefsJSON
             webView.evaluateJavaScript("if (window.lucid) { window.lucid.updatePreferences(\(prefsJSON)); }")
@@ -342,7 +341,7 @@ public struct PreviewWebView: NSViewRepresentable {
             isPageLoaded = true
             renderCoordinator.setWebView(webView)
 
-            let prefsJSON = parent.preferences.jsonPayload(systemColorScheme: parent.colorScheme)
+            let prefsJSON = parent.preferences.jsonPayload(systemColorScheme: parent.colorScheme, focusMode: parent.focusMode)
             lastAppliedPrefsJSON = prefsJSON
             webView.evaluateJavaScript("if (window.lucid) { window.lucid.updatePreferences(\(prefsJSON)); }")
 
@@ -510,7 +509,7 @@ public struct PreviewWebView: NSViewRepresentable {
 
 /// Forwards script messages to a weakly held handler, breaking the retain cycle
 /// WKUserContentController would otherwise form with its handler.
-private final class WeakScriptMessageHandler: NSObject, WKScriptMessageHandler {
+final class WeakScriptMessageHandler: NSObject, WKScriptMessageHandler {
     private weak var target: WKScriptMessageHandler?
 
     init(_ target: WKScriptMessageHandler) {
@@ -525,7 +524,7 @@ private final class WeakScriptMessageHandler: NSObject, WKScriptMessageHandler {
 /// Serves images referenced by the document (`lucid-asset://doc/<relative>` or
 /// `lucid-asset://abs/<absolute>`, each path one percent-encoded segment, as
 /// written by bridge.js). Only image files are served; anything else fails.
-private final class LocalAssetSchemeHandler: NSObject, WKURLSchemeHandler {
+final class LocalAssetSchemeHandler: NSObject, WKURLSchemeHandler {
     static let scheme = "lucid-asset"
     private let documentDirectory: () -> URL?
 
@@ -556,6 +555,11 @@ private final class LocalAssetSchemeHandler: NSObject, WKURLSchemeHandler {
     func webView(_ webView: WKWebView, stop urlSchemeTask: WKURLSchemeTask) {}
 
     private func resolve(_ url: URL) -> URL? {
+        Self.resolve(url, documentDirectory: documentDirectory())
+    }
+
+    /// The file a `lucid-asset:` URL points to (relative paths against `documentDirectory`).
+    static func resolve(_ url: URL, documentDirectory: URL?) -> URL? {
         guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
               let path = String(components.percentEncodedPath.drop(while: { $0 == "/" })).removingPercentEncoding,
               !path.isEmpty else { return nil }
@@ -563,7 +567,7 @@ private final class LocalAssetSchemeHandler: NSObject, WKURLSchemeHandler {
         case "abs":
             return URL(fileURLWithPath: "/" + path).standardizedFileURL
         case "doc":
-            guard let base = documentDirectory() else { return nil }
+            guard let base = documentDirectory else { return nil }
             return URL(fileURLWithPath: path, relativeTo: base).standardizedFileURL
         default:
             return nil

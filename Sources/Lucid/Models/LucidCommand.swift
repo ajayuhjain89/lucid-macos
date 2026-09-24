@@ -149,21 +149,4 @@ public final class LucidCommandRegistry {
     public func metadata(for id: LucidCommandID) -> LucidCommandMetadata? {
         commands[id]
     }
-
-    /// Reserved macOS system shortcuts that custom keybindings must not override without warning.
-    public static let reservedSystemShortcuts: Set<String> = [
-        "⌘N", "⌘O", "⌘S", "⇧⌘S", "⌘W", "⌘Q", "⌘Z", "⇧⌘Z",
-        "⌘X", "⌘C", "⌘V", "⌘A", "⌘F", "⌘G", "⌘P", "⌘,", "⌘H", "⌘M", "⌘`"
-    ]
-
-    /// Check if a key combination collides with standard macOS reserved shortcuts.
-    public static func isReservedShortcut(key: String, modifiers: EventModifiers) -> Bool {
-        var str = ""
-        if modifiers.contains(.control) { str += "⌃" }
-        if modifiers.contains(.option) { str += "⌥" }
-        if modifiers.contains(.shift) { str += "⇧" }
-        if modifiers.contains(.command) { str += "⌘" }
-        str += key.uppercased()
-        return reservedSystemShortcuts.contains(str)
-    }
 }

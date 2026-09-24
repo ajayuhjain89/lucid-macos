@@ -30,6 +30,7 @@ public struct CommandPaletteItem: Identifiable {
 public struct CommandPaletteView: View {
     @Binding var isPresented: Bool
     @ObservedObject var preferences: LucidPreferences
+    @ObservedObject var viewState: WindowViewState
     var webView: WKWebView?
     var onInsertSnippet: (String) -> Void
     var onExportPDF: () -> Void
@@ -55,7 +56,7 @@ public struct CommandPaletteView: View {
             icon: "book",
             shortcut: sc(.viewModeReader),
             category: "View"
-        ) { preferences.viewMode = .reader })
+        ) { viewState.viewMode = .reader })
 
         list.append(CommandPaletteItem(
             title: "Split Mode",
@@ -63,7 +64,7 @@ public struct CommandPaletteView: View {
             icon: "rectangle.split.2x1",
             shortcut: sc(.viewModeSplit),
             category: "View"
-        ) { preferences.viewMode = .split })
+        ) { viewState.viewMode = .split })
 
         list.append(CommandPaletteItem(
             title: "Editor Mode",
@@ -71,7 +72,7 @@ public struct CommandPaletteView: View {
             icon: "pencil",
             shortcut: sc(.viewModeEditor),
             category: "View"
-        ) { preferences.viewMode = .editor })
+        ) { viewState.viewMode = .editor })
 
         list.append(CommandPaletteItem(
             title: "Toggle Focus Mode",
@@ -79,7 +80,7 @@ public struct CommandPaletteView: View {
             icon: "scope",
             shortcut: sc(.toggleFocusMode),
             category: "View"
-        ) { preferences.focusMode.toggle() })
+        ) { viewState.focusMode.toggle() })
 
         list.append(CommandPaletteItem(
             title: "Toggle Typewriter Mode",
@@ -95,7 +96,7 @@ public struct CommandPaletteView: View {
             icon: "sidebar.leading",
             shortcut: sc(.toggleSidebar),
             category: "View"
-        ) { preferences.showOutline.toggle() })
+        ) { viewState.showOutline.toggle() })
 
         list.append(CommandPaletteItem(
             title: "Toggle Status Bar",
