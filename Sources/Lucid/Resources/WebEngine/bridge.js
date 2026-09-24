@@ -1350,8 +1350,33 @@
     };
   }
 
+  // Mermaid's rendered error only ever says "Syntax error in text". Ask its
+  // parser for the real message (line, what it expected) and show that instead.
+  function fillMermaidErrorDetail(c) {
+    if (c._lucidErrorDetailRequested || typeof mermaid === 'undefined' || typeof mermaid.parse !== 'function') return;
+    c._lucidErrorDetailRequested = true;
+    const rawAttr = c.getAttribute('data-raw-mermaid');
+    if (!rawAttr) return;
+    let source = '';
+    try { source = decodeURIComponent(rawAttr); } catch (_) { source = rawAttr; }
+    Promise.resolve()
+      .then(function() { return mermaid.parse(sanitizeMermaidSource(source)); })
+      .then(function() { /* parses fine: the generic message is all there is */ },
+            function(err) {
+              const detail = c.querySelector('.lucid-mermaid-error-detail');
+              const message = err && (err.message || String(err));
+              if (detail && message) detail.textContent = message.trim().split('\n').slice(0, 6).join('\n');
+            });
+  }
+
   function formatMermaidContainer(c, optErr) {
     if (!c) return;
+    // An error card restored from the cache: keep it, hide the toolbar, add detail.
+    if (!optErr && c.querySelector('.mermaid-canvas .lucid-mermaid-error')) {
+      c.classList.add('is-error');
+      fillMermaidErrorDetail(c);
+      return;
+    }
     const svg = c.querySelector('.mermaid-canvas svg') || c.querySelector('.mermaid svg');
     const isError = !!optErr ||
                     !!c.querySelector('.error-icon') ||
@@ -1373,11 +1398,15 @@
         }
         canvas.innerHTML = '<div class="lucid-mermaid-error" style="padding: 16px; font-family: var(--lucid-font-family, system-ui); color: #e06c75; font-size: 13px;">' +
                            '<div style="font-weight: 600; margin-bottom: 4px;">Mermaid couldn\'t render this diagram.</div>' +
-                           '<div style="opacity: 0.85; font-size: 12px; font-family: monospace;">' + md.utils.escapeHtml(errorMsg) + '</div>' +
+                           '<div class="lucid-mermaid-error-detail" style="opacity: 0.85; font-size: 12px; font-family: monospace; white-space: pre-wrap;">' + md.utils.escapeHtml(errorMsg) + '</div>' +
                            '</div>';
       }
+      // Zoom, pan and SVG export make no sense for an error card.
+      c.classList.add('is-error');
+      if (!optErr) fillMermaidErrorDetail(c);
       return;
     }
+    c.classList.remove('is-error');
     if (!svg) return;
     const viewBox = svg.viewBox && svg.viewBox.baseVal;
     if (viewBox && viewBox.width > 0) {

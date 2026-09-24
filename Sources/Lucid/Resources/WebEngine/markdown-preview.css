@@ -1160,6 +1160,9 @@ mark.lucid-find-active {
   color: #1a1200;
 }
 
+/* A diagram that failed to render shows only its error card, no diagram toolbar. */
+.mermaid-container.is-error .mermaid-toolbar { display: none; }
+
 /* ============================================================
    FOCUS MODE (dim inactive blocks)
    ============================================================ */
