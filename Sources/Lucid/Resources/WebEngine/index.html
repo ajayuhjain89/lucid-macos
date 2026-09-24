@@ -2,6 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <!-- Document content must never run script: only the bundled engine files load, with no inline
+       or eval'd code. Styles stay inline-capable for KaTeX, Mermaid SVG and user CSS. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' lucid-asset: data: blob: https: http:; font-src 'self' data:; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Lucid Preview</title>
   <link rel="stylesheet" href="katex/katex.min.css">

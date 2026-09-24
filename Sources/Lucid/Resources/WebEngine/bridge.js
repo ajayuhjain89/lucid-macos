@@ -274,17 +274,17 @@
         const escapedRaw = encodeURIComponent(str);
         return '<div class="mermaid-container" data-raw-mermaid="' + escapedRaw + '">' +
                '<div class="mermaid-toolbar">' +
-               '<button class="lucid-mermaid-btn lucid-btn-pan" title="Pan Tool" onclick="window.lucid.togglePan(this)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8M6 14v-1.5a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v4a8 8 0 0 0 8 8h2a8 8 0 0 0 8-8v-3a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2"/></svg></button>' +
-               '<button class="lucid-mermaid-btn" title="Zoom In" onclick="window.lucid.zoomDiagram(this, 1.15)">+</button>' +
-               '<button class="lucid-mermaid-btn" title="Zoom Out" onclick="window.lucid.zoomDiagram(this, 0.87)">−</button>' +
-               '<button class="lucid-mermaid-btn" title="Fit to Viewport" onclick="window.lucid.fitDiagram(this)">Fit</button>' +
-               '<button class="lucid-mermaid-btn" title="Reset to Initial View" onclick="window.lucid.resetDiagram(this)">Reset</button>' +
-               '<button class="lucid-mermaid-btn lucid-btn-expand" title="Expand Fullscreen" onclick="window.lucid.expandDiagram(this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button>' +
+               '<button class="lucid-mermaid-btn lucid-btn-pan" title="Pan Tool" data-lucid-action="togglePan"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8M6 14v-1.5a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v4a8 8 0 0 0 8 8h2a8 8 0 0 0 8-8v-3a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2"/></svg></button>' +
+               '<button class="lucid-mermaid-btn" title="Zoom In" data-lucid-action="zoomDiagram" data-lucid-arg="1.15">+</button>' +
+               '<button class="lucid-mermaid-btn" title="Zoom Out" data-lucid-action="zoomDiagram" data-lucid-arg="0.87">−</button>' +
+               '<button class="lucid-mermaid-btn" title="Fit to Viewport" data-lucid-action="fitDiagram">Fit</button>' +
+               '<button class="lucid-mermaid-btn" title="Reset to Initial View" data-lucid-action="resetDiagram">Reset</button>' +
+               '<button class="lucid-mermaid-btn lucid-btn-expand" title="Expand Fullscreen" data-lucid-action="expandDiagram"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button>' +
                '<span class="mermaid-toolbar-sep"></span>' +
-               '<button class="lucid-mermaid-btn" title="Copy SVG" onclick="window.lucid.copySvg(this)">Copy SVG</button>' +
-               '<button class="lucid-mermaid-btn" title="Export SVG…" onclick="window.lucid.saveSvg(this)">Export SVG…</button>' +
+               '<button class="lucid-mermaid-btn" title="Copy SVG" data-lucid-action="copySvg">Copy SVG</button>' +
+               '<button class="lucid-mermaid-btn" title="Export SVG…" data-lucid-action="saveSvg">Export SVG…</button>' +
                '</div>' +
-               '<div class="mermaid-viewport" onpointerdown="window.lucid.handleDiagramPointerDown(event, this)">' +
+               '<div class="mermaid-viewport" data-lucid-pan-surface>' +
                '<div class="mermaid-canvas">' +
                '<div class="mermaid">' + md.utils.escapeHtml(preparedStr) + '</div>' +
                '</div>' +
@@ -320,7 +320,7 @@
       return '<pre class="' + classes.join(' ') + '">' +
              '<div class="lucid-codebar">' +
              (langLabel ? '<span class="lucid-lang">' + langLabel + '</span>' : '<span></span>') +
-             '<button class="lucid-copy" type="button" onclick="window.lucid.copyCode(this)">Copy</button>' +
+             '<button class="lucid-copy" type="button" data-lucid-action="copyCode">Copy</button>' +
              '</div>' +
              '<code class="hljs language-' + md.utils.escapeHtml(lang || '') + '">' + highlighted + '</code>' +
              '</pre>';
@@ -1045,9 +1045,9 @@
       const rendered = katex.renderToString(trimmed, { displayMode: true, throwOnError: false });
       const res = '<div class="lucid-math-block"' + mathAttr + '>' +
              rendered +
-             '<button class="lucid-btn-copy-latex" onclick="window.lucid.copyLatex(this)">Copy LaTeX</button>' +
+             '<button class="lucid-btn-copy-latex" data-lucid-action="copyLatex">Copy LaTeX</button>' +
              '</div>';
-      katexLRU.set(cacheKey, '<div class="lucid-math-block">' + rendered + '<button class="lucid-btn-copy-latex" onclick="window.lucid.copyLatex(this)">Copy LaTeX</button></div>');
+      katexLRU.set(cacheKey, '<div class="lucid-math-block">' + rendered + '<button class="lucid-btn-copy-latex" data-lucid-action="copyLatex">Copy LaTeX</button></div>');
       return res;
     } catch (e) {
       return '<div class="lucid-math-error"><span class="lucid-error-msg">Formula render warning: ' + md.utils.escapeHtml(e.message || 'Syntax error') + '</span><pre>' + md.utils.escapeHtml(trimmed) + '</pre></div>';
@@ -1381,6 +1381,29 @@
 
   document.addEventListener('keyup', updateCaretPosition);
   document.addEventListener('mouseup', updateCaretPosition);
+
+  // Toolbar buttons and pan surfaces are wired here rather than with inline
+  // on* attributes, so the page's Content-Security-Policy can forbid inline script.
+  const LUCID_ACTIONS = {
+    togglePan: 1, zoomDiagram: 1, fitDiagram: 1, resetDiagram: 1, expandDiagram: 1,
+    copySvg: 1, saveSvg: 1, closeDiagramModal: 1, copyCode: 1, copyLatex: 1
+  };
+  document.addEventListener('click', function(e) {
+    const btn = e.target && e.target.closest ? e.target.closest('[data-lucid-action]') : null;
+    if (!btn) return;
+    const action = btn.getAttribute('data-lucid-action');
+    if (!LUCID_ACTIONS[action] || typeof window.lucid[action] !== 'function') return;
+    const arg = btn.getAttribute('data-lucid-arg');
+    if (arg !== null) {
+      window.lucid[action](btn, parseFloat(arg));
+    } else {
+      window.lucid[action](btn);
+    }
+  });
+  document.addEventListener('pointerdown', function(e) {
+    const surface = e.target && e.target.closest ? e.target.closest('[data-lucid-pan-surface]') : null;
+    if (surface) window.lucid.handleDiagramPointerDown(e, surface);
+  });
 
   // Link handling: keep in-page anchors smooth, and hand every other link
   // (external URLs and relative references to sibling documents) to the native
@@ -2462,19 +2485,19 @@
             '<div class="lucid-mermaid-modal-header">' +
               '<span class="lucid-mermaid-modal-title">Diagram Preview</span>' +
               '<div class="mermaid-toolbar" style="position:static; opacity:1; box-shadow:none; border:none; background:transparent;">' +
-                '<button class="lucid-mermaid-btn lucid-btn-pan" title="Pan Tool" onclick="window.lucid.togglePan(this)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8M6 14v-1.5a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v4a8 8 0 0 0 8 8h2a8 8 0 0 0 8-8v-3a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2"/></svg></button>' +
-                '<button class="lucid-mermaid-btn" title="Zoom In" onclick="window.lucid.zoomDiagram(this, 1.15)">+</button>' +
-                '<button class="lucid-mermaid-btn" title="Zoom Out" onclick="window.lucid.zoomDiagram(this, 0.87)">−</button>' +
-                '<button class="lucid-mermaid-btn" title="Fit to Viewport" onclick="window.lucid.fitDiagram(this)">Fit</button>' +
-                '<button class="lucid-mermaid-btn" title="Reset to Initial View" onclick="window.lucid.resetDiagram(this)">Reset</button>' +
+                '<button class="lucid-mermaid-btn lucid-btn-pan" title="Pan Tool" data-lucid-action="togglePan"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8M6 14v-1.5a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v4a8 8 0 0 0 8 8h2a8 8 0 0 0 8-8v-3a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2"/></svg></button>' +
+                '<button class="lucid-mermaid-btn" title="Zoom In" data-lucid-action="zoomDiagram" data-lucid-arg="1.15">+</button>' +
+                '<button class="lucid-mermaid-btn" title="Zoom Out" data-lucid-action="zoomDiagram" data-lucid-arg="0.87">−</button>' +
+                '<button class="lucid-mermaid-btn" title="Fit to Viewport" data-lucid-action="fitDiagram">Fit</button>' +
+                '<button class="lucid-mermaid-btn" title="Reset to Initial View" data-lucid-action="resetDiagram">Reset</button>' +
                 '<span class="mermaid-toolbar-sep"></span>' +
-                '<button class="lucid-mermaid-btn" title="Copy SVG" onclick="window.lucid.copySvg(this)">Copy SVG</button>' +
-                '<button class="lucid-mermaid-btn" title="Export SVG…" onclick="window.lucid.saveSvg(this)">Export SVG…</button>' +
+                '<button class="lucid-mermaid-btn" title="Copy SVG" data-lucid-action="copySvg">Copy SVG</button>' +
+                '<button class="lucid-mermaid-btn" title="Export SVG…" data-lucid-action="saveSvg">Export SVG…</button>' +
                 '<span class="mermaid-toolbar-sep"></span>' +
-                '<button class="lucid-mermaid-btn" title="Close (Esc)" onclick="window.lucid.closeDiagramModal()">✕</button>' +
+                '<button class="lucid-mermaid-btn" title="Close (Esc)" data-lucid-action="closeDiagramModal">✕</button>' +
               '</div>' +
             '</div>' +
-            '<div class="lucid-mermaid-modal-body" onpointerdown="window.lucid.handleDiagramPointerDown(event, this)">' +
+            '<div class="lucid-mermaid-modal-body" data-lucid-pan-surface>' +
               '<div class="mermaid-canvas" id="lucid-modal-canvas"></div>' +
             '</div>' +
           '</div>';
