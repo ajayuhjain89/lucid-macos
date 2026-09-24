@@ -40,6 +40,33 @@ public enum LucidChrome {
     /// Combined top inset applied to scrollable content so the first line sits
     /// clear of the toolbar at rest, then travels beneath it as the reader scrolls.
     public static var contentTopInset: CGFloat { toolbarHeight + readerTopBreathingRoom }
+    /// Length of the fade below the toolbar where scrolled content dissolves into
+    /// the band that hides it under the controls. No longer than the breathing
+    /// room, so the first line at rest is never touched.
+    public static let scrollEdgeFade: CGFloat = 12
+}
+
+/// The band that keeps scrolled content from showing through the floating
+/// toolbar: the pane's own background under the toolbar, fading out just below
+/// it. At rest nothing sits under it, so it is invisible until content scrolls up.
+struct LucidScrollEdgeBand: View {
+    let color: Color
+
+    var body: some View {
+        let total = LucidChrome.toolbarHeight + LucidChrome.scrollEdgeFade
+        LinearGradient(
+            stops: [
+                .init(color: color, location: 0),
+                .init(color: color, location: LucidChrome.toolbarHeight / total),
+                .init(color: color.opacity(0), location: 1)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .frame(height: total)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
 }
 
 // MARK: - Corner Radius Tokens

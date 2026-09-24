@@ -25,7 +25,7 @@ const ROOT = path.resolve(__dirname, '..');
 const WEBENGINE_DIR = path.join(ROOT, 'Sources', 'Lucid', 'Resources', 'WebEngine');
 
 function createEnv() {
-  const dom = { contentHTML: '', messages: [] };
+  const dom = { contentHTML: '', messages: [], rootClasses: new Set(), rootStyle: {} };
   const ctx = {
     console, setTimeout, clearTimeout,
     requestAnimationFrame: (cb) => setTimeout(cb, 0),
@@ -60,7 +60,16 @@ function createEnv() {
       },
       head: { appendChild() {} },
       body: { classList: { add() {}, remove() {}, contains() { return false; } }, setAttribute() {} },
-      documentElement: { style: { setProperty() {} }, setAttribute() {}, classList: { add() {}, remove() {} } }
+      documentElement: {
+        style: { setProperty(k, v) { dom.rootStyle[k] = v; } },
+        setAttribute() {},
+        classList: {
+          add(c) { dom.rootClasses.add(c); },
+          remove(c) { dom.rootClasses.delete(c); },
+          toggle(c, on) { if (on) dom.rootClasses.add(c); else dom.rootClasses.delete(c); return on; },
+          contains(c) { return dom.rootClasses.has(c); }
+        }
+      }
     },
     window: null,
     navigator: { clipboard: { writeText: async () => {} } },
@@ -251,6 +260,17 @@ runTest('AUDIT-004: heading ids preserve Unicode and deduplicate like the native
   assert.deepStrictEqual(ids, expected, 'ids: ' + JSON.stringify(ids));
   // No duplicate ids (would break the SwiftUI outline List identity).
   assert.strictEqual(new Set(ids).size, ids.length, 'heading ids must be unique');
+});
+
+// ---- 048: the toolbar band is on in the app and off in exports -------------
+runTest('048: chromeHeight turns the toolbar band on in the app and off for exports', () => {
+  ctx.lucid.updatePreferences({ chromeHeight: 36 });
+  assert(dom.rootClasses.has('lucid-chrome'), 'app preview must get html.lucid-chrome');
+  assert.strictEqual(dom.rootStyle['--lucid-chrome-height'], '36px');
+  ctx.lucid.updatePreferences({ chromeHeight: 0 });
+  assert(!dom.rootClasses.has('lucid-chrome'), 'exports (chromeHeight 0) must not get the band');
+  ctx.lucid.updatePreferences({ theme: 'light' });
+  assert(!dom.rootClasses.has('lucid-chrome'), 'a later update without chromeHeight leaves it off');
 });
 
 console.log(`\n=== Results: ${passed} passed, ${failed} failed ===\n`);

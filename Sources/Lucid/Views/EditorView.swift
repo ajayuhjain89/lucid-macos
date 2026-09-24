@@ -39,12 +39,19 @@ public struct EditorView: NSViewRepresentable {
         let fgColor = NSColor(Color(hex: tokens.textPrimary))
         let selColor = NSColor(Color(hex: tokens.selection))
 
-        let scrollView = NSScrollView()
+        let scrollView = LucidEditorScrollView()
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = !preferences.wordWrap
         scrollView.autohidesScrollers = true
         scrollView.drawsBackground = true
         scrollView.backgroundColor = bgColor
+        // The view runs under the hidden title bar, and AppKit would add the
+        // title bar's height to the content inset in some layouts (Split started
+        // 28 pt lower than Editor). The top inset is ours alone: textContainerInset.
+        scrollView.automaticallyAdjustsContentInsets = false
+        scrollView.contentInsets = NSEdgeInsetsZero
+        // Keep the scroller out from under the toolbar and its band.
+        scrollView.scrollerInsets = NSEdgeInsets(top: LucidChrome.toolbarHeight, left: 0, bottom: 0, right: 0)
 
         // Start at the clip view's real width. Width autoresizing preserves the
         // initial difference, so any larger placeholder here would leave the text
@@ -340,6 +347,22 @@ public struct EditorView: NSViewRepresentable {
             parent.onScrollIntensityChanged?(intensity)
             gutterView?.needsDisplay = true
         }
+    }
+}
+
+/// The editor's scroll view. NSTextView keeps its selection in view whenever
+/// it is resized, and the first sizing (from zero, when SwiftUI lays the pane
+/// out) scrolled every new editor down by the top inset, leaving the first line
+/// under the toolbar. The first real sizing starts at the top instead.
+final class LucidEditorScrollView: NSScrollView {
+    private var hasBeenSized = false
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        guard !hasBeenSized, newSize.width > 0, newSize.height > 0, let documentView else { return }
+        hasBeenSized = true
+        contentView.scroll(to: NSPoint(x: contentView.bounds.minX, y: documentView.frame.minY))
+        reflectScrolledClipView(contentView)
     }
 }
 

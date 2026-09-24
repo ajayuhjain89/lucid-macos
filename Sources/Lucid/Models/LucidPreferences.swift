@@ -328,7 +328,9 @@ public final class LucidPreferences: ObservableObject {
             "enableMermaid": enableMermaid,
             "enableSyntaxHighlighting": enableSyntaxHighlighting,
             "customCSS": customCSS,
-            "topInset": LucidChrome.contentTopInset
+            "topInset": LucidChrome.contentTopInset,
+            // The in-app preview sits under the floating toolbar; exports set 0.
+            "chromeHeight": LucidChrome.toolbarHeight
         ]
         if let data = try? JSONSerialization.data(withJSONObject: dict),
            let string = String(data: data, encoding: .utf8) {

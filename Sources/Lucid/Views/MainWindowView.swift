@@ -560,6 +560,10 @@ public struct MainWindowView: View {
                         onTextViewCreated: { editorTextView = $0 },
                         onScrollIntensityChanged: { scrollIntensity = $0 }
                     )
+                    .overlay(alignment: .top) { editorScrollEdgeBand }
+                    // Split panes are hosted separately and would otherwise start
+                    // below the hidden title bar, 28 pt lower than Reader/Editor.
+                    .ignoresSafeArea()
                     // 2 × 220 + dividers + the widest sidebar (320) fits the 780 pt window minimum.
                     .frame(minWidth: 220)
 
@@ -584,9 +588,11 @@ public struct MainWindowView: View {
                         isSidebarOpen: viewState.showOutline,
                         focusMode: viewState.focusMode
                     )
+                    .ignoresSafeArea()
                     // 2 × 220 + dividers + the widest sidebar (320) fits the 780 pt window minimum.
                     .frame(minWidth: 220)
                 }
+                .ignoresSafeArea()
                 .transition(.opacity)
             case .editor:
                 EditorView(
@@ -600,17 +606,22 @@ public struct MainWindowView: View {
                     onTextViewCreated: { editorTextView = $0 },
                     onScrollIntensityChanged: { scrollIntensity = $0 }
                 )
+                .overlay(alignment: .top) { editorScrollEdgeBand }
                 .transition(.opacity)
             }
         }
     }
 
+    /// Hides editor text scrolled beneath the floating toolbar. The preview
+    /// draws its own band in the page (markdown-preview.css), so it repaints in
+    /// step with the page on theme changes.
+    private var editorScrollEdgeBand: some View {
+        LucidScrollEdgeBand(color: Color(hex: preferences.theme.themeTokens.editorBackground))
+    }
+
     private func documentTopBar(sidebarOpen: Bool) -> some View {
         VStack(spacing: 0) {
             ZStack {
-                // Soft, subtle downward fade only when scrolled — no full-width titlebar slab
-                topBarBackground
-
                 // Empty regions of the bar drag the window.
                 LucidWindowDragArea()
 
@@ -693,21 +704,6 @@ public struct MainWindowView: View {
     private var toolbarControlsOpacity: Double {
         guard viewState.focusMode else { return 1 }
         return isToolbarHovered ? 1 : 0.4
-    }
-
-    /// Soft, subtle gradient fade only when scrolled — no full-width titlebar slab.
-    /// The document continues physically underneath, with content remaining clearly perceptible.
-    private var topBarBackground: some View {
-        LinearGradient(
-            colors: [
-                Color(hex: preferences.theme.themeTokens.windowBackground).opacity(0.42 * scrollIntensity),
-                Color(hex: preferences.theme.themeTokens.windowBackground).opacity(0.0)
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-        .allowsHitTesting(false)
-        .animation(.easeOut(duration: 0.15), value: scrollIntensity)
     }
 
     private var rightControlsCluster: some View {
