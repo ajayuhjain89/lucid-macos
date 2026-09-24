@@ -82,7 +82,8 @@ public struct EditorView: NSViewRepresentable {
         textView.preferences = preferences
 
         // Apply initial typography
-        applyTypography(to: textView)
+        applyTypography(to: textView, coordinator: context.coordinator)
+        context.coordinator.lastSyncedText = text
 
         scrollView.documentView = textView
         scrollView.contentView.postsBoundsChangedNotifications = true
@@ -159,42 +160,62 @@ public struct EditorView: NSViewRepresentable {
         let fgColor = NSColor(Color(hex: tokens.textPrimary))
         let selColor = NSColor(Color(hex: tokens.selection))
 
-        if scrollView.backgroundColor != bgColor {
+        // Colors only change with the theme. Setting textColor restyles the whole
+        // text storage, so it happens in applyTypography, not on every update.
+        let themeKey = tokens.editorBackground + tokens.textPrimary + tokens.selection + tokens.textTertiary
+        if context.coordinator.appliedThemeKey != themeKey {
+            context.coordinator.appliedThemeKey = themeKey
             scrollView.backgroundColor = bgColor
-        }
-        if textView.backgroundColor != bgColor {
             textView.backgroundColor = bgColor
-        }
-        if textView.textColor != fgColor {
-            textView.textColor = fgColor
-        }
-        textView.selectedTextAttributes = [
-            .backgroundColor: selColor,
-            .foregroundColor: fgColor
-        ]
-
-        if let gutter = context.coordinator.gutterView {
-            gutter.backgroundColor = bgColor
-            gutter.textColor = NSColor(Color(hex: tokens.textTertiary))
-            gutter.activeLineNumberColor = fgColor
+            textView.selectedTextAttributes = [
+                .backgroundColor: selColor,
+                .foregroundColor: fgColor
+            ]
+            if let gutter = context.coordinator.gutterView {
+                gutter.backgroundColor = bgColor
+                gutter.textColor = NSColor(Color(hex: tokens.textTertiary))
+                gutter.activeLineNumberColor = fgColor
+                gutter.needsDisplay = true
+            }
         }
 
-        // Apply updated typography
-        applyTypography(to: textView)
-
-        // Update text only if modified externally without disturbing selection
-        if textView.string != text {
+        // Update text only if modified externally without disturbing selection.
+        // The binding usually still holds the exact string this view last sent,
+        // which is checked first: a full String comparison normalizes Unicode and
+        // costs O(n) on every SwiftUI update.
+        var replacedText = false
+        if text != context.coordinator.lastSyncedText && textView.string != text {
             let selectedRanges = textView.selectedRanges
             textView.string = text
-            textView.selectedRanges = selectedRanges
+            let length = (text as NSString).length
+            textView.selectedRanges = selectedRanges.map { value in
+                let range = value.rangeValue
+                let location = min(range.location, length)
+                return NSValue(range: NSRange(location: location, length: min(range.length, length - location)))
+            }
             context.coordinator.gutterView?.needsDisplay = true
+            replacedText = true
         }
+        context.coordinator.lastSyncedText = text
 
-        textView.needsDisplay = true
+        // Apply updated typography (a no-op unless the font, spacing or theme changed,
+        // or the text was replaced and lost its attributes).
+        applyTypography(to: textView, coordinator: context.coordinator, force: replacedText)
     }
 
-    private func applyTypography(to textView: LucidTextView) {
+    /// Styles the whole text storage with the current font, color and line spacing.
+    /// This is O(document) and invalidates all layout, so it only runs when one of
+    /// those inputs actually changed (or `force` is set after replacing the text).
+    private func applyTypography(to textView: LucidTextView, coordinator: Coordinator, force: Bool = false) {
         let tokens = preferences.theme.themeTokens
+        let key = [
+            preferences.fontFamily.rawValue, preferences.customFontName,
+            String(preferences.fontSize), String(preferences.lineHeight),
+            tokens.textPrimary, tokens.cursor
+        ].joined(separator: "|")
+        guard force || coordinator.appliedTypographyKey != key else { return }
+        coordinator.appliedTypographyKey = key
+
         let font = preferences.fontFamily.nsFont(
             size: CGFloat(preferences.fontSize),
             customName: preferences.customFontName
@@ -216,10 +237,20 @@ public struct EditorView: NSViewRepresentable {
 
         if let textStorage = textView.textStorage, textStorage.length > 0 {
             let fullRange = NSRange(location: 0, length: textStorage.length)
+            textStorage.beginEditing()
             textStorage.addAttribute(.font, value: font, range: fullRange)
             textStorage.addAttribute(.foregroundColor, value: fgColor, range: fullRange)
             textStorage.addAttribute(.paragraphStyle, value: paragraphStyle, range: fullRange)
+            textStorage.endEditing()
         }
+        // New text takes the typing attributes; include the paragraph style so
+        // typed lines keep the line spacing without restyling the whole storage.
+        textView.typingAttributes = [
+            .font: font,
+            .foregroundColor: fgColor,
+            .paragraphStyle: paragraphStyle
+        ]
+        textView.needsDisplay = true
 
         if let gutter = (textView.enclosingScrollView?.verticalRulerView as? LineNumberGutterView) {
             gutter.font = NSFont.monospacedSystemFont(ofSize: max(10, CGFloat(preferences.fontSize * 0.65)), weight: .regular)
@@ -229,6 +260,12 @@ public struct EditorView: NSViewRepresentable {
     public final class Coordinator: NSObject, NSTextViewDelegate {
         var parent: EditorView
         weak var gutterView: LineNumberGutterView?
+        var appliedTypographyKey: String?
+        var appliedThemeKey: String?
+        /// The text most recently pushed to (or received from) the binding. The
+        /// binding hands this same string back, and String equality on shared
+        /// storage returns immediately instead of normalizing the whole document.
+        var lastSyncedText: String = ""
 
         init(_ parent: EditorView) {
             self.parent = parent
@@ -236,7 +273,9 @@ public struct EditorView: NSViewRepresentable {
 
         public func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? LucidTextView else { return }
-            parent.text = textView.string
+            let newText = textView.string
+            lastSyncedText = newText
+            parent.text = newText
             gutterView?.needsDisplay = true
             updateCursorInfo(textView)
         }

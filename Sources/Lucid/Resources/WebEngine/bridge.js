@@ -714,7 +714,126 @@
   // updatePreferences can re-render the current document with the new flags.
   let lastMarkdownSource = '';
   const katexLRU = new SimpleLRU(500);
-  const mermaidLRU = new SimpleLRU(50);
+  // Rendered diagram markup keyed by theme + source, so an edit elsewhere in the
+  // document never re-runs Mermaid for a diagram whose source did not change.
+  const mermaidSvgCache = new SimpleLRU(150);
+  function mermaidCacheKey(theme, rawAttr) {
+    return theme + '\n' + rawAttr;
+  }
+  function cacheRenderedMermaid(c, theme) {
+    const canvas = c.querySelector('.mermaid-canvas');
+    if (!canvas || !canvas.innerHTML) return;
+    c._lucidRenderedThemes = c._lucidRenderedThemes || {};
+    c._lucidRenderedThemes[theme] = canvas.innerHTML;
+    c._lucidCurrentTheme = theme;
+    const rawAttr = c.getAttribute('data-raw-mermaid');
+    if (rawAttr && canvas.querySelector('svg, .lucid-mermaid-error')) {
+      mermaidSvgCache.set(mermaidCacheKey(theme, rawAttr), canvas.innerHTML);
+    }
+  }
+
+  // Replace only the top-level blocks that changed. Each block remembers the
+  // serialized markup it was created from (render ids stripped, since they change
+  // every render); the unchanged prefix and suffix of the document are kept as
+  // live DOM, with their rendered math, diagrams and scroll geometry intact.
+  // Returns the newly inserted blocks, or null when the caller must fall back to
+  // a full innerHTML replacement.
+  const RENDER_ID_ATTR = / data-render-id="[^"]*"/g;
+  function reconcileBlocks(container, html, renderId) {
+    if (typeof document.createElement !== 'function' || !container.children) return null;
+    const tpl = document.createElement('template');
+    if (!tpl || !tpl.content) return null;
+    tpl.innerHTML = html;
+    const fresh = [];
+    for (let n = tpl.content.firstChild; n; n = n.nextSibling) {
+      if (n.nodeType === 1) fresh.push(n);
+      else if (n.nodeType === 3 && /\S/.test(n.nodeValue)) return null;
+    }
+    const keys = fresh.map(function(n) { return n.outerHTML.replace(RENDER_ID_ATTR, ''); });
+
+    const old = Array.prototype.slice.call(container.children);
+    let start = 0;
+    while (start < old.length && start < fresh.length && old[start]._lucidKey === keys[start]) start++;
+    let endOld = old.length - 1;
+    let endNew = fresh.length - 1;
+    while (endOld >= start && endNew >= start && old[endOld]._lucidKey === keys[endNew]) {
+      endOld--;
+      endNew--;
+    }
+
+    // Stray non-element nodes (e.g. from a fallback render) are not tracked.
+    for (let n = container.firstChild; n; ) {
+      const next = n.nextSibling;
+      if (n.nodeType !== 1) container.removeChild(n);
+      n = next;
+    }
+    const ref = old[endOld + 1] || null;
+    for (let i = start; i <= endOld; i++) container.removeChild(old[i]);
+    const inserted = [];
+    for (let i = start; i <= endNew; i++) {
+      fresh[i]._lucidKey = keys[i];
+      container.insertBefore(fresh[i], ref);
+      inserted.push(fresh[i]);
+    }
+
+    // Kept blocks now belong to this render: point their math at its registry.
+    for (let i = 0; i < old.length; i++) {
+      if (i >= start && i <= endOld) continue;
+      const tagged = old[i].querySelectorAll('[data-render-id]');
+      for (let j = 0; j < tagged.length; j++) tagged[j].setAttribute('data-render-id', renderId);
+      if (old[i].hasAttribute('data-render-id')) old[i].setAttribute('data-render-id', renderId);
+    }
+    return inserted;
+  }
+
+  // The .mermaid nodes this render must run: diagrams in newly inserted blocks,
+  // plus kept diagrams whose earlier render never finished. Anything already in
+  // the SVG cache for the current theme is filled in directly instead.
+  function collectMermaidToRender(container, insertedBlocks) {
+    const fullRender = insertedBlocks[0] === container;
+    const containers = fullRender
+      ? Array.prototype.slice.call(container.querySelectorAll('.mermaid-container'))
+      : Array.prototype.slice.call(container.querySelectorAll('.mermaid-container')).filter(function(c) {
+          return !c._lucidCurrentTheme || insertedBlocks.some(function(b) { return b === c || b.contains(c); });
+        });
+    const pending = [];
+    for (let i = 0; i < containers.length; i++) {
+      const c = containers[i];
+      const canvas = c.querySelector('.mermaid-canvas');
+      const rawAttr = c.getAttribute('data-raw-mermaid');
+      if (!canvas || !rawAttr) continue;
+      const cached = mermaidSvgCache.get(mermaidCacheKey(currentMermaidTheme, rawAttr));
+      if (cached) {
+        canvas.innerHTML = cached;
+        c._lucidRenderedThemes = {};
+        c._lucidRenderedThemes[currentMermaidTheme] = cached;
+        c._lucidCurrentTheme = currentMermaidTheme;
+        formatMermaidContainer(c);
+        continue;
+      }
+      let node = canvas.querySelector('.mermaid');
+      if (!node || node.getAttribute('data-processed')) {
+        // A kept diagram whose earlier run was abandoned: start from its source.
+        let rawCode = '';
+        try { rawCode = decodeURIComponent(rawAttr); } catch (_) { rawCode = rawAttr; }
+        canvas.innerHTML = '<div class="mermaid">' + md.utils.escapeHtml(sanitizeMermaidSource(rawCode)) + '</div>';
+        node = canvas.querySelector('.mermaid');
+      }
+      pending.push(node);
+    }
+    return pending;
+  }
+
+  // Elements matching selector inside the given blocks (including the blocks).
+  function queryInBlocks(blocks, selector) {
+    const out = [];
+    for (let i = 0; i < blocks.length; i++) {
+      if (blocks[i].matches && blocks[i].matches(selector)) out.push(blocks[i]);
+      const found = blocks[i].querySelectorAll(selector);
+      for (let j = 0; j < found.length; j++) out.push(found[j]);
+    }
+    return out;
+  }
   let currentMermaidTheme = 'dark';
   let desiredMermaidTheme = 'dark';
   let mermaidThemeGeneration = 0;
@@ -1119,6 +1238,12 @@
       }
     }
 
+    // A top-level placeholder carries its block key (see reconcileBlocks); the
+    // element that replaces it must keep it, or the block is rebuilt every render.
+    const phParent = ph.parentNode;
+    const phPrev = ph.previousSibling;
+    const phKey = ph._lucidKey;
+
     if (rawLatex) {
       try {
         if (isBlock) {
@@ -1129,6 +1254,10 @@
           ph.outerHTML = renderKaTeXBlock(rawLatex, mathId, renderId);
         } else {
           ph.outerHTML = renderKaTeXInline(rawLatex, '$', mathId, renderId);
+        }
+        if (phKey) {
+          const replacement = phPrev ? phPrev.nextSibling : phParent.firstChild;
+          if (replacement) replacement._lucidKey = phKey;
         }
       } catch (e) {
         console.warn('KaTeX placeholder enhance error:', e);
@@ -1825,7 +1954,19 @@
       LucidPerf.mark(renderId, 't7_alerts_end', { htmlLength: html.length });
 
       LucidPerf.mark(renderId, 't8_dom_insert_begin');
-      container.innerHTML = html;
+      // Find highlights belong to the previous render; drop them before blocks are reused.
+      const staleMarks = container.querySelectorAll('mark.lucid-find-match');
+      for (let i = 0; i < staleMarks.length; i++) {
+        const parent = staleMarks[i].parentNode;
+        parent.replaceChild(document.createTextNode(staleMarks[i].textContent), staleMarks[i]);
+        parent.normalize();
+      }
+      if (staleMarks.length) window.lucid.findMatches = [];
+      let insertedBlocks = reconcileBlocks(container, html, renderId);
+      if (!insertedBlocks) {
+        container.innerHTML = html;
+        insertedBlocks = [container];
+      }
       const domNodeCount = container.querySelectorAll('*').length;
       LucidPerf.mark(renderId, 't9_dom_insert_end', { nodeCount: domNodeCount });
 
@@ -1863,7 +2004,7 @@
       });
 
       // Dynamic Content-Aware Table Layout & TOC Detection (Batched to prevent layout thrashing)
-      const tables = container.querySelectorAll('table');
+      const tables = insertedBlocks[0] === container ? container.querySelectorAll('table') : queryInBlocks(insertedBlocks, 'table');
       LucidPerf.mark(renderId, 't10_table_layout_begin', { tableCount: tables.length });
 
       if (tables.length > 0) {
@@ -1877,6 +2018,7 @@
           if (!wrapper || !wrapper.classList.contains('lucid-table-wrapper')) {
             wrapper = document.createElement('div');
             wrapper.className = 'lucid-table-wrapper';
+            wrapper._lucidKey = table._lucidKey;
             table.parentNode.insertBefore(wrapper, table);
             wrapper.appendChild(table);
           }
@@ -1937,7 +2079,7 @@
 
       // Asynchronous Enhancements (Math & Mermaid)
       let mathDone = !isDeferredMath;
-      const mermaidNodes = (typeof mermaid !== 'undefined') ? container.querySelectorAll('.mermaid') : [];
+      const mermaidNodes = (typeof mermaid !== 'undefined') ? collectMermaidToRender(container, insertedBlocks) : [];
       let mermaidDone = (mermaidNodes.length === 0);
 
       function checkFullEnhancement() {
@@ -2027,12 +2169,7 @@
                 const c = (mermaidNodes[i] && typeof mermaidNodes[i].closest === 'function') ? mermaidNodes[i].closest('.mermaid-container') : null;
                 if (c) {
                   formatMermaidContainer(c);
-                  const canvas = c.querySelector('.mermaid-canvas');
-                  if (canvas && canvas.innerHTML) {
-                    c._lucidRenderedThemes = c._lucidRenderedThemes || {};
-                    c._lucidRenderedThemes[renderTheme] = canvas.innerHTML;
-                    c._lucidCurrentTheme = renderTheme;
-                  }
+                  cacheRenderedMermaid(c, renderTheme);
                 }
               }
               LucidPerf.mark(renderId, 't16_mermaid_end', { count: mermaidCount });
@@ -2045,12 +2182,7 @@
                 const c = (mermaidNodes[i] && typeof mermaidNodes[i].closest === 'function') ? mermaidNodes[i].closest('.mermaid-container') : null;
                 if (c) {
                   formatMermaidContainer(c);
-                  const canvas = c.querySelector('.mermaid-canvas');
-                  if (canvas && canvas.innerHTML) {
-                    c._lucidRenderedThemes = c._lucidRenderedThemes || {};
-                    c._lucidRenderedThemes[renderTheme] = canvas.innerHTML;
-                    c._lucidCurrentTheme = renderTheme;
-                  }
+                  cacheRenderedMermaid(c, renderTheme);
                 }
               }
               LucidPerf.mark(renderId, 't16_mermaid_end', { count: mermaidCount });
@@ -2087,12 +2219,7 @@
                   const c = (currentChunk[i] && typeof currentChunk[i].closest === 'function') ? currentChunk[i].closest('.mermaid-container') : null;
                   if (c) {
                     formatMermaidContainer(c);
-                    const canvas = c.querySelector('.mermaid-canvas');
-                    if (canvas && canvas.innerHTML) {
-                      c._lucidRenderedThemes = c._lucidRenderedThemes || {};
-                      c._lucidRenderedThemes[renderTheme] = canvas.innerHTML;
-                      c._lucidCurrentTheme = renderTheme;
-                    }
+                    cacheRenderedMermaid(c, renderTheme);
                   }
                 }
                 setTimeout(processMermaidChunk, 0);
@@ -2103,12 +2230,7 @@
                   const c = (currentChunk[i] && typeof currentChunk[i].closest === 'function') ? currentChunk[i].closest('.mermaid-container') : null;
                   if (c) {
                     formatMermaidContainer(c);
-                    const canvas = c.querySelector('.mermaid-canvas');
-                    if (canvas && canvas.innerHTML) {
-                      c._lucidRenderedThemes = c._lucidRenderedThemes || {};
-                      c._lucidRenderedThemes[renderTheme] = canvas.innerHTML;
-                      c._lucidCurrentTheme = renderTheme;
-                    }
+                    cacheRenderedMermaid(c, renderTheme);
                   }
                 }
                 setTimeout(processMermaidChunk, 0);
