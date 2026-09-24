@@ -841,7 +841,8 @@ public struct MainWindowView: View {
         guard let url = fileURL else { return }
         lastSyncedText = document.text
         fileWatcher = FileWatcher(url: url) {
-            guard let updatedText = try? String(contentsOf: url, encoding: .utf8) else { return }
+            guard let data = try? Data(contentsOf: url),
+                  let updatedText = LucidDocument.decodeText(data)?.text else { return }
             DispatchQueue.main.async {
                 if updatedText == self.document.text {
                     // Already in sync (e.g. Lucid's own save): refresh the baseline.

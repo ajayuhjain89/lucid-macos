@@ -94,6 +94,7 @@ struct GeneralSettingsTab: View {
                             }
                         }
                         .pickerStyle(.segmented)
+                        .accessibilityLabel("Startup View Mode")
                         .fixedSize()
                     }
 
@@ -209,6 +210,7 @@ struct AppearanceSettingsTab: View {
                             }
                         }
                         .pickerStyle(.segmented)
+                        .accessibilityLabel("Spacing & Density")
                         .fixedSize()
                     }
                 }
@@ -273,6 +275,7 @@ struct EditorSettingsTab: View {
                                 .foregroundColor(LucidColors.textPrimary)
                         }
                         Slider(value: $preferences.fontSize, in: LucidPreferences.Limits.fontSizeRange, step: LucidPreferences.Limits.fontSizeStep)
+                            .accessibilityLabel("Font Size")
                     }
 
                     // Line Height Slider
@@ -287,6 +290,7 @@ struct EditorSettingsTab: View {
                                 .foregroundColor(LucidColors.textPrimary)
                         }
                         Slider(value: $preferences.lineHeight, in: LucidPreferences.Limits.lineHeightRange, step: LucidPreferences.Limits.lineHeightStep)
+                            .accessibilityLabel("Line Height")
                     }
                 }
 
@@ -299,26 +303,31 @@ struct EditorSettingsTab: View {
                     LucidSettingRow(title: "Line Numbers Gutter", description: "Display line numbers along the left edge.") {
                         Toggle("", isOn: $preferences.lineNumbers)
                             .toggleStyle(.switch)
+                            .accessibilityLabel("Line Numbers Gutter")
                     }
 
                     LucidSettingRow(title: "Highlight Active Line", description: "Apply a subtle luminance lift to the current cursor line.") {
                         Toggle("", isOn: $preferences.highlightCurrentLine)
                             .toggleStyle(.switch)
+                            .accessibilityLabel("Highlight Active Line")
                     }
 
                     LucidSettingRow(title: "Auto-Pair Delimiters", description: "Automatically insert closing brackets, quotes, and backticks.") {
                         Toggle("", isOn: $preferences.autoPairDelimiters)
                             .toggleStyle(.switch)
+                            .accessibilityLabel("Auto-Pair Delimiters")
                     }
 
                     LucidSettingRow(title: "Auto-Indent on Return", description: "Maintain leading indentation and list markers when pressing Return.") {
                         Toggle("", isOn: $preferences.autoIndent)
                             .toggleStyle(.switch)
+                            .accessibilityLabel("Auto-Indent on Return")
                     }
 
                     LucidSettingRow(title: "Soft Word Wrap", description: "Wrap long lines at the editor viewport edge.") {
                         Toggle("", isOn: $preferences.wordWrap)
                             .toggleStyle(.switch)
+                            .accessibilityLabel("Soft Word Wrap")
                     }
                 }
 
@@ -357,6 +366,7 @@ struct PreviewSettingsTab: View {
                             }
                         }
                         .pickerStyle(.menu)
+                        .accessibilityLabel("Column Width")
                         .frame(width: 260)
                     }
 
@@ -366,6 +376,7 @@ struct PreviewSettingsTab: View {
                     ) {
                         Toggle("", isOn: $preferences.breakoutEnabled)
                             .toggleStyle(.switch)
+                            .accessibilityLabel("Signature Breakout Layout")
                     }
 
                     LucidSettingRow(title: "Table Density") {
@@ -375,6 +386,7 @@ struct PreviewSettingsTab: View {
                             }
                         }
                         .pickerStyle(.segmented)
+                        .accessibilityLabel("Table Density")
                         .fixedSize()
                     }
                 }
@@ -388,6 +400,7 @@ struct PreviewSettingsTab: View {
                     LucidSettingRow(title: "Math Scale") {
                         HStack(spacing: LucidSpacing.small) {
                             Slider(value: $preferences.mathScale, in: LucidPreferences.Limits.mathScaleRange, step: LucidPreferences.Limits.mathScaleStep)
+                                .accessibilityLabel("Math Scale")
                                 .frame(width: 160)
                             Text(String(format: "%.1f×", preferences.mathScale))
                                 .font(LucidTypography.metadata)
@@ -399,6 +412,7 @@ struct PreviewSettingsTab: View {
                     LucidSettingRow(title: "Mermaid Scale") {
                         HStack(spacing: LucidSpacing.small) {
                             Slider(value: $preferences.mermaidScale, in: LucidPreferences.Limits.mermaidScaleRange, step: LucidPreferences.Limits.mermaidScaleStep)
+                                .accessibilityLabel("Mermaid Scale")
                                 .frame(width: 160)
                             Text(String(format: "%.1f×", preferences.mermaidScale))
                                 .font(LucidTypography.metadata)
@@ -440,6 +454,7 @@ struct STEMSettingsTab: View {
                 ) {
                     Toggle("", isOn: $preferences.enableKaTeX)
                         .toggleStyle(.switch)
+                        .accessibilityLabel("KaTeX Mathematics & Physics")
                 }
 
                 LucidSettingRow(
@@ -448,6 +463,7 @@ struct STEMSettingsTab: View {
                 ) {
                     Toggle("", isOn: $preferences.enableMhchem)
                         .toggleStyle(.switch)
+                        .accessibilityLabel("Chemistry Notation (mhchem)")
                         .disabled(!preferences.enableKaTeX)
                 }
 
@@ -457,6 +473,7 @@ struct STEMSettingsTab: View {
                 ) {
                     Toggle("", isOn: $preferences.enableMermaid)
                         .toggleStyle(.switch)
+                        .accessibilityLabel("Mermaid Diagrams")
                 }
 
                 LucidSettingRow(
@@ -465,6 +482,7 @@ struct STEMSettingsTab: View {
                 ) {
                     Toggle("", isOn: $preferences.enableSyntaxHighlighting)
                         .toggleStyle(.switch)
+                        .accessibilityLabel("Syntax Highlighting")
                 }
             }
             .padding(LucidSpacing.small)
@@ -678,6 +696,7 @@ struct UpdatesSettingsTab: View {
                             set: { updateController.automaticallyChecksForUpdates = $0 }
                         ))
                         .toggleStyle(.switch)
+                        .accessibilityLabel("Automatically check for updates")
                     }
 
                     LucidSettingRow(
@@ -689,6 +708,7 @@ struct UpdatesSettingsTab: View {
                             set: { updateController.automaticallyDownloadsUpdates = $0 }
                         ))
                         .toggleStyle(.switch)
+                        .accessibilityLabel("Automatically download updates")
                         .disabled(!updateController.automaticallyChecksForUpdates)
                     }
                 }
