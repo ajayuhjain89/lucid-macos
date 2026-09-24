@@ -81,6 +81,7 @@ function createEnv() {
     'plugins/markdown-it-sub.min.js', 'plugins/markdown-it-sup.min.js',
     'plugins/markdown-it-ins.min.js', 'plugins/markdown-it-mark.min.js',
     'plugins/markdown-it-deflist.min.js', 'plugins/markdown-it-abbr.min.js',
+    'plugins/markdown-it-footnote.min.js',
     'katex/katex.min.js', 'katex/contrib/mhchem.min.js',
     'highlight/highlight.min.js', 'mermaid/mermaid.min.js', 'bridge.js'
   ].forEach((f) => vm.runInContext(fs.readFileSync(path.join(WEBENGINE_DIR, f), 'utf8'), ctx));

@@ -346,6 +346,7 @@
   if (window.markdownitMark) md.use(window.markdownitMark);
   if (window.markdownitDeflist) md.use(window.markdownitDeflist);
   if (window.markdownitAbbr) md.use(window.markdownitAbbr);
+  if (window.markdownitFootnote) md.use(window.markdownitFootnote);
   // The plugin registers itself as window.markdownitTaskLists. Checkboxes stay
   // disabled: the preview is read-only, so a click can't change the source.
   const taskListsPlugin = window.markdownitTaskLists || window.markdownitTaskList;
