@@ -636,10 +636,10 @@ struct UpdatesSettingsTab: View {
                                 .foregroundColor(.orange)
                                 .font(.system(size: 16))
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Running from Disk Image")
+                                Text("Lucid Can't Update Itself Here")
                                     .font(LucidTypography.label)
                                     .foregroundColor(LucidColors.textPrimary)
-                                Text("Lucid is currently running from a mounted disk image. To enable in-app updates, drag Lucid.app to your Applications folder.")
+                                Text("Lucid is running from a disk image or a temporary location. Drag Lucid.app to your Applications folder and open it from there to enable updates.")
                                     .font(LucidTypography.caption)
                                     .foregroundColor(LucidColors.textSecondary)
                             }
@@ -679,7 +679,7 @@ struct UpdatesSettingsTab: View {
                         Button("Check for Updates…") {
                             updateController.checkForUpdates()
                         }
-                        .disabled(!updateController.canCheckForUpdates)
+                        .disabled(!updateController.isUpdateCheckAvailable)
                     }
                 }
 
@@ -693,7 +693,7 @@ struct UpdatesSettingsTab: View {
 
                     LucidSettingRow(
                         title: "Automatically check for updates",
-                        description: "Periodically check the update feed in the background."
+                        description: "On by default. Lucid checks the update feed once a day."
                     ) {
                         Toggle("", isOn: Binding(
                             get: { updateController.automaticallyChecksForUpdates },
@@ -705,7 +705,7 @@ struct UpdatesSettingsTab: View {
 
                     LucidSettingRow(
                         title: "Automatically download updates",
-                        description: "Download updates in the background and notify when ready to install."
+                        description: "On by default. Updates download in the background and install when you quit Lucid."
                     ) {
                         Toggle("", isOn: Binding(
                             get: { updateController.automaticallyDownloadsUpdates },

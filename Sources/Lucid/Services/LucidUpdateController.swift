@@ -67,16 +67,25 @@ public final class LucidUpdateController: ObservableObject {
         Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "Unknown"
     }
 
-    /// Detects whether Lucid is running from a mounted read-only disk image or external volume.
+    /// Whether Lucid runs from somewhere it can't replace itself: a read-only
+    /// volume (a mounted disk image) or macOS App Translocation (a downloaded app
+    /// opened in place). An app on a writable external drive can update, so
+    /// `/Volumes/` alone doesn't count.
     public var isMountedFromDiskImage: Bool {
         let bundleURL = Bundle.main.bundleURL
-        if bundleURL.path.hasPrefix("/Volumes/") {
+        if bundleURL.path.contains("/AppTranslocation/") {
             return true
         }
         if let isReadOnly = (try? bundleURL.resourceValues(forKeys: [.volumeIsReadOnlyKey]))?.volumeIsReadOnly {
             return isReadOnly
         }
         return false
+    }
+
+    /// Whether "Check for Updates…" can do anything: Sparkle is ready and Lucid
+    /// can replace itself where it is.
+    public var isUpdateCheckAvailable: Bool {
+        canCheckForUpdates && !isMountedFromDiskImage
     }
 
     /// Triggers a user-initiated update check via Sparkle's standard user interface.

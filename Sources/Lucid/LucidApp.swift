@@ -24,7 +24,7 @@ struct LucidApp: App {
                 Button("Check for Updates…") {
                     updateController.checkForUpdates()
                 }
-                .disabled(!updateController.canCheckForUpdates)
+                .disabled(!updateController.isUpdateCheckAvailable)
                 Divider()
             }
 
