@@ -26,7 +26,7 @@ public struct SettingsView: View {
                 .tabItem { Label("Preview", systemImage: "book") }
 
             STEMSettingsTab(preferences: preferences)
-                .tabItem { Label("STEM & Math", systemImage: "atom") }
+                .tabItem { Label("STEM", systemImage: "atom") }  // "STEM & Math" was truncated in the tab bar
 
             ShortcutsSettingsTab()
                 .tabItem { Label("Shortcuts", systemImage: "command") }
@@ -182,7 +182,7 @@ struct AppearanceSettingsTab: View {
 
                 // Accent Color
                 VStack(alignment: .leading, spacing: LucidSpacing.medium) {
-                    LucidSectionHeader(title: "Accent Color")
+                    LucidSectionHeader(title: "Accent Color", subtitle: "Links and highlights in the rendered document.")
 
                     HStack(spacing: LucidSpacing.large) {
                         ForEach(accentPresets, id: \.0) { hex, name in
@@ -206,7 +206,7 @@ struct AppearanceSettingsTab: View {
 
                     LucidSettingRow(
                         title: "Spacing & Density",
-                        description: "Adjust padding and row heights across sidebar, toolbar, and status bar."
+                        description: "Adjust row heights in the sidebar outline and the status bar."
                     ) {
                         Picker("", selection: $preferences.density) {
                             ForEach(InterfaceDensity.allCases) { d in
@@ -376,7 +376,7 @@ struct PreviewSettingsTab: View {
 
                     LucidSettingRow(
                         title: "Signature Breakout Layout",
-                        description: "Prose remains centered at 720px while wide code blocks, tables, and diagrams expand to the full canvas."
+                        description: "Prose stays at your column width while wide code blocks, tables, and diagrams can extend to the full window width."
                     ) {
                         Toggle("", isOn: $preferences.breakoutEnabled)
                             .toggleStyle(.switch)

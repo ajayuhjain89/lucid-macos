@@ -17,8 +17,8 @@ public enum ThemeMode: String, CaseIterable, Identifiable, Codable {
     public var displayName: String {
         switch self {
         case .system: return "System Dynamic"
-        case .dark: return "Lucid Studio Dark (#171717)"
-        case .light: return "Lucid Editorial Light"
+        case .dark: return "Studio Dark"
+        case .light: return "Editorial Light"
         case .sepia: return "Warm Book Sepia"
         case .oled: return "OLED Pure Black"
         case .nord: return "Nord Arctic"
@@ -287,7 +287,10 @@ public final class LucidPreferences: ObservableObject {
     @AppStorage("lucid.statusLineCol") public var statusLineCol: Bool = Defaults.statusLineCol
     @AppStorage("lucid.statusCharCount") public var statusCharCount: Bool = Defaults.statusCharCount
 
-    public init() {}
+    public init() {
+        // Left behind by an old "click to edit" setting that no longer exists.
+        UserDefaults.standard.removeObject(forKey: "lucid.clickToEdit")
+    }
 
     public func effectiveTheme(systemColorScheme: ColorScheme) -> String {
         if theme == .system {

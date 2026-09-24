@@ -123,6 +123,19 @@ struct LucidApp: App {
                 Divider()
             }
 
+            // The default Help item only said help isn't available.
+            CommandGroup(replacing: .help) {
+                Button("Lucid on GitHub") {
+                    NSWorkspace.shared.open(URL(string: "https://github.com/ajayuhjain89/lucid-macos")!)
+                }
+                Button("Report an Issue…") {
+                    NSWorkspace.shared.open(URL(string: "https://github.com/ajayuhjain89/lucid-macos/issues/new")!)
+                }
+                Button("Release Notes") {
+                    NSWorkspace.shared.open(URL(string: "https://github.com/ajayuhjain89/lucid-macos/releases")!)
+                }
+            }
+
             CommandMenu("Theme") {
                 ForEach(ThemeMode.curatedThemes) { mode in
                     Toggle(mode.displayName, isOn: Binding(

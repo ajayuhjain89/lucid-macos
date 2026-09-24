@@ -776,7 +776,7 @@ public struct MainWindowView: View {
             }
 
             Section {
-                Button("Preferences…") {
+                Button("Settings…") {
                     SettingsWindowManager.shared.showSettings(preferences: preferences)
                 }
             }
