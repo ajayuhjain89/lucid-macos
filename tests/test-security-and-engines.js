@@ -127,6 +127,37 @@ runTest('AUDIT-001: markdown-it configured html:false and Mermaid securityLevel 
   assert(!/\bhtml:\s*true\b/.test(src), 'markdown-it must not re-enable html:true');
 });
 
+runTest('Code-fence info string is escaped in the code bar (no live elements or attributes)', () => {
+  ctx.lucid.updateContent(
+    '```<MARK>X</MARK>\ncode\n```\n\n```<IMG/SRC=x ONERROR=alert(1)>\ncode\n```\n\n```a"b\'c\ncode\n```',
+    'sec-fence'
+  );
+  const h = dom.contentHTML;
+  assert(!/<mark\b/i.test(h), 'fence tag must not create a <mark> element');
+  assert(!/<img\b/i.test(h), 'fence tag must not create an <img> element');
+  assert(/&lt;MARK&gt;X&lt;\/MARK&gt;/.test(h), 'fence tag rendered as escaped text in the code bar');
+  const langs = [...h.matchAll(/<span class="lucid-lang">([^<]*)<\/span>/g)].map((m) => m[1]);
+  assert(langs.length === 3, 'expected three language labels, got ' + langs.length);
+  langs.forEach((l) => assert(!/[<>"]/.test(l), 'label must not carry raw markup characters: ' + l));
+});
+
+runTest('Local image paths are routed through lucid-asset:, remote and data images untouched', () => {
+  ctx.lucid.updateContent(
+    '![a](shot.png) ![b](<dir with space/my image.png>) ![c](../up/x.png) ![d](/Users/me/p.png) ' +
+    '![e](https://example.com/r.png) ![f](data:image/png;base64,AAAA)',
+    'img-1'
+  );
+  const srcs = [...dom.contentHTML.matchAll(/<img src="([^"]*)"/g)].map((m) => m[1]);
+  assert.deepStrictEqual(srcs, [
+    'lucid-asset://doc/shot.png',
+    'lucid-asset://doc/dir%20with%20space%2Fmy%20image.png',
+    'lucid-asset://doc/..%2Fup%2Fx.png',
+    'lucid-asset://abs/Users%2Fme%2Fp.png',
+    'https://example.com/r.png',
+    'data:image/png;base64,AAAA'
+  ], 'srcs: ' + JSON.stringify(srcs));
+});
+
 // ---- AUDIT-003: STEM engine toggles gate rendering ------------------------
 runTest('AUDIT-003: KaTeX toggle gates math rendering', () => {
   ctx.lucid.updatePreferences({ enableKaTeX: true });

@@ -78,13 +78,22 @@ fi
 FRAMEWORKS="$CONTENTS/Frameworks"
 
 echo "==> Compiling $APP_NAME for macOS (arm64)..."
-swift build -c release --arch arm64 -Xlinker -rpath -Xlinker @executable_path/../Frameworks
+SWIFT_BUILD_ARGS=(-c release --arch arm64 -Xlinker -rpath -Xlinker @executable_path/../Frameworks)
+if ! swift build "${SWIFT_BUILD_ARGS[@]}"; then
+  echo "Error: swift build failed." >&2
+  echo "If the errors mention SwiftUIMacros or @State, the active SDK lacks the SwiftUI macro plugins" >&2
+  echo "(e.g. Command Line Tools for macOS 27). Install Xcode, or point SDKROOT at an SDK that has them:" >&2
+  echo "  SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk ./build.sh" >&2
+  exit 1
+fi
+# The build output directory differs between SwiftPM build systems; ask SwiftPM for it.
+BIN_DIR="$(swift build "${SWIFT_BUILD_ARGS[@]}" --show-bin-path)"
 
 echo "==> Creating application bundle at $APP_BUNDLE..."
 rm -rf "$APP_BUNDLE"
 mkdir -p "$MACOS" "$RESOURCES" "$FRAMEWORKS"
 
-cp "$DIR/.build/arm64-apple-macosx/release/$APP_NAME" "$MACOS/$APP_NAME"
+cp "$BIN_DIR/$APP_NAME" "$MACOS/$APP_NAME"
 cp "$DIR/Info.plist" "$CONTENTS/Info.plist"
 echo "APPL????" > "$CONTENTS/PkgInfo"
 
@@ -96,7 +105,7 @@ echo "==> Copying WebEngine resources..."
 cp -R "$DIR/Sources/Lucid/Resources/WebEngine" "$RESOURCES/WebEngine"
 
 echo "==> Copying Sparkle framework..."
-cp -R "$DIR/.build/arm64-apple-macosx/release/Sparkle.framework" "$FRAMEWORKS/"
+cp -R "$BIN_DIR/Sparkle.framework" "$FRAMEWORKS/"
 
 echo "==> Signing application bundle (inside-out)..."
 SPARKLE_DIR="$FRAMEWORKS/Sparkle.framework"

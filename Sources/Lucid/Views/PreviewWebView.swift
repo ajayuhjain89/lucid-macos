@@ -1,5 +1,6 @@
 import SwiftUI
 import WebKit
+import UniformTypeIdentifiers
 import AppKit
 
 /// A custom NSView container that hosts WKWebView with strict layout clipping and
@@ -127,6 +128,12 @@ public struct PreviewWebView: NSViewRepresentable {
 
     public func makeNSView(context: Context) -> LucidWebContainerView {
         let config = WKWebViewConfiguration()
+        config.setURLSchemeHandler(
+            LocalAssetSchemeHandler { [weak coordinator = context.coordinator] in
+                coordinator?.parent.documentFileURL?.deletingLastPathComponent()
+            },
+            forURLScheme: LocalAssetSchemeHandler.scheme
+        )
         let userContent = WKUserContentController()
 
         let effectiveTheme: String = {
@@ -147,14 +154,12 @@ public struct PreviewWebView: NSViewRepresentable {
         )
         userContent.addUserScript(themeScript)
 
-        userContent.add(context.coordinator, name: "lucidReady")
-        userContent.add(context.coordinator, name: "lucidScroll")
-        userContent.add(context.coordinator, name: "lucidHeadings")
-        userContent.add(context.coordinator, name: "lucidActiveHeading")
-        userContent.add(context.coordinator, name: "lucidFindMatches")
-        userContent.add(context.coordinator, name: "lucidLinkClicked")
-        userContent.add(context.coordinator, name: "lucidSaveSvg")
-        userContent.add(context.coordinator, name: "lucidPerf")
+        // WKUserContentController retains its handlers strongly; route through a
+        // weak proxy so the coordinator (and this web view) can be released.
+        let messageHandler = WeakScriptMessageHandler(context.coordinator)
+        for name in PreviewWebView.messageHandlerNames {
+            userContent.add(messageHandler, name: name)
+        }
         config.userContentController = userContent
 
         let effectiveTokens: LucidThemeTokens = {
@@ -197,6 +202,27 @@ public struct PreviewWebView: NSViewRepresentable {
         }
 
         return LucidWebContainerView(webView: webView)
+    }
+
+    static let messageHandlerNames = [
+        "lucidReady", "lucidScroll", "lucidHeadings", "lucidActiveHeading",
+        "lucidFindMatches", "lucidLinkClicked", "lucidSaveSvg", "lucidPerf"
+    ]
+
+    /// Tears the web view down when SwiftUI removes it (e.g. a view-mode switch),
+    /// so its WebContent process exits instead of accumulating.
+    public static func dismantleNSView(_ containerView: LucidWebContainerView, coordinator: Coordinator) {
+        let webView = containerView.webView
+        webView.stopLoading()
+        webView.navigationDelegate = nil
+        webView.configuration.userContentController.removeAllScriptMessageHandlers()
+        webView.configuration.userContentController.removeAllUserScripts()
+        DispatchQueue.main.async {
+            // Drop the window's reference only if it still points at this web view.
+            if coordinator.parent.webViewInstance === webView {
+                coordinator.parent.webViewInstance = nil
+            }
+        }
     }
 
     public func updateNSView(_ containerView: LucidWebContainerView, context: Context) {
@@ -425,7 +451,8 @@ public struct PreviewWebView: NSViewRepresentable {
         }
 
         /// Resolves a clicked link. External URLs open in the default browser;
-        /// relative references to sibling documents open in a Lucid window.
+        /// local Markdown documents open in a Lucid window; any other local
+        /// target is revealed in Finder, never opened.
         private func handleLinkClick(_ href: String) {
             let trimmed = href.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { return }
@@ -454,17 +481,83 @@ public struct PreviewWebView: NSViewRepresentable {
                 return
             }
 
-            guard FileManager.default.fileExists(atPath: target.path) else {
+            var isDirectory: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: target.path, isDirectory: &isDirectory) else {
                 NSSound.beep()
                 return
             }
 
             let markdownExtensions: Set<String> = ["md", "markdown", "mdown", "mkd", "mdx", "txt"]
-            if markdownExtensions.contains(target.pathExtension.lowercased()) {
+            if !isDirectory.boolValue && markdownExtensions.contains(target.pathExtension.lowercased()) {
                 NSDocumentController.shared.openDocument(withContentsOf: target, display: true) { _, _, _ in }
             } else {
-                NSWorkspace.shared.open(target)
+                // Document content must never launch apps, scripts or other files:
+                // reveal anything that is not a Markdown document in Finder instead.
+                NSWorkspace.shared.activateFileViewerSelecting([target])
             }
+        }
+    }
+}
+
+/// Forwards script messages to a weakly held handler, breaking the retain cycle
+/// WKUserContentController would otherwise form with its handler.
+private final class WeakScriptMessageHandler: NSObject, WKScriptMessageHandler {
+    private weak var target: WKScriptMessageHandler?
+
+    init(_ target: WKScriptMessageHandler) {
+        self.target = target
+    }
+
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        target?.userContentController(userContentController, didReceive: message)
+    }
+}
+
+/// Serves images referenced by the document (`lucid-asset://doc/<relative>` or
+/// `lucid-asset://abs/<absolute>`, each path one percent-encoded segment, as
+/// written by bridge.js). Only image files are served; anything else fails.
+private final class LocalAssetSchemeHandler: NSObject, WKURLSchemeHandler {
+    static let scheme = "lucid-asset"
+    private let documentDirectory: () -> URL?
+
+    init(documentDirectory: @escaping () -> URL?) {
+        self.documentDirectory = documentDirectory
+    }
+
+    func webView(_ webView: WKWebView, start urlSchemeTask: WKURLSchemeTask) {
+        guard let url = urlSchemeTask.request.url,
+              let fileURL = resolve(url),
+              let type = UTType(filenameExtension: fileURL.pathExtension),
+              type.conforms(to: .image),
+              let data = try? Data(contentsOf: fileURL) else {
+            urlSchemeTask.didFailWithError(URLError(.fileDoesNotExist))
+            return
+        }
+        let response = URLResponse(
+            url: url,
+            mimeType: type.preferredMIMEType ?? "application/octet-stream",
+            expectedContentLength: data.count,
+            textEncodingName: nil
+        )
+        urlSchemeTask.didReceive(response)
+        urlSchemeTask.didReceive(data)
+        urlSchemeTask.didFinish()
+    }
+
+    func webView(_ webView: WKWebView, stop urlSchemeTask: WKURLSchemeTask) {}
+
+    private func resolve(_ url: URL) -> URL? {
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let path = String(components.percentEncodedPath.drop(while: { $0 == "/" })).removingPercentEncoding,
+              !path.isEmpty else { return nil }
+        switch components.host {
+        case "abs":
+            return URL(fileURLWithPath: "/" + path).standardizedFileURL
+        case "doc":
+            guard let base = documentDirectory() else { return nil }
+            return URL(fileURLWithPath: path, relativeTo: base).standardizedFileURL
+        default:
+            return nil
         }
     }
 }
