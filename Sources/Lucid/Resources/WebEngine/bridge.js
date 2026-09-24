@@ -2914,8 +2914,35 @@
       }
     },
 
-    getStandaloneHTML: function() {
-      return document.documentElement.outerHTML;
+    // Export runs in a separate, offscreen page (ExportService). Ready once math
+    // placeholders are typeset, every diagram has rendered and images loaded.
+    isExportReady: function() {
+      if (document.querySelector('.lucid-math-placeholder')) return false;
+      const diagrams = document.querySelectorAll('.mermaid-container');
+      for (let i = 0; i < diagrams.length; i++) {
+        if (!diagrams[i]._lucidCurrentTheme) return false;
+      }
+      for (let i = 0; i < document.images.length; i++) {
+        if (!document.images[i].complete) return false;
+      }
+      return true;
+    },
+
+    // Strips interactive chrome (toolbars, copy buttons, hover anchors) from the
+    // export page and returns the parts the native side assembles into a
+    // standalone file, as JSON: root and body attributes plus the content markup.
+    prepareForExport: function() {
+      const content = document.getElementById('lucid-content');
+      content.querySelectorAll('.mermaid-toolbar, .lucid-copy, .lucid-btn-copy-latex, .lucid-anchor')
+        .forEach(function(el) { el.remove(); });
+      const attrs = function(el) {
+        return Array.prototype.map.call(el.attributes, function(a) { return [a.name, a.value]; });
+      };
+      return JSON.stringify({
+        htmlAttrs: attrs(document.documentElement),
+        bodyAttrs: attrs(document.body),
+        content: content.outerHTML
+      });
     },
 
     getCurrentRevision: function() {

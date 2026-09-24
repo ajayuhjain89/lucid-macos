@@ -169,22 +169,8 @@ public struct MainWindowView: View {
                     onInsertSnippet: { type in
                         insertSnippet(type)
                     },
-                    onExportPDF: {
-                        if let webView = webViewInstance {
-                            ExportService.shared.exportPDF(
-                                webView: webView,
-                                defaultFilename: documentTitle
-                            )
-                        }
-                    },
-                    onExportHTML: {
-                        if let webView = webViewInstance {
-                            ExportService.shared.exportHTML(
-                                webView: webView,
-                                defaultFilename: documentTitle
-                            )
-                        }
-                    },
+                    onExportPDF: { exportPDF() },
+                    onExportHTML: { exportHTML() },
                     onCopyRichText: {
                         if let webView = webViewInstance {
                             ExportService.shared.copyRichText(webView: webView)
@@ -428,6 +414,16 @@ public struct MainWindowView: View {
             webViewInstance?.evaluateJavaScript("if (window.lucid) { window.lucid.clearFind(); }")
         }
         restoreFocusAfterFind()
+    }
+
+    // Exports render the document text in their own offscreen page, so they
+    // work in every view mode, including Editor mode with no preview.
+    private func exportPDF() {
+        ExportService.shared.exportPDF(markdown: document.text, documentURL: fileURL, preferences: preferences, defaultFilename: documentTitle)
+    }
+
+    private func exportHTML() {
+        ExportService.shared.exportHTML(markdown: document.text, documentURL: fileURL, preferences: preferences, defaultFilename: documentTitle)
     }
 
     private func focusDocumentIfFieldHasFocus() {
@@ -767,16 +763,8 @@ public struct MainWindowView: View {
                         isFindBarPresented = true
                     }
                 }
-                Button("Export as PDF…") {
-                    if let webView = webViewInstance {
-                        ExportService.shared.exportPDF(webView: webView, defaultFilename: documentTitle)
-                    }
-                }
-                Button("Export as Standalone HTML…") {
-                    if let webView = webViewInstance {
-                        ExportService.shared.exportHTML(webView: webView, defaultFilename: documentTitle)
-                    }
-                }
+                Button("Export as PDF…") { exportPDF() }
+                Button("Export as Standalone HTML…") { exportHTML() }
             }
 
             Section {
