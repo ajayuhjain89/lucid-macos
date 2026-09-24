@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import Lucid
 
@@ -26,5 +27,37 @@ struct OutlineParserTests {
 
     @Test func emptyDocument() {
         #expect(MarkdownOutlineParser.parse(markdown: "").isEmpty)
+    }
+
+    /// tests/test-outline-parity.js checks the renderer against the same JSON.
+    @Test func matchesTheRendererOnTheParityFixture() throws {
+        let fixtures = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("fixtures")
+        let markdown = try String(contentsOf: fixtures.appendingPathComponent("outline-parity.md"), encoding: .utf8)
+        let data = try Data(contentsOf: fixtures.appendingPathComponent("outline-parity.json"))
+        let expected = try #require(try JSONSerialization.jsonObject(with: data) as? [[String: Any]])
+        let collapse = { (s: String) in s.split(whereSeparator: \.isWhitespace).joined(separator: " ") }
+
+        let parsed = MarkdownOutlineParser.parse(markdown: markdown)
+        #expect(parsed.map(\.id) == expected.map { $0["id"] as? String ?? "" })
+        #expect(parsed.map(\.level) == expected.map { $0["level"] as? Int ?? 0 })
+        #expect(parsed.map { collapse($0.text) } == expected.map { collapse($0["text"] as? String ?? "") })
+    }
+
+    @Test(arguments: ["#hashtag", "#", "####### seven", "    # indented code", "\\# escaped"])
+    func notHeadings(_ line: String) {
+        #expect(MarkdownOutlineParser.parse(markdown: "Intro\n\n" + line + "\n").isEmpty)
+    }
+
+    @Test func tildeInsideBacktickFenceDoesNotCloseIt() {
+        let md = "```\n~~~\n# hidden\n~~~\n```\n# Shown\n"
+        #expect(MarkdownOutlineParser.parse(markdown: md).map(\.text) == ["Shown"])
+    }
+
+    @Test func frontMatterIsSkippedButALaterRuleIsNot() {
+        let md = "---\ntitle: x\n---\n\nPara\n---\n"
+        let parsed = MarkdownOutlineParser.parseWithLines(markdown: md)
+        #expect(parsed.map(\.item.text) == ["Para"])
+        #expect(parsed.map(\.line) == [4])
     }
 }
