@@ -351,16 +351,14 @@ public struct EditorView: NSViewRepresentable {
 }
 
 /// The editor's scroll view. NSTextView keeps its selection in view whenever
-/// it is resized, and the first sizing (from zero, when SwiftUI lays the pane
-/// out) scrolled every new editor down by the top inset, leaving the first line
-/// under the toolbar. The first real sizing starts at the top instead.
+/// it is resized, so SwiftUI's first sizing (and Split's second one) scrolled a
+/// new editor down by up to a line plus the top inset, leaving its first line
+/// under the toolbar. A resize that starts at the top now stays at the top.
 final class LucidEditorScrollView: NSScrollView {
-    private var hasBeenSized = false
-
     override func setFrameSize(_ newSize: NSSize) {
+        let wasAtTop = documentView.map { contentView.bounds.minY <= $0.frame.minY + 0.5 } ?? true
         super.setFrameSize(newSize)
-        guard !hasBeenSized, newSize.width > 0, newSize.height > 0, let documentView else { return }
-        hasBeenSized = true
+        guard wasAtTop, let documentView, contentView.bounds.minY > documentView.frame.minY + 0.5 else { return }
         contentView.scroll(to: NSPoint(x: contentView.bounds.minX, y: documentView.frame.minY))
         reflectScrolledClipView(contentView)
     }
