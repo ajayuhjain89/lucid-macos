@@ -2368,6 +2368,13 @@
       if (prefs.contentWidth) root.style.setProperty('--lucid-content-width', prefs.contentWidth);
       if (prefs.accentColor) root.style.setProperty('--lucid-accent', prefs.accentColor);
       if (prefs.topInset) root.style.setProperty('--lucid-top-inset', prefs.topInset + 'px');
+      // The band hiding content under the app's floating toolbar. On <html>,
+      // because the body's class list is rebuilt on every theme change.
+      if (typeof prefs.chromeHeight !== 'undefined') {
+        const hasChrome = prefs.chromeHeight > 0;
+        root.classList.toggle('lucid-chrome', hasChrome);
+        if (hasChrome) root.style.setProperty('--lucid-chrome-height', prefs.chromeHeight + 'px');
+      }
       if (typeof prefs.breakout !== 'undefined') {
         if (prefs.breakout) body.classList.remove('no-breakout');
         else body.classList.add('no-breakout');

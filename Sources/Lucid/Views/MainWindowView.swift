@@ -257,6 +257,12 @@ public struct MainWindowView: View {
                 performFind(findQuery, moveSelection: false)
             }
         }
+        .onChange(of: isCommandPalettePresented) { _, isPresented in
+            // However the palette closed (Esc, a command, a click outside), give
+            // the keyboard back to the document; a command that opens the find
+            // bar still takes focus after this, on the next run-loop turn.
+            if !isPresented && !isFindBarPresented { restoreFocusAfterFind() }
+        }
         .onChange(of: viewState.viewMode) { _, _ in
             if isFindBarPresented && !findQuery.isEmpty {
                 performFind(findQuery)
@@ -476,6 +482,7 @@ public struct MainWindowView: View {
     }
 
     private func presentCommandPalette() {
+        previousFirstResponder = NSApp.keyWindow?.firstResponder
         withAnimation(LucidMotion.respecting(reduceMotion, LucidMotion.modal)) {
             isCommandPalettePresented = true
         }
@@ -560,6 +567,10 @@ public struct MainWindowView: View {
                         onTextViewCreated: { editorTextView = $0 },
                         onScrollIntensityChanged: { scrollIntensity = $0 }
                     )
+                    .overlay(alignment: .top) { editorScrollEdgeBand }
+                    // Split panes are hosted separately and would otherwise start
+                    // below the hidden title bar, 28 pt lower than Reader/Editor.
+                    .ignoresSafeArea()
                     // 2 × 220 + dividers + the widest sidebar (320) fits the 780 pt window minimum.
                     .frame(minWidth: 220)
 
@@ -584,9 +595,11 @@ public struct MainWindowView: View {
                         isSidebarOpen: viewState.showOutline,
                         focusMode: viewState.focusMode
                     )
+                    .ignoresSafeArea()
                     // 2 × 220 + dividers + the widest sidebar (320) fits the 780 pt window minimum.
                     .frame(minWidth: 220)
                 }
+                .ignoresSafeArea()
                 .transition(.opacity)
             case .editor:
                 EditorView(
@@ -600,17 +613,22 @@ public struct MainWindowView: View {
                     onTextViewCreated: { editorTextView = $0 },
                     onScrollIntensityChanged: { scrollIntensity = $0 }
                 )
+                .overlay(alignment: .top) { editorScrollEdgeBand }
                 .transition(.opacity)
             }
         }
     }
 
+    /// Hides editor text scrolled beneath the floating toolbar. The preview
+    /// draws its own band in the page (markdown-preview.css), so it repaints in
+    /// step with the page on theme changes.
+    private var editorScrollEdgeBand: some View {
+        LucidScrollEdgeBand(color: Color(hex: preferences.theme.themeTokens.editorBackground))
+    }
+
     private func documentTopBar(sidebarOpen: Bool) -> some View {
         VStack(spacing: 0) {
             ZStack {
-                // Soft, subtle downward fade only when scrolled — no full-width titlebar slab
-                topBarBackground
-
                 // Empty regions of the bar drag the window.
                 LucidWindowDragArea()
 
@@ -693,21 +711,6 @@ public struct MainWindowView: View {
     private var toolbarControlsOpacity: Double {
         guard viewState.focusMode else { return 1 }
         return isToolbarHovered ? 1 : 0.4
-    }
-
-    /// Soft, subtle gradient fade only when scrolled — no full-width titlebar slab.
-    /// The document continues physically underneath, with content remaining clearly perceptible.
-    private var topBarBackground: some View {
-        LinearGradient(
-            colors: [
-                Color(hex: preferences.theme.themeTokens.windowBackground).opacity(0.42 * scrollIntensity),
-                Color(hex: preferences.theme.themeTokens.windowBackground).opacity(0.0)
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-        .allowsHitTesting(false)
-        .animation(.easeOut(duration: 0.15), value: scrollIntensity)
     }
 
     private var rightControlsCluster: some View {
@@ -839,13 +842,14 @@ public struct MainWindowView: View {
         }
 
         if let textView = editorTextView {
-            let ns = textView.string as NSString
-            let location = min(textView.selectedRange().location, ns.length)
-            let updated = ns.replacingCharacters(in: NSRange(location: location, length: 0), with: template)
-            document.text = updated
-            DispatchQueue.main.async {
-                let caret = min(location + (template as NSString).length, (textView.string as NSString).length)
-                textView.setSelectedRange(NSRange(location: caret, length: 0))
+            // Through the text view, so the insertion is a single undo step
+            // (like a paste) and the caret lands after it.
+            let location = min(textView.selectedRange().location, (textView.string as NSString).length)
+            let range = NSRange(location: location, length: 0)
+            if textView.shouldChangeText(in: range, replacementString: template) {
+                textView.replaceCharacters(in: range, with: template)
+                textView.didChangeText()
+                textView.setSelectedRange(NSRange(location: location + (template as NSString).length, length: 0))
             }
         } else {
             // No live editor yet (e.g. just switched modes): append safely.

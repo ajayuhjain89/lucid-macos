@@ -16,6 +16,8 @@
      (toolbar height + breathing room). Content scrolls beneath the toolbar, so
      at rest the first heading clears it, and on scroll it passes underneath. */
   --lucid-top-inset: 48px;
+  /* Height of the app's floating toolbar (set by the app; exports leave it off). */
+  --lucid-chrome-height: 36px;
   /* One centered column. `--lucid-content-width` is normally supplied by the
      app's Column Width preference; everything shares this width so left and
      right edges line up and the whole column stays centered in the window. */
@@ -85,6 +87,27 @@ body.vscode-body {
   text-rendering: optimizeLegibility;
   position: relative;
   transition: background 0.15s ease, color 0.15s ease;
+}
+
+/* The toolbar floats over the page with no backdrop of its own, so content
+   scrolled beneath it must be hidden here: a band in the page background under
+   the toolbar that fades out just below it (12px, within the breathing room,
+   so the first line at rest is untouched). Painted by the page itself, it
+   changes theme in step with the content. Only in the app (html.lucid-chrome). */
+html.lucid-chrome body.vscode-body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: calc(var(--lucid-chrome-height) + 12px);
+  background-color: var(--lucid-bg);
+  -webkit-mask-image: linear-gradient(to bottom, #000 var(--lucid-chrome-height), transparent);
+  mask-image: linear-gradient(to bottom, #000 var(--lucid-chrome-height), transparent);
+  pointer-events: none;
+  /* Above diagram toolbars (20), below the diagram modal (9999). */
+  z-index: 30;
+  transition: background-color 0.15s ease;
 }
 
 /* Responsive gutters: keep safe margins on small windows. The top inset stays
@@ -1236,6 +1259,7 @@ body.lucid-focus-mode #lucid-content > .lucid-active-block {
    PRINT / "Save as PDF"
    ============================================================ */
 @media print {
+  html.lucid-chrome body.vscode-body::before { display: none; }
   body.vscode-body {
     max-width: none;
     padding: 0;
