@@ -327,13 +327,38 @@
     }
   });
 
+  // markdown-it wraps highlight output in <pre><code> unless it starts with
+  // "<pre", which put every Mermaid container inside a dark code frame. Emit
+  // diagram containers as-is.
+  const defaultFenceRule = md.renderer.rules.fence;
+  md.renderer.rules.fence = function(tokens, idx, options, env, self) {
+    const token = tokens[idx];
+    const info = token.info ? md.utils.unescapeAll(token.info).trim() : '';
+    if (info.split(/\s+/g)[0] === 'mermaid' && enginePrefs.enableMermaid) {
+      return options.highlight(token.content, 'mermaid', '') + '\n';
+    }
+    return defaultFenceRule(tokens, idx, options, env, self);
+  };
+
   if (window.markdownitSub) md.use(window.markdownitSub);
   if (window.markdownitSup) md.use(window.markdownitSup);
   if (window.markdownitIns) md.use(window.markdownitIns);
   if (window.markdownitMark) md.use(window.markdownitMark);
   if (window.markdownitDeflist) md.use(window.markdownitDeflist);
   if (window.markdownitAbbr) md.use(window.markdownitAbbr);
-  if (window.markdownitTaskList) md.use(window.markdownitTaskList, { enabled: true });
+  // The plugin registers itself as window.markdownitTaskLists. Checkboxes stay
+  // disabled: the preview is read-only, so a click can't change the source.
+  const taskListsPlugin = window.markdownitTaskLists || window.markdownitTaskList;
+  if (taskListsPlugin) md.use(taskListsPlugin, { enabled: false });
+
+  // YAML front matter (--- … --- or … at the very top) is metadata, not
+  // content. Blank its lines instead of deleting them so line positions stay
+  // aligned with the source.
+  function blankFrontMatter(source) {
+    const m = /^---[ \t]*\r?\n[\s\S]*?\r?\n(?:---|\.\.\.)[ \t]*(?:\r?\n|$)/.exec(source);
+    if (!m) return source;
+    return m[0].replace(/[^\r\n]/g, '') + source.slice(m[0].length);
+  }
 
   // Local images: the page is served from the app bundle, so relative and
   // absolute file paths would resolve against the bundled engine folder. Route
@@ -750,14 +775,8 @@
         }
 
         // Initialize Mermaid for targetTheme if needed
-        if (currentMermaidTheme !== targetTheme) {
-          currentMermaidTheme = targetTheme;
-          try {
-            mermaid.initialize(getMermaidConfigForTheme(targetTheme));
-          } catch (e) {
-            console.warn('Failed to initialize mermaid for theme:', targetTheme, e);
-          }
-        }
+        currentMermaidTheme = targetTheme;
+        ensureMermaidTheme(targetTheme);
 
         // Render ONE uncached diagram at a time
         const c = uncachedContainers[0];
@@ -991,15 +1010,24 @@
     };
   }
 
-  function ensureMermaidInitialized() {
-    if (typeof mermaid !== 'undefined' && !mermaid._lucidInitialized) {
-      try {
-        mermaid.initialize(getMermaidConfigForTheme(currentMermaidTheme));
-        mermaid._lucidInitialized = true;
-      } catch (e) {
-        console.warn('Failed to initialize Mermaid:', e);
-      }
+  // The theme Mermaid's global config was last initialized with. It can lag
+  // behind currentMermaidTheme (a switch served entirely from cache doesn't
+  // re-initialize), so every render checks it before drawing.
+  let initializedMermaidTheme = null;
+
+  function ensureMermaidTheme(theme) {
+    if (typeof mermaid === 'undefined' || initializedMermaidTheme === theme) return;
+    try {
+      mermaid.initialize(getMermaidConfigForTheme(theme));
+      initializedMermaidTheme = theme;
+      mermaid._lucidInitialized = true;
+    } catch (e) {
+      console.warn('Failed to initialize Mermaid for theme:', theme, e);
     }
+  }
+
+  function ensureMermaidInitialized() {
+    ensureMermaidTheme(currentMermaidTheme);
   }
 
   function renderKaTeXBlock(trimmed, mathId, renderId) {
@@ -1750,7 +1778,7 @@
 
       LucidPerf.mark(renderId, 't6_md_render_begin');
       const env = { renderId: renderId, isDeferredMath: false };
-      const tokens = md.parse(rawMarkdown || '', env);
+      const tokens = md.parse(blankFrontMatter(rawMarkdown || ''), env);
 
       let mathCount = 0;
       for (let i = 0; i < tokens.length; i++) {
@@ -1962,6 +1990,9 @@
       // 2. Mermaid Enhancement
       if (!mermaidDone) {
         ensureMermaidInitialized();
+        // Cache results under the theme they were drawn with, even if the
+        // theme changes while this render is in flight.
+        const renderTheme = currentMermaidTheme;
         const mermaidCount = mermaidNodes.length;
         LucidPerf.mark(renderId, 't15_mermaid_begin', { count: mermaidCount });
 
@@ -1976,8 +2007,8 @@
                   const canvas = c.querySelector('.mermaid-canvas');
                   if (canvas && canvas.innerHTML) {
                     c._lucidRenderedThemes = c._lucidRenderedThemes || {};
-                    c._lucidRenderedThemes[currentMermaidTheme] = canvas.innerHTML;
-                    c._lucidCurrentTheme = currentMermaidTheme;
+                    c._lucidRenderedThemes[renderTheme] = canvas.innerHTML;
+                    c._lucidCurrentTheme = renderTheme;
                   }
                 }
               }
@@ -1994,8 +2025,8 @@
                   const canvas = c.querySelector('.mermaid-canvas');
                   if (canvas && canvas.innerHTML) {
                     c._lucidRenderedThemes = c._lucidRenderedThemes || {};
-                    c._lucidRenderedThemes[currentMermaidTheme] = canvas.innerHTML;
-                    c._lucidCurrentTheme = currentMermaidTheme;
+                    c._lucidRenderedThemes[renderTheme] = canvas.innerHTML;
+                    c._lucidCurrentTheme = renderTheme;
                   }
                 }
               }
@@ -2036,8 +2067,8 @@
                     const canvas = c.querySelector('.mermaid-canvas');
                     if (canvas && canvas.innerHTML) {
                       c._lucidRenderedThemes = c._lucidRenderedThemes || {};
-                      c._lucidRenderedThemes[currentMermaidTheme] = canvas.innerHTML;
-                      c._lucidCurrentTheme = currentMermaidTheme;
+                      c._lucidRenderedThemes[renderTheme] = canvas.innerHTML;
+                      c._lucidCurrentTheme = renderTheme;
                     }
                   }
                 }
@@ -2052,8 +2083,8 @@
                     const canvas = c.querySelector('.mermaid-canvas');
                     if (canvas && canvas.innerHTML) {
                       c._lucidRenderedThemes = c._lucidRenderedThemes || {};
-                      c._lucidRenderedThemes[currentMermaidTheme] = canvas.innerHTML;
-                      c._lucidCurrentTheme = currentMermaidTheme;
+                      c._lucidRenderedThemes[renderTheme] = canvas.innerHTML;
+                      c._lucidCurrentTheme = renderTheme;
                     }
                   }
                 }

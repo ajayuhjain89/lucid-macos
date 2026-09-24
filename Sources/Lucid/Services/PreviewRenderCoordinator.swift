@@ -34,6 +34,17 @@ public final class PreviewRenderCoordinator: ObservableObject {
         }
     }
 
+    /// The web content process died (crash or memory pressure). Queue the last
+    /// document so it renders again once the reloaded page reports ready.
+    public func handleContentProcessTerminated() {
+        isBridgeReady = false
+        hasRenderedInitialContent = false
+        pendingTask?.cancel()
+        if pendingMarkdown == nil {
+            pendingMarkdown = lastRenderedMarkdown
+        }
+    }
+
     /// Request rendering for an updated document string.
     public func scheduleRender(
         markdown: String,
@@ -99,8 +110,14 @@ public final class PreviewRenderCoordinator: ObservableObject {
                 guard let self = self else { return }
                 if let success = result as? Bool, success {
                     // Successfully delivered
+                } else if let error {
+                    // The page is alive but this render threw. Keep the bridge
+                    // ready so the next edit renders again; marking it not
+                    // ready here froze the preview for good (nothing re-sends
+                    // lucidReady on a loaded page).
+                    NSLog("Lucid preview render failed: %@", error.localizedDescription)
                 } else {
-                    // Bridge was not actually ready to receive; re-queue for when bridge reports ready
+                    // The bridge isn't on the page yet; re-queue for its ready handshake.
                     self.isBridgeReady = false
                     self.pendingMarkdown = markdown
                 }

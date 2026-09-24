@@ -158,6 +158,14 @@ runTest('Local image paths are routed through lucid-asset:, remote and data imag
   ], 'srcs: ' + JSON.stringify(srcs));
 });
 
+runTest('Mermaid containers are emitted bare, not inside a <pre><code> code frame', () => {
+  ctx.lucid.updatePreferences({ enableMermaid: true });
+  ctx.lucid.updateContent('```mermaid\nflowchart TD\nA-->B\n```', 'm-frame');
+  const h = dom.contentHTML;
+  assert(/^\s*<div class="mermaid-container"/.test(h), 'container must be top-level, got: ' + h.slice(0, 80));
+  assert(!/<pre><code[^>]*>\s*<div class="mermaid-container"/.test(h), 'no <pre><code> wrapper');
+});
+
 // ---- AUDIT-003: STEM engine toggles gate rendering ------------------------
 runTest('AUDIT-003: KaTeX toggle gates math rendering', () => {
   ctx.lucid.updatePreferences({ enableKaTeX: true });

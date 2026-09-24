@@ -115,6 +115,9 @@ public struct EditorView: NSViewRepresentable {
 
     public func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let textView = scrollView.documentView as? LucidTextView else { return }
+        // Keep callbacks (scroll fraction, cursor, text binding) pointing at the
+        // current view values rather than the ones captured at creation.
+        context.coordinator.parent = self
 
         // Update preferences reference
         textView.preferences = preferences
@@ -266,12 +269,17 @@ public struct EditorView: NSViewRepresentable {
         @objc func boundsDidChange(_ notification: Notification) {
             guard let clipView = notification.object as? NSClipView,
                   let documentView = clipView.documentView else { return }
-            let maxScroll = documentView.bounds.height - clipView.bounds.height
+            // Measure in document coordinates: the text view's frame origin is not
+            // always 0 inside the clip view, so clipView.bounds.origin is not the
+            // scroll offset (it produced negative fractions and broke split sync).
+            let visible = clipView.documentVisibleRect
+            let offset = visible.minY - documentView.bounds.minY
+            let maxScroll = documentView.bounds.height - visible.height
             if maxScroll > 0 {
-                let fraction = clipView.bounds.origin.y / maxScroll
+                let fraction = min(1, max(0, offset / maxScroll))
                 parent.onScrollFractionChanged?(Double(fraction))
             }
-            let intensity = min(1, max(0, Double(clipView.bounds.origin.y) / 28))
+            let intensity = min(1, max(0, Double(offset) / 28))
             parent.onScrollIntensityChanged?(intensity)
             gutterView?.needsDisplay = true
         }
