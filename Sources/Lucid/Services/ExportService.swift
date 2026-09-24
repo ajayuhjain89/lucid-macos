@@ -68,14 +68,16 @@ public final class ExportService {
         }
     }
 
-    /// The preview preference payload, optionally with the theme forced to light
-    /// (PDF pages are white, so diagrams and code must use light colors).
+    /// The preview preference payload for an export: Focus/Typewriter off, and the
+    /// theme optionally forced to light (PDF pages are white, so diagrams and code
+    /// must use light colors).
     private static func preferencesJSON(_ preferences: LucidPreferences, forceLightTheme: Bool) -> String {
         let isDark = NSApp?.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-        let json = preferences.jsonPayload(systemColorScheme: isDark ? .dark : .light)
-        guard forceLightTheme,
-              var dict = (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: Any] else { return json }
-        dict["theme"] = "light"
+        let json = preferences.jsonPayload(systemColorScheme: isDark ? .dark : .light, focusMode: false)
+        guard var dict = (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: Any] else { return json }
+        // An export is the whole document: never dimmed or caret-centered.
+        dict["typewriterMode"] = false
+        if forceLightTheme { dict["theme"] = "light" }
         guard let data = try? JSONSerialization.data(withJSONObject: dict),
               let light = String(data: data, encoding: .utf8) else { return json }
         return light

@@ -4,6 +4,8 @@ import AppKit
 public struct EditorView: NSViewRepresentable {
     @Binding var text: String
     @ObservedObject var preferences: LucidPreferences
+    /// This window's Focus Mode (WindowViewState), not the app-wide default.
+    var focusMode: Bool
     var onScrollFractionChanged: ((Double) -> Void)?
     var onCursorPositionChanged: ((Int, Int) -> Void)? // (line, column)
     var onTextViewCreated: ((NSTextView) -> Void)?
@@ -12,6 +14,7 @@ public struct EditorView: NSViewRepresentable {
     public init(
         text: Binding<String>,
         preferences: LucidPreferences = .shared,
+        focusMode: Bool = false,
         onScrollFractionChanged: ((Double) -> Void)? = nil,
         onCursorPositionChanged: ((Int, Int) -> Void)? = nil,
         onTextViewCreated: ((NSTextView) -> Void)? = nil,
@@ -19,6 +22,7 @@ public struct EditorView: NSViewRepresentable {
     ) {
         self._text = text
         self.preferences = preferences
+        self.focusMode = focusMode
         self.onScrollFractionChanged = onScrollFractionChanged
         self.onCursorPositionChanged = onCursorPositionChanged
         self.onTextViewCreated = onTextViewCreated
@@ -203,7 +207,8 @@ public struct EditorView: NSViewRepresentable {
         applyTypography(to: textView, coordinator: context.coordinator, force: replacedText)
 
         // Focus / Typewriter mode: refresh when toggled, re-themed or the text was replaced.
-        let modesKey = "\(preferences.focusMode)|\(preferences.typewriterMode)|\(themeKey)"
+        textView.focusModeEnabled = focusMode
+        let modesKey = "\(focusMode)|\(preferences.typewriterMode)|\(themeKey)"
         if replacedText || context.coordinator.appliedModesKey != modesKey {
             let typewriterTurnedOn = preferences.typewriterMode && !(context.coordinator.appliedModesKey?.contains("|true|") ?? false)
             context.coordinator.appliedModesKey = modesKey
@@ -343,6 +348,8 @@ public final class LucidTextView: NSTextView {
     public var preferences: LucidPreferences?
     public var strongTextStorage: NSTextStorage?
     private var previousActiveLineRect: NSRect?
+    /// Whether this window's Focus Mode is on (set by EditorView).
+    public var focusModeEnabled = false
     /// The paragraph Focus Mode currently leaves undimmed (nil = nothing dimmed).
     private var focusedParagraph: NSRange?
 
@@ -365,7 +372,7 @@ public final class LucidTextView: NSTextView {
     public func updateFocusAndTypewriter(scroll: Bool) {
         guard let layoutManager else { return }
         let length = (string as NSString).length
-        if preferences?.focusMode == true {
+        if focusModeEnabled {
             let paragraph = currentParagraphRange()
             if paragraph != focusedParagraph {
                 let full = NSRange(location: 0, length: length)

@@ -120,6 +120,8 @@ public struct PreviewWebView: NSViewRepresentable {
     var sidebarWidth: CGFloat = 240
     var transitionToken: UUID? = nil
     var isSidebarOpen: Bool = false
+    /// This window's Focus Mode (WindowViewState), not the app-wide default.
+    var focusMode: Bool = false
     @Environment(\.colorScheme) var colorScheme
 
     public func makeCoordinator() -> Coordinator {
@@ -238,7 +240,7 @@ public struct PreviewWebView: NSViewRepresentable {
         webView.underPageBackgroundColor = NSColor(Color(hex: tokens.previewBackground))
 
         // Update preferences only when payload changes to avoid IPC thrashing
-        let prefsJSON = preferences.jsonPayload(systemColorScheme: colorScheme)
+        let prefsJSON = preferences.jsonPayload(systemColorScheme: colorScheme, focusMode: focusMode)
         if prefsJSON != context.coordinator.lastAppliedPrefsJSON {
             context.coordinator.lastAppliedPrefsJSON = prefsJSON
             webView.evaluateJavaScript("if (window.lucid) { window.lucid.updatePreferences(\(prefsJSON)); }")
@@ -339,7 +341,7 @@ public struct PreviewWebView: NSViewRepresentable {
             isPageLoaded = true
             renderCoordinator.setWebView(webView)
 
-            let prefsJSON = parent.preferences.jsonPayload(systemColorScheme: parent.colorScheme)
+            let prefsJSON = parent.preferences.jsonPayload(systemColorScheme: parent.colorScheme, focusMode: parent.focusMode)
             lastAppliedPrefsJSON = prefsJSON
             webView.evaluateJavaScript("if (window.lucid) { window.lucid.updatePreferences(\(prefsJSON)); }")
 

@@ -296,7 +296,12 @@ public final class LucidPreferences: ObservableObject {
         return theme.rawValue
     }
 
-    public func jsonPayload(systemColorScheme: ColorScheme) -> String {
+    /// Posted (object: the preferences) after `applyPreset`, so open windows adopt it.
+    public static let presetAppliedNotification = Notification.Name("LucidPresetApplied")
+
+    /// The preview's preference payload. `focusMode` overrides the app-wide value
+    /// with the window's own (see WindowViewState).
+    public func jsonPayload(systemColorScheme: ColorScheme, focusMode: Bool? = nil) -> String {
         let dict: [String: Any] = [
             "theme": effectiveTheme(systemColorScheme: systemColorScheme),
             "fontFamily": fontFamily.cssValue(customName: customFontName),
@@ -305,7 +310,7 @@ public final class LucidPreferences: ObservableObject {
             "contentWidth": contentWidth.rawValue,
             "accentColor": accentColor,
             "breakout": breakoutEnabled,
-            "focusMode": focusMode,
+            "focusMode": focusMode ?? self.focusMode,
             "typewriterMode": typewriterMode,
             "tableDensity": tableDensity.rawValue,
             "mathScale": mathScale,
@@ -426,6 +431,7 @@ public final class LucidPreferences: ObservableObject {
             showStatusBar = false
             viewMode = .reader
         }
+        NotificationCenter.default.post(name: Self.presetAppliedNotification, object: self)
     }
 
     // MARK: - Domain Resets
