@@ -16,8 +16,11 @@
   };
 
   // Performance instrumentation
+  // Render-phase timing marks. Off by default (the app ignores them, and each
+  // mark is an IPC hop); set window.LucidPerf.enabled = true from Web Inspector
+  // while profiling.
   const LucidPerf = {
-    enabled: true,
+    enabled: false,
     mark: function(renderId, phase, data) {
       if (!this.enabled) return;
       const t = performance.now();
@@ -1869,12 +1872,31 @@
     }
   }
 
-  window.addEventListener('scroll', function() {
+  // Scroll position for the native side (split-mode sync, toolbar glass): at most
+  // one message per frame, and only when it moved enough for the app to act on
+  // (the same thresholds it applies), instead of one IPC hop per scroll event.
+  let scrollReportPending = false;
+  let lastPostedFraction = -1;
+  let lastPostedIntensity = -1;
+  function reportScrollPosition() {
+    scrollReportPending = false;
+    const handlers = window.webkit && window.webkit.messageHandlers;
+    if (!handlers || !handlers.lucidScroll) return;
     const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
     const fraction = maxScroll > 0 ? window.scrollY / maxScroll : 0;
     const intensity = Math.max(0, Math.min(1, window.scrollY / 28));
-    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.lucidScroll) {
-      window.webkit.messageHandlers.lucidScroll.postMessage({ fraction: fraction, scrolled: window.scrollY > 6, intensity: intensity });
+    const crossed = (intensity >= 0.05) !== (lastPostedIntensity >= 0.05);
+    if (Math.abs(fraction - lastPostedFraction) < 0.005 &&
+        Math.abs(intensity - lastPostedIntensity) <= 0.04 && !crossed) return;
+    lastPostedFraction = fraction;
+    lastPostedIntensity = intensity;
+    handlers.lucidScroll.postMessage({ fraction: fraction, scrolled: window.scrollY > 6, intensity: intensity });
+  }
+
+  window.addEventListener('scroll', function() {
+    if (!scrollReportPending) {
+      scrollReportPending = true;
+      requestAnimationFrame(reportScrollPosition);
     }
 
     if (anchorRestoreActive) {
