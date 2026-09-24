@@ -100,7 +100,9 @@ public struct FindBarView: View {
         )
         .shadow(color: Color.black.opacity(0.12), radius: 10, x: 0, y: 4)
         .onAppear {
-            isFieldFocused = true
+            // Focusing synchronously in onAppear loses to the editor, which is
+            // still first responder; take focus on the next run-loop turn.
+            DispatchQueue.main.async { isFieldFocused = true }
             if !query.isEmpty {
                 onPerformFind(query)
             }

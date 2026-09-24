@@ -16,15 +16,22 @@ public struct HeadingItem: Identifiable, Hashable, Codable, Sendable {
 /// text in < 2ms without waiting for WebKit / DOM / JavaScript initialization.
 public struct MarkdownOutlineParser {
     public static func parse(markdown: String) -> [HeadingItem] {
+        parseWithLines(markdown: markdown).map(\.item)
+    }
+
+    /// Like `parse`, plus each heading's zero-based line index in `markdown`.
+    public static func parseWithLines(markdown: String) -> [(item: HeadingItem, line: Int)] {
         guard !markdown.isEmpty else { return [] }
 
-        var items: [HeadingItem] = []
+        var items: [(item: HeadingItem, line: Int)] = []
+        var lineIndex = -1
         var inCodeBlock = false
         var inMathBlock = false
         var activeMathCloseDelim: String? = nil
         var seenIds: [String: Int] = [:]
 
         markdown.enumerateLines { line, _ in
+            lineIndex += 1
             let trimmed = line.trimmingCharacters(in: .whitespaces)
 
             // Track fenced code blocks (``` or ~~~)
@@ -80,7 +87,7 @@ public struct MarkdownOutlineParser {
                         seenIds[baseId] = count + 1
                         let uniqueId = count == 0 ? baseId : "\(baseId)-\(count)"
 
-                        items.append(HeadingItem(id: uniqueId, level: level, text: rest))
+                        items.append((HeadingItem(id: uniqueId, level: level, text: rest), lineIndex))
                     }
                 }
             }

@@ -14,6 +14,9 @@ public struct MainWindowView: View {
     @State private var scrollToHeadingId: String?
     @State private var previewTargetFraction: Double?
     @State private var webViewInstance: WKWebView?
+    /// The window hosting this document, held weakly. App-wide commands (Find,
+    /// Command Palette) are posted without an object; only the key window acts.
+    @State private var hostWindow = WeakWindowRef()
     @State private var editorTextView: NSTextView?
     @State private var fileWatcher: FileWatcher?
     /// The document text as of the last point buffer and disk were known to
@@ -110,6 +113,9 @@ public struct MainWindowView: View {
                                 }
                             ) { id in
                                 activeHeading = headings.first(where: { $0.id == id })
+                                if preferences.viewMode != .reader {
+                                    scrollEditor(toHeadingId: id)
+                                }
                                 scrollToHeadingId = id
                                 DispatchQueue.main.async {
                                     scrollToHeadingId = nil
@@ -214,25 +220,21 @@ public struct MainWindowView: View {
         .ignoresSafeArea()
         // Configure the window: hide the native title bar so our custom top bar
         // sits flush at the top, and keep it draggable.
-        .background(WindowConfigurator(preferences: preferences, trafficLightWidth: $trafficLightReservedWidth))
-        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEnterFullScreenNotification)) { _ in
+        .background(WindowConfigurator(preferences: preferences, trafficLightWidth: $trafficLightReservedWidth, hostWindow: hostWindow))
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEnterFullScreenNotification)) { note in
+            guard isHostWindow(note.object) else { return }
             trafficLightReservedWidth = LucidSpacing.medium
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didExitFullScreenNotification)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didExitFullScreenNotification)) { note in
+            guard isHostWindow(note.object) else { return }
             trafficLightReservedWidth = 77
         }
-        // Keyboard Shortcuts
-        .background(
-            Group {
-                Button("") {
-                    if isCommandPalettePresented { dismissCommandPalette() }
-                    else { presentCommandPalette() }
-                }
-                .keyboardShortcut("k", modifiers: .command)
-                .opacity(0)
-            }
-        )
         .onAppear {
+            LaunchUntitledCleanup.closeUntouchedUntitledIfOpeningFile()
+            // The Untitled window can appear just after the file's window.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                LaunchUntitledCleanup.closeUntouchedUntitledIfOpeningFile()
+            }
             setupFileWatcher()
             // Prompt initial analysis (off-main, no debounce).
             analyzer.prime(text: document.text)
@@ -262,19 +264,49 @@ public struct MainWindowView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("LucidToggleFind"))) { _ in
+            guard isKeyDocumentWindow else { return }
             toggleFind()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("LucidFindNext"))) { _ in
+            guard isKeyDocumentWindow else { return }
             findNext()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("LucidFindPrevious"))) { _ in
+            guard isKeyDocumentWindow else { return }
             findPrev()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("LucidToggleCommandPalette"))) { _ in
-            withAnimation(LucidMotion.respecting(reduceMotion, LucidMotion.modal)) {
-                isCommandPalettePresented.toggle()
-            }
+            guard isKeyDocumentWindow else { return }
+            if isCommandPalettePresented { dismissCommandPalette() } else { presentCommandPalette() }
         }
+    }
+
+    /// Scrolls the editor so the heading with `id` sits at the top, below the
+    /// toolbar, and puts the caret at its start.
+    private func scrollEditor(toHeadingId id: String) {
+        guard let textView = editorTextView,
+              let line = MarkdownOutlineParser.parseWithLines(markdown: textView.string)
+                .first(where: { $0.item.id == id })?.line else { return }
+        let text = textView.string as NSString
+        var location = 0
+        for _ in 0..<line where location < text.length {
+            location = NSMaxRange(text.lineRange(for: NSRange(location: location, length: 0)))
+        }
+        textView.setSelectedRange(NSRange(location: location, length: 0))
+        guard let layoutManager = textView.layoutManager, let container = textView.textContainer else { return }
+        let glyphs = layoutManager.glyphRange(forCharacterRange: NSRange(location: location, length: 0), actualCharacterRange: nil)
+        let rect = layoutManager.boundingRect(forGlyphRange: glyphs, in: container)
+        // Container y == the clip origin that shows this line where the first line rests.
+        textView.scroll(NSPoint(x: 0, y: max(0, rect.minY)))
+    }
+
+    private var isKeyDocumentWindow: Bool {
+        hostWindow.window?.isKeyWindow == true
+    }
+
+    private func isHostWindow(_ object: Any?) -> Bool {
+        guard let window = object as? NSWindow, let host = hostWindow.window else { return false }
+        return window === host
     }
 
     private var currentActiveSurface: ActiveSurface {
@@ -865,6 +897,7 @@ public struct MainWindowView: View {
 private struct WindowConfigurator: NSViewRepresentable {
     @ObservedObject var preferences: LucidPreferences
     @Binding var trafficLightWidth: CGFloat
+    let hostWindow: WeakWindowRef
 
     func makeNSView(context: Context) -> ConfiguratorView {
         let view = ConfiguratorView()
@@ -884,9 +917,12 @@ private struct WindowConfigurator: NSViewRepresentable {
     }
 
     private func applyWindowSettings(to window: NSWindow) {
+        hostWindow.window = window
         window.titlebarAppearsTransparent = true
+        // The title stays set (NSDocument names the window) so the Window menu,
+        // Mission Control and accessibility show the document name; it is just
+        // not drawn in the hidden title bar.
         window.titleVisibility = .hidden
-        window.title = ""
         window.styleMask.insert(.fullSizeContentView)
         window.isMovableByWindowBackground = false
         if let toolbar = window.toolbar {
@@ -942,6 +978,11 @@ private struct WindowConfigurator: NSViewRepresentable {
             }
         }
     }
+}
+
+/// A weak reference to a window, safe to keep in view state.
+final class WeakWindowRef {
+    weak var window: NSWindow?
 }
 
 // MARK: - Draggable Sidebar Divider
