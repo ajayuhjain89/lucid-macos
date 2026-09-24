@@ -340,8 +340,14 @@ public struct CommandPaletteView: View {
         )
         .shadow(color: Color.black.opacity(0.24), radius: 24, x: 0, y: 10)
         .onAppear {
-            isSearchFocused = true
+            // As in the find bar: focusing synchronously loses to the editor,
+            // which is still first responder, and typing then went into the
+            // document behind the palette. Take focus on the next run-loop turn.
+            DispatchQueue.main.async { isSearchFocused = true }
             selectedIndex = 0
+        }
+        .onExitCommand {
+            isPresented = false
         }
         .onChange(of: searchText) { _, _ in
             selectedIndex = 0

@@ -77,6 +77,8 @@ public final class ExportService {
         guard var dict = (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: Any] else { return json }
         // An export is the whole document: never dimmed or caret-centered.
         dict["typewriterMode"] = false
+        // No toolbar over an export, so no band hiding the top of the page.
+        dict["chromeHeight"] = 0
         if forceLightTheme { dict["theme"] = "light" }
         guard let data = try? JSONSerialization.data(withJSONObject: dict),
               let light = String(data: data, encoding: .utf8) else { return json }
