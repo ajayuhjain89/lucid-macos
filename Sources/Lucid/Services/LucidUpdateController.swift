@@ -57,14 +57,14 @@ public final class LucidUpdateController: ObservableObject {
         }
     }
 
-    /// User-facing short version string (e.g. "1.0.3").
+    /// User-facing short version string from Info.plist (e.g. "1.0.4").
     public var currentVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.3"
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown"
     }
 
-    /// Machine-readable build number string (e.g. "4").
+    /// Machine-readable build number from Info.plist (e.g. "5").
     public var currentBuild: String {
-        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "4"
+        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "Unknown"
     }
 
     /// Detects whether Lucid is running from a mounted read-only disk image or external volume.

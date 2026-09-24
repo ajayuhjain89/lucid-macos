@@ -2484,10 +2484,6 @@
       window.addEventListener('blur', onPointerCancel);
     },
 
-    handleDiagramMouseDown: function(e, viewport) {
-      window.lucid.handleDiagramPointerDown(e, viewport);
-    },
-
     zoomDiagramAtPoint: function(targetEl, factor, clientX, clientY) {
       if (!targetEl) return;
       const viewport = targetEl.classList && (targetEl.classList.contains('mermaid-viewport') || targetEl.classList.contains('lucid-mermaid-modal-body'))
