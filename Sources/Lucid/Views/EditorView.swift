@@ -115,6 +115,9 @@ public struct EditorView: NSViewRepresentable {
 
     public func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let textView = scrollView.documentView as? LucidTextView else { return }
+        // Keep callbacks (scroll fraction, cursor, text binding) pointing at the
+        // current view values rather than the ones captured at creation.
+        context.coordinator.parent = self
 
         // Update preferences reference
         textView.preferences = preferences
@@ -266,12 +269,17 @@ public struct EditorView: NSViewRepresentable {
         @objc func boundsDidChange(_ notification: Notification) {
             guard let clipView = notification.object as? NSClipView,
                   let documentView = clipView.documentView else { return }
-            let maxScroll = documentView.bounds.height - clipView.bounds.height
+            // Measure in document coordinates: the text view's frame origin is not
+            // always 0 inside the clip view, so clipView.bounds.origin is not the
+            // scroll offset (it produced negative fractions and broke split sync).
+            let visible = clipView.documentVisibleRect
+            let offset = visible.minY - documentView.bounds.minY
+            let maxScroll = documentView.bounds.height - visible.height
             if maxScroll > 0 {
-                let fraction = clipView.bounds.origin.y / maxScroll
+                let fraction = min(1, max(0, offset / maxScroll))
                 parent.onScrollFractionChanged?(Double(fraction))
             }
-            let intensity = min(1, max(0, Double(clipView.bounds.origin.y) / 28))
+            let intensity = min(1, max(0, Double(offset) / 28))
             parent.onScrollIntensityChanged?(intensity)
             gutterView?.needsDisplay = true
         }
@@ -345,6 +353,18 @@ public final class LucidTextView: NSTextView {
             }
         }
 
+        // A space inside an empty `*`/`_` pair means a bullet ("* ") or spaced
+        // arithmetic ("a * b"), not emphasis: drop the auto-inserted closer.
+        if str == " ", selectedRange.length == 0,
+           selectedRange.location > 0, selectedRange.location < currentString.length {
+            let prevChar = currentString.substring(with: NSRange(location: selectedRange.location - 1, length: 1))
+            let nextChar = currentString.substring(with: NSRange(location: selectedRange.location, length: 1))
+            if (prevChar == "*" || prevChar == "_") && nextChar == prevChar {
+                super.insertText(" ", replacementRange: NSRange(location: selectedRange.location, length: 1))
+                return
+            }
+        }
+
         // 2. Wrap selected text with delimiters
         let pairMap: [String: (open: String, close: String)] = [
             "(": ("(", ")"),
@@ -396,24 +416,52 @@ public final class LucidTextView: NSTextView {
         // 4. Auto-indentation on Return
         if str == "\n", preferences.autoIndent {
             let lineRange = currentString.lineRange(for: NSRange(location: selectedRange.location, length: 0))
-            let currentLine = currentString.substring(with: lineRange)
-            let leadingWhitespace = currentLine.prefix { $0 == " " || $0 == "\t" }
+            let lineStart = lineRange.location
+            let head = currentString.substring(with: NSRange(location: lineStart, length: selectedRange.location - lineStart))
+            let fullLine = currentString.substring(with: lineRange).trimmingCharacters(in: .newlines)
 
-            // Check for list markers
-            let trimmed = currentLine.trimmingCharacters(in: .whitespaces)
-            var indentPrefix = String(leadingWhitespace)
-
-            if trimmed.hasPrefix("- [ ] ") {
-                indentPrefix += "- [ ] "
-            } else if trimmed.hasPrefix("- ") || trimmed.hasPrefix("* ") {
-                indentPrefix += "- "
+            // Return on an item that holds only its marker ends the list or quote.
+            if selectedRange.length == 0,
+               let marker = Self.listContinuation(for: fullLine)?.marker,
+               fullLine.trimmingCharacters(in: .whitespaces) == marker.trimmingCharacters(in: .whitespaces) {
+                let markerRange = NSRange(location: lineStart, length: (fullLine as NSString).length)
+                super.insertText("", replacementRange: markerRange)
+                return
             }
 
-            super.insertText("\n" + indentPrefix, replacementRange: selectedRange)
+            let prefix = Self.listContinuation(for: head)?.prefix
+                ?? String(head.prefix { $0 == " " || $0 == "\t" })
+            super.insertText("\n" + prefix, replacementRange: selectedRange)
             return
         }
 
         super.insertText(string, replacementRange: replacementRange)
+    }
+
+    /// The marker that starts `line` (bullet, task, numbered item or blockquote)
+    /// and the prefix the next line should get: same bullet, an unchecked task
+    /// box, the next number, the same quote depth.
+    static func listContinuation(for line: String) -> (prefix: String, marker: String)? {
+        let ns = line as NSString
+        func match(_ pattern: String) -> NSTextCheckingResult? {
+            (try? NSRegularExpression(pattern: pattern))?.firstMatch(in: line, range: NSRange(location: 0, length: ns.length))
+        }
+        func group(_ m: NSTextCheckingResult, _ i: Int) -> String {
+            m.range(at: i).location == NSNotFound ? "" : ns.substring(with: m.range(at: i))
+        }
+        if let m = match("^([ \\t]*)([-*+])([ \\t]+)(\\[[ xX]\\][ \\t]+)?") {
+            let task = m.range(at: 4).location == NSNotFound ? "" : "[ ] "
+            return (group(m, 1) + group(m, 2) + group(m, 3) + task, ns.substring(with: m.range))
+        }
+        if let m = match("^([ \\t]*)([0-9]{1,9})([.)])([ \\t]+)") {
+            let next = (Int(group(m, 2)) ?? 0) + 1
+            return (group(m, 1) + String(next) + group(m, 3) + group(m, 4), ns.substring(with: m.range))
+        }
+        if let m = match("^([ \\t]*(?:>[ \\t]?)+)") {
+            let marker = ns.substring(with: m.range)
+            return (marker, marker)
+        }
+        return nil
     }
 
     // MARK: - Backspace in Empty Pair Deletion
