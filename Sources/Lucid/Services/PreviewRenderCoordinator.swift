@@ -19,6 +19,12 @@ public final class PreviewRenderCoordinator: ObservableObject {
     private var lastRenderedMarkdown: String = ""
     private var pendingMarkdown: String? = nil
     private var hasRenderedInitialContent: Bool = false
+    /// When the current burst of edits started waiting for a render (nil = none pending).
+    private var burstStartedAt: UInt64? = nil
+
+    /// Longest the preview may lag behind continuous typing. The trailing debounce
+    /// alone restarts on every keystroke, so a steady typist never saw an update.
+    public static let maxRenderWaitMilliseconds: UInt64 = 600
 
     public init() {}
 
@@ -60,6 +66,7 @@ public final class PreviewRenderCoordinator: ObservableObject {
 
         // If not an immediate/forced render, skip if markdown has not changed
         if !immediate && markdown == lastRenderedMarkdown {
+            burstStartedAt = nil
             return
         }
 
@@ -75,10 +82,17 @@ public final class PreviewRenderCoordinator: ObservableObject {
             self.hasRenderedInitialContent = true
             self.dispatchRender(markdown: markdown, revision: targetRevision)
         } else {
-            // Debounced dispatch for interactive typing
+            // Debounced dispatch for interactive typing, capped so a render still
+            // happens at least every maxRenderWaitMilliseconds while typing continues.
+            let now = DispatchTime.now().uptimeNanoseconds
+            let startedAt = burstStartedAt ?? now
+            burstStartedAt = startedAt
+            let waitedMs = (now - startedAt) / 1_000_000
+            let remainingMs = Self.maxRenderWaitMilliseconds > waitedMs ? Self.maxRenderWaitMilliseconds - waitedMs : 0
+            let delayMs = min(debounceMilliseconds, remainingMs)
             pendingTask = Task { @MainActor in
-                if debounceMilliseconds > 0 {
-                    try? await Task.sleep(nanoseconds: debounceMilliseconds * 1_000_000)
+                if delayMs > 0 {
+                    try? await Task.sleep(nanoseconds: delayMs * 1_000_000)
                 }
 
                 // Verify task was not cancelled during sleep
@@ -94,6 +108,7 @@ public final class PreviewRenderCoordinator: ObservableObject {
     }
 
     private func dispatchRender(markdown: String, revision: UInt64) {
+        burstStartedAt = nil
         guard let webView = webView else { return }
 
         let payload: [String: Any] = [
