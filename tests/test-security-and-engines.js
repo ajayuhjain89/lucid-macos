@@ -81,6 +81,7 @@ function createEnv() {
     'plugins/markdown-it-sub.min.js', 'plugins/markdown-it-sup.min.js',
     'plugins/markdown-it-ins.min.js', 'plugins/markdown-it-mark.min.js',
     'plugins/markdown-it-deflist.min.js', 'plugins/markdown-it-abbr.min.js',
+    'plugins/markdown-it-footnote.min.js',
     'katex/katex.min.js', 'katex/contrib/mhchem.min.js',
     'highlight/highlight.min.js', 'mermaid/mermaid.min.js', 'bridge.js'
   ].forEach((f) => vm.runInContext(fs.readFileSync(path.join(WEBENGINE_DIR, f), 'utf8'), ctx));
@@ -216,6 +217,23 @@ runTest('AUDIT-003: mhchem toggle gates chemistry rendering', () => {
   assert(/mhchem/i.test(dom.contentHTML) || /\\ce\{H2O\}/.test(dom.contentHTML),
     'mhchem OFF must not typeset chemistry (disabled notice or literal source)');
   ctx.lucid.updatePreferences({ enableMhchem: true });
+});
+
+runTest('AUDIT-001: preview CSP forbids inline script, and the engine emits no inline handlers', () => {
+  const html = fs.readFileSync(path.join(WEBENGINE_DIR, 'index.html'), 'utf8');
+  const meta = html.match(/<meta http-equiv="Content-Security-Policy" content="([^"]+)"/);
+  assert(meta, 'index.html must declare a Content-Security-Policy');
+  const scriptSrc = (meta[1].match(/script-src ([^;]+)/) || [])[1] || '';
+  assert(scriptSrc && !/unsafe-inline|unsafe-eval/.test(scriptSrc), 'script-src must not allow inline/eval: ' + scriptSrc);
+  assert(/object-src 'none'/.test(meta[1]) && /frame-src 'none'/.test(meta[1]), 'objects and frames must be blocked');
+  assert(!/<script>/.test(html), 'index.html must not contain inline <script> blocks');
+
+  const doc = ['```js', 'x()', '```', '', '```mermaid', 'graph TD; A-->B', '```', '', '$$', 'x^2', '$$'].join('\n');
+  ctx.lucid.updateContent(doc, 'csp-1');
+  assert(/data-lucid-action="copyCode"/.test(dom.contentHTML), 'code copy button must use data-lucid-action');
+  assert(!/\son[a-z]+\s*=/i.test(dom.contentHTML), 'rendered HTML must not contain inline on* handlers');
+  const bridge = fs.readFileSync(path.join(WEBENGINE_DIR, 'bridge.js'), 'utf8');
+  assert(!/\son(click|pointerdown|error|load)="/.test(bridge), 'bridge.js must not emit inline handler attributes');
 });
 
 // ---- AUDIT-004: heading id Unicode parity + dedup -------------------------

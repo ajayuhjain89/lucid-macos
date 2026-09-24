@@ -7,7 +7,7 @@ rights remain with the respective authors.
 | Library | Purpose | License |
 | :--- | :--- | :--- |
 | [markdown-it](https://github.com/markdown-it/markdown-it) | Markdown parser & renderer | MIT |
-| markdown-it plugins (sub, sup, ins, mark, deflist, abbr, task-lists) | Markdown extensions | MIT |
+| markdown-it plugins (sub, sup, ins, mark, deflist, abbr, task-lists, footnote) | Markdown extensions | MIT |
 | [KaTeX](https://github.com/KaTeX/KaTeX) | Math typesetting | MIT |
 | KaTeX `mhchem` extension | Chemistry equations | MIT |
 | [Mermaid](https://github.com/mermaid-js/mermaid) | Diagrams | MIT |

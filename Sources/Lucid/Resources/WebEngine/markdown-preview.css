@@ -638,6 +638,9 @@ body.vscode-body .footnotes {
   font-size: 0.9em;
 }
 body.vscode-body sup.footnote-ref a { text-decoration: none; }
+/* The notes section draws its own rule; the plugin's separate <hr> would double it. */
+body.vscode-body hr.footnotes-sep { display: none; }
+body.vscode-body .footnote-backref { text-decoration: none; }
 
 /* ============================================================
    SELECTION

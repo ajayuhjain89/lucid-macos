@@ -673,13 +673,25 @@ public struct LucidTextButton: View {
 /// Manages its own hover lift, press feedback, and selected emphasis so cards feel alive.
 public struct LucidSelectableCard<Content: View>: View {
     var isSelected: Bool
+    let accessibilityName: String
+    let accessibilityHint: String?
     let action: () -> Void
     let content: Content
 
     @State private var isHovered = false
 
-    public init(isSelected: Bool = false, action: @escaping () -> Void, @ViewBuilder content: () -> Content) {
+    /// `accessibilityName` is what VoiceOver reads for the card (its visible title);
+    /// `accessibilityHint` can carry the card's description.
+    public init(
+        isSelected: Bool = false,
+        accessibilityName: String,
+        accessibilityHint: String? = nil,
+        action: @escaping () -> Void,
+        @ViewBuilder content: () -> Content
+    ) {
         self.isSelected = isSelected
+        self.accessibilityName = accessibilityName
+        self.accessibilityHint = accessibilityHint
         self.action = action
         self.content = content()
     }
@@ -715,6 +727,9 @@ public struct LucidSelectableCard<Content: View>: View {
         }
         .buttonStyle(LucidPressableButtonStyle(pressedScale: 0.985))
         .onHover { isHovered = $0 }
+        .accessibilityLabel(Text(accessibilityName))
+        .accessibilityHint(accessibilityHint.map { Text($0) } ?? Text(""))
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
@@ -815,6 +830,8 @@ public struct LucidAccentSwatch: View {
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
         .help(name)
+        .accessibilityLabel(Text("\(name) accent color"))
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 

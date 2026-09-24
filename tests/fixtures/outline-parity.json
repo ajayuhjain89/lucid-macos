@@ -1,0 +1,52 @@
+[
+  {
+    "id": "title-with-bold-and-a-linkhttpsexamplecom",
+    "level": 1,
+    "text": "Title with bold and a link"
+  },
+  {
+    "id": "setext-level-one",
+    "level": 1,
+    "text": "Setext level one"
+  },
+  {
+    "id": "setext-level-twoover-two-lines",
+    "level": 2,
+    "text": "Setext level two\nover two lines"
+  },
+  {
+    "id": "quoted-heading",
+    "level": 2,
+    "text": "Quoted heading"
+  },
+  {
+    "id": "heading-in-a-list-item",
+    "level": 2,
+    "text": "Heading in a list item"
+  },
+  {
+    "id": "numbered-item-heading",
+    "level": 3,
+    "text": "Numbered item heading"
+  },
+  {
+    "id": "title-with-bold-and-a-linkhttpsexamplecom-1",
+    "level": 2,
+    "text": "Title with bold and a link"
+  },
+  {
+    "id": "code-and-emphasis-and-gone",
+    "level": 3,
+    "text": "code and emphasis and gone"
+  },
+  {
+    "id": "café-résumé-θ",
+    "level": 2,
+    "text": "Café résumé θ"
+  },
+  {
+    "id": "trailing-hashes",
+    "level": 4,
+    "text": "Trailing hashes"
+  }
+]

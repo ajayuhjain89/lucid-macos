@@ -61,5 +61,14 @@ jobs:
             node "$t"
           done
 
+      - name: Swift unit tests
+        run: |
+          set -euo pipefail
+          # Swift Testing needs Xcode 16 or later; the runner's default Xcode may be older.
+          XCODE="$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
+          echo "Using $XCODE"
+          DEVELOPER_DIR="$XCODE/Contents/Developer" swift --version
+          DEVELOPER_DIR="$XCODE/Contents/Developer" ./scripts/swift-test.sh
+
       - name: Branch-flow policy suite
         run: bash tests/test-branch-flow-policy.sh
