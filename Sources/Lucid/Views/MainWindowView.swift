@@ -236,6 +236,11 @@ public struct MainWindowView: View {
                 LaunchUntitledCleanup.closeUntouchedUntitledIfOpeningFile()
             }
             setupFileWatcher()
+            // AppKit gives a new window's focus to its first text field (the
+            // sidebar filter), so typing would go there. Start on the document.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                focusDocumentIfFieldHasFocus()
+            }
             // Prompt initial analysis (off-main, no debounce).
             analyzer.prime(text: document.text)
         }
@@ -248,6 +253,10 @@ public struct MainWindowView: View {
             // analyze the new one promptly.
             analyzer.reset()
             analyzer.prime(text: document.text)
+            // A rename, move or Save As changes the path; the old watcher is tied
+            // to the previous path and goes quiet, so watch the new one. Keep the
+            // sync baseline: unsaved edits must still count as unsaved.
+            setupFileWatcher(resetBaseline: false)
         }
         .onChange(of: document.text) { _, newText in
             // Typing path: schedule coalesced/cancellable analysis; never block.
@@ -418,6 +427,15 @@ public struct MainWindowView: View {
         if currentActiveSurface == .reader {
             webViewInstance?.evaluateJavaScript("if (window.lucid) { window.lucid.clearFind(); }")
         }
+        restoreFocusAfterFind()
+    }
+
+    private func focusDocumentIfFieldHasFocus() {
+        guard let window = hostWindow.window,
+              let fieldEditor = window.firstResponder as? NSTextView,
+              fieldEditor.isFieldEditor,
+              !isFindBarPresented, !isCommandPalettePresented else { return }
+        previousFirstResponder = nil
         restoreFocusAfterFind()
     }
 
@@ -839,9 +857,9 @@ public struct MainWindowView: View {
         }
     }
 
-    private func setupFileWatcher() {
+    private func setupFileWatcher(resetBaseline: Bool = true) {
         guard let url = fileURL else { return }
-        lastSyncedText = document.text
+        if resetBaseline { lastSyncedText = document.text }
         fileWatcher = FileWatcher(url: url) {
             guard let data = try? Data(contentsOf: url),
                   let updatedText = LucidDocument.decodeText(data)?.text else { return }

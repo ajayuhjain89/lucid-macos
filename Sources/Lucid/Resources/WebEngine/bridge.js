@@ -274,17 +274,17 @@
         const escapedRaw = encodeURIComponent(str);
         return '<div class="mermaid-container" data-raw-mermaid="' + escapedRaw + '">' +
                '<div class="mermaid-toolbar">' +
-               '<button class="lucid-mermaid-btn lucid-btn-pan" title="Pan Tool" onclick="window.lucid.togglePan(this)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8M6 14v-1.5a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v4a8 8 0 0 0 8 8h2a8 8 0 0 0 8-8v-3a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2"/></svg></button>' +
-               '<button class="lucid-mermaid-btn" title="Zoom In" onclick="window.lucid.zoomDiagram(this, 1.15)">+</button>' +
-               '<button class="lucid-mermaid-btn" title="Zoom Out" onclick="window.lucid.zoomDiagram(this, 0.87)">−</button>' +
-               '<button class="lucid-mermaid-btn" title="Fit to Viewport" onclick="window.lucid.fitDiagram(this)">Fit</button>' +
-               '<button class="lucid-mermaid-btn" title="Reset to Initial View" onclick="window.lucid.resetDiagram(this)">Reset</button>' +
-               '<button class="lucid-mermaid-btn lucid-btn-expand" title="Expand Fullscreen" onclick="window.lucid.expandDiagram(this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button>' +
+               '<button class="lucid-mermaid-btn lucid-btn-pan" title="Pan Tool" data-lucid-action="togglePan"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8M6 14v-1.5a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v4a8 8 0 0 0 8 8h2a8 8 0 0 0 8-8v-3a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2"/></svg></button>' +
+               '<button class="lucid-mermaid-btn" title="Zoom In" data-lucid-action="zoomDiagram" data-lucid-arg="1.15">+</button>' +
+               '<button class="lucid-mermaid-btn" title="Zoom Out" data-lucid-action="zoomDiagram" data-lucid-arg="0.87">−</button>' +
+               '<button class="lucid-mermaid-btn" title="Fit to Viewport" data-lucid-action="fitDiagram">Fit</button>' +
+               '<button class="lucid-mermaid-btn" title="Reset to Initial View" data-lucid-action="resetDiagram">Reset</button>' +
+               '<button class="lucid-mermaid-btn lucid-btn-expand" title="Expand Fullscreen" data-lucid-action="expandDiagram"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button>' +
                '<span class="mermaid-toolbar-sep"></span>' +
-               '<button class="lucid-mermaid-btn" title="Copy SVG" onclick="window.lucid.copySvg(this)">Copy SVG</button>' +
-               '<button class="lucid-mermaid-btn" title="Export SVG…" onclick="window.lucid.saveSvg(this)">Export SVG…</button>' +
+               '<button class="lucid-mermaid-btn" title="Copy SVG" data-lucid-action="copySvg">Copy SVG</button>' +
+               '<button class="lucid-mermaid-btn" title="Export SVG…" data-lucid-action="saveSvg">Export SVG…</button>' +
                '</div>' +
-               '<div class="mermaid-viewport" onpointerdown="window.lucid.handleDiagramPointerDown(event, this)">' +
+               '<div class="mermaid-viewport" data-lucid-pan-surface>' +
                '<div class="mermaid-canvas">' +
                '<div class="mermaid">' + md.utils.escapeHtml(preparedStr) + '</div>' +
                '</div>' +
@@ -320,7 +320,7 @@
       return '<pre class="' + classes.join(' ') + '">' +
              '<div class="lucid-codebar">' +
              (langLabel ? '<span class="lucid-lang">' + langLabel + '</span>' : '<span></span>') +
-             '<button class="lucid-copy" type="button" onclick="window.lucid.copyCode(this)">Copy</button>' +
+             '<button class="lucid-copy" type="button" data-lucid-action="copyCode">Copy</button>' +
              '</div>' +
              '<code class="hljs language-' + md.utils.escapeHtml(lang || '') + '">' + highlighted + '</code>' +
              '</pre>';
@@ -346,6 +346,7 @@
   if (window.markdownitMark) md.use(window.markdownitMark);
   if (window.markdownitDeflist) md.use(window.markdownitDeflist);
   if (window.markdownitAbbr) md.use(window.markdownitAbbr);
+  if (window.markdownitFootnote) md.use(window.markdownitFootnote);
   // The plugin registers itself as window.markdownitTaskLists. Checkboxes stay
   // disabled: the preview is read-only, so a click can't change the source.
   const taskListsPlugin = window.markdownitTaskLists || window.markdownitTaskList;
@@ -714,7 +715,126 @@
   // updatePreferences can re-render the current document with the new flags.
   let lastMarkdownSource = '';
   const katexLRU = new SimpleLRU(500);
-  const mermaidLRU = new SimpleLRU(50);
+  // Rendered diagram markup keyed by theme + source, so an edit elsewhere in the
+  // document never re-runs Mermaid for a diagram whose source did not change.
+  const mermaidSvgCache = new SimpleLRU(150);
+  function mermaidCacheKey(theme, rawAttr) {
+    return theme + '\n' + rawAttr;
+  }
+  function cacheRenderedMermaid(c, theme) {
+    const canvas = c.querySelector('.mermaid-canvas');
+    if (!canvas || !canvas.innerHTML) return;
+    c._lucidRenderedThemes = c._lucidRenderedThemes || {};
+    c._lucidRenderedThemes[theme] = canvas.innerHTML;
+    c._lucidCurrentTheme = theme;
+    const rawAttr = c.getAttribute('data-raw-mermaid');
+    if (rawAttr && canvas.querySelector('svg, .lucid-mermaid-error')) {
+      mermaidSvgCache.set(mermaidCacheKey(theme, rawAttr), canvas.innerHTML);
+    }
+  }
+
+  // Replace only the top-level blocks that changed. Each block remembers the
+  // serialized markup it was created from (render ids stripped, since they change
+  // every render); the unchanged prefix and suffix of the document are kept as
+  // live DOM, with their rendered math, diagrams and scroll geometry intact.
+  // Returns the newly inserted blocks, or null when the caller must fall back to
+  // a full innerHTML replacement.
+  const RENDER_ID_ATTR = / data-render-id="[^"]*"/g;
+  function reconcileBlocks(container, html, renderId) {
+    if (typeof document.createElement !== 'function' || !container.children) return null;
+    const tpl = document.createElement('template');
+    if (!tpl || !tpl.content) return null;
+    tpl.innerHTML = html;
+    const fresh = [];
+    for (let n = tpl.content.firstChild; n; n = n.nextSibling) {
+      if (n.nodeType === 1) fresh.push(n);
+      else if (n.nodeType === 3 && /\S/.test(n.nodeValue)) return null;
+    }
+    const keys = fresh.map(function(n) { return n.outerHTML.replace(RENDER_ID_ATTR, ''); });
+
+    const old = Array.prototype.slice.call(container.children);
+    let start = 0;
+    while (start < old.length && start < fresh.length && old[start]._lucidKey === keys[start]) start++;
+    let endOld = old.length - 1;
+    let endNew = fresh.length - 1;
+    while (endOld >= start && endNew >= start && old[endOld]._lucidKey === keys[endNew]) {
+      endOld--;
+      endNew--;
+    }
+
+    // Stray non-element nodes (e.g. from a fallback render) are not tracked.
+    for (let n = container.firstChild; n; ) {
+      const next = n.nextSibling;
+      if (n.nodeType !== 1) container.removeChild(n);
+      n = next;
+    }
+    const ref = old[endOld + 1] || null;
+    for (let i = start; i <= endOld; i++) container.removeChild(old[i]);
+    const inserted = [];
+    for (let i = start; i <= endNew; i++) {
+      fresh[i]._lucidKey = keys[i];
+      container.insertBefore(fresh[i], ref);
+      inserted.push(fresh[i]);
+    }
+
+    // Kept blocks now belong to this render: point their math at its registry.
+    for (let i = 0; i < old.length; i++) {
+      if (i >= start && i <= endOld) continue;
+      const tagged = old[i].querySelectorAll('[data-render-id]');
+      for (let j = 0; j < tagged.length; j++) tagged[j].setAttribute('data-render-id', renderId);
+      if (old[i].hasAttribute('data-render-id')) old[i].setAttribute('data-render-id', renderId);
+    }
+    return inserted;
+  }
+
+  // The .mermaid nodes this render must run: diagrams in newly inserted blocks,
+  // plus kept diagrams whose earlier render never finished. Anything already in
+  // the SVG cache for the current theme is filled in directly instead.
+  function collectMermaidToRender(container, insertedBlocks) {
+    const fullRender = insertedBlocks[0] === container;
+    const containers = fullRender
+      ? Array.prototype.slice.call(container.querySelectorAll('.mermaid-container'))
+      : Array.prototype.slice.call(container.querySelectorAll('.mermaid-container')).filter(function(c) {
+          return !c._lucidCurrentTheme || insertedBlocks.some(function(b) { return b === c || b.contains(c); });
+        });
+    const pending = [];
+    for (let i = 0; i < containers.length; i++) {
+      const c = containers[i];
+      const canvas = c.querySelector('.mermaid-canvas');
+      const rawAttr = c.getAttribute('data-raw-mermaid');
+      if (!canvas || !rawAttr) continue;
+      const cached = mermaidSvgCache.get(mermaidCacheKey(currentMermaidTheme, rawAttr));
+      if (cached) {
+        canvas.innerHTML = cached;
+        c._lucidRenderedThemes = {};
+        c._lucidRenderedThemes[currentMermaidTheme] = cached;
+        c._lucidCurrentTheme = currentMermaidTheme;
+        formatMermaidContainer(c);
+        continue;
+      }
+      let node = canvas.querySelector('.mermaid');
+      if (!node || node.getAttribute('data-processed')) {
+        // A kept diagram whose earlier run was abandoned: start from its source.
+        let rawCode = '';
+        try { rawCode = decodeURIComponent(rawAttr); } catch (_) { rawCode = rawAttr; }
+        canvas.innerHTML = '<div class="mermaid">' + md.utils.escapeHtml(sanitizeMermaidSource(rawCode)) + '</div>';
+        node = canvas.querySelector('.mermaid');
+      }
+      pending.push(node);
+    }
+    return pending;
+  }
+
+  // Elements matching selector inside the given blocks (including the blocks).
+  function queryInBlocks(blocks, selector) {
+    const out = [];
+    for (let i = 0; i < blocks.length; i++) {
+      if (blocks[i].matches && blocks[i].matches(selector)) out.push(blocks[i]);
+      const found = blocks[i].querySelectorAll(selector);
+      for (let j = 0; j < found.length; j++) out.push(found[j]);
+    }
+    return out;
+  }
   let currentMermaidTheme = 'dark';
   let desiredMermaidTheme = 'dark';
   let mermaidThemeGeneration = 0;
@@ -1045,9 +1165,9 @@
       const rendered = katex.renderToString(trimmed, { displayMode: true, throwOnError: false });
       const res = '<div class="lucid-math-block"' + mathAttr + '>' +
              rendered +
-             '<button class="lucid-btn-copy-latex" onclick="window.lucid.copyLatex(this)">Copy LaTeX</button>' +
+             '<button class="lucid-btn-copy-latex" data-lucid-action="copyLatex">Copy LaTeX</button>' +
              '</div>';
-      katexLRU.set(cacheKey, '<div class="lucid-math-block">' + rendered + '<button class="lucid-btn-copy-latex" onclick="window.lucid.copyLatex(this)">Copy LaTeX</button></div>');
+      katexLRU.set(cacheKey, '<div class="lucid-math-block">' + rendered + '<button class="lucid-btn-copy-latex" data-lucid-action="copyLatex">Copy LaTeX</button></div>');
       return res;
     } catch (e) {
       return '<div class="lucid-math-error"><span class="lucid-error-msg">Formula render warning: ' + md.utils.escapeHtml(e.message || 'Syntax error') + '</span><pre>' + md.utils.escapeHtml(trimmed) + '</pre></div>';
@@ -1119,6 +1239,12 @@
       }
     }
 
+    // A top-level placeholder carries its block key (see reconcileBlocks); the
+    // element that replaces it must keep it, or the block is rebuilt every render.
+    const phParent = ph.parentNode;
+    const phPrev = ph.previousSibling;
+    const phKey = ph._lucidKey;
+
     if (rawLatex) {
       try {
         if (isBlock) {
@@ -1129,6 +1255,10 @@
           ph.outerHTML = renderKaTeXBlock(rawLatex, mathId, renderId);
         } else {
           ph.outerHTML = renderKaTeXInline(rawLatex, '$', mathId, renderId);
+        }
+        if (phKey) {
+          const replacement = phPrev ? phPrev.nextSibling : phParent.firstChild;
+          if (replacement) replacement._lucidKey = phKey;
         }
       } catch (e) {
         console.warn('KaTeX placeholder enhance error:', e);
@@ -1381,6 +1511,29 @@
 
   document.addEventListener('keyup', updateCaretPosition);
   document.addEventListener('mouseup', updateCaretPosition);
+
+  // Toolbar buttons and pan surfaces are wired here rather than with inline
+  // on* attributes, so the page's Content-Security-Policy can forbid inline script.
+  const LUCID_ACTIONS = {
+    togglePan: 1, zoomDiagram: 1, fitDiagram: 1, resetDiagram: 1, expandDiagram: 1,
+    copySvg: 1, saveSvg: 1, closeDiagramModal: 1, copyCode: 1, copyLatex: 1
+  };
+  document.addEventListener('click', function(e) {
+    const btn = e.target && e.target.closest ? e.target.closest('[data-lucid-action]') : null;
+    if (!btn) return;
+    const action = btn.getAttribute('data-lucid-action');
+    if (!LUCID_ACTIONS[action] || typeof window.lucid[action] !== 'function') return;
+    const arg = btn.getAttribute('data-lucid-arg');
+    if (arg !== null) {
+      window.lucid[action](btn, parseFloat(arg));
+    } else {
+      window.lucid[action](btn);
+    }
+  });
+  document.addEventListener('pointerdown', function(e) {
+    const surface = e.target && e.target.closest ? e.target.closest('[data-lucid-pan-surface]') : null;
+    if (surface) window.lucid.handleDiagramPointerDown(e, surface);
+  });
 
   // Link handling: keep in-page anchors smooth, and hand every other link
   // (external URLs and relative references to sibling documents) to the native
@@ -1802,7 +1955,19 @@
       LucidPerf.mark(renderId, 't7_alerts_end', { htmlLength: html.length });
 
       LucidPerf.mark(renderId, 't8_dom_insert_begin');
-      container.innerHTML = html;
+      // Find highlights belong to the previous render; drop them before blocks are reused.
+      const staleMarks = container.querySelectorAll('mark.lucid-find-match');
+      for (let i = 0; i < staleMarks.length; i++) {
+        const parent = staleMarks[i].parentNode;
+        parent.replaceChild(document.createTextNode(staleMarks[i].textContent), staleMarks[i]);
+        parent.normalize();
+      }
+      if (staleMarks.length) window.lucid.findMatches = [];
+      let insertedBlocks = reconcileBlocks(container, html, renderId);
+      if (!insertedBlocks) {
+        container.innerHTML = html;
+        insertedBlocks = [container];
+      }
       const domNodeCount = container.querySelectorAll('*').length;
       LucidPerf.mark(renderId, 't9_dom_insert_end', { nodeCount: domNodeCount });
 
@@ -1840,7 +2005,7 @@
       });
 
       // Dynamic Content-Aware Table Layout & TOC Detection (Batched to prevent layout thrashing)
-      const tables = container.querySelectorAll('table');
+      const tables = insertedBlocks[0] === container ? container.querySelectorAll('table') : queryInBlocks(insertedBlocks, 'table');
       LucidPerf.mark(renderId, 't10_table_layout_begin', { tableCount: tables.length });
 
       if (tables.length > 0) {
@@ -1854,6 +2019,7 @@
           if (!wrapper || !wrapper.classList.contains('lucid-table-wrapper')) {
             wrapper = document.createElement('div');
             wrapper.className = 'lucid-table-wrapper';
+            wrapper._lucidKey = table._lucidKey;
             table.parentNode.insertBefore(wrapper, table);
             wrapper.appendChild(table);
           }
@@ -1914,7 +2080,7 @@
 
       // Asynchronous Enhancements (Math & Mermaid)
       let mathDone = !isDeferredMath;
-      const mermaidNodes = (typeof mermaid !== 'undefined') ? container.querySelectorAll('.mermaid') : [];
+      const mermaidNodes = (typeof mermaid !== 'undefined') ? collectMermaidToRender(container, insertedBlocks) : [];
       let mermaidDone = (mermaidNodes.length === 0);
 
       function checkFullEnhancement() {
@@ -2004,12 +2170,7 @@
                 const c = (mermaidNodes[i] && typeof mermaidNodes[i].closest === 'function') ? mermaidNodes[i].closest('.mermaid-container') : null;
                 if (c) {
                   formatMermaidContainer(c);
-                  const canvas = c.querySelector('.mermaid-canvas');
-                  if (canvas && canvas.innerHTML) {
-                    c._lucidRenderedThemes = c._lucidRenderedThemes || {};
-                    c._lucidRenderedThemes[renderTheme] = canvas.innerHTML;
-                    c._lucidCurrentTheme = renderTheme;
-                  }
+                  cacheRenderedMermaid(c, renderTheme);
                 }
               }
               LucidPerf.mark(renderId, 't16_mermaid_end', { count: mermaidCount });
@@ -2022,12 +2183,7 @@
                 const c = (mermaidNodes[i] && typeof mermaidNodes[i].closest === 'function') ? mermaidNodes[i].closest('.mermaid-container') : null;
                 if (c) {
                   formatMermaidContainer(c);
-                  const canvas = c.querySelector('.mermaid-canvas');
-                  if (canvas && canvas.innerHTML) {
-                    c._lucidRenderedThemes = c._lucidRenderedThemes || {};
-                    c._lucidRenderedThemes[renderTheme] = canvas.innerHTML;
-                    c._lucidCurrentTheme = renderTheme;
-                  }
+                  cacheRenderedMermaid(c, renderTheme);
                 }
               }
               LucidPerf.mark(renderId, 't16_mermaid_end', { count: mermaidCount });
@@ -2064,12 +2220,7 @@
                   const c = (currentChunk[i] && typeof currentChunk[i].closest === 'function') ? currentChunk[i].closest('.mermaid-container') : null;
                   if (c) {
                     formatMermaidContainer(c);
-                    const canvas = c.querySelector('.mermaid-canvas');
-                    if (canvas && canvas.innerHTML) {
-                      c._lucidRenderedThemes = c._lucidRenderedThemes || {};
-                      c._lucidRenderedThemes[renderTheme] = canvas.innerHTML;
-                      c._lucidCurrentTheme = renderTheme;
-                    }
+                    cacheRenderedMermaid(c, renderTheme);
                   }
                 }
                 setTimeout(processMermaidChunk, 0);
@@ -2080,12 +2231,7 @@
                   const c = (currentChunk[i] && typeof currentChunk[i].closest === 'function') ? currentChunk[i].closest('.mermaid-container') : null;
                   if (c) {
                     formatMermaidContainer(c);
-                    const canvas = c.querySelector('.mermaid-canvas');
-                    if (canvas && canvas.innerHTML) {
-                      c._lucidRenderedThemes = c._lucidRenderedThemes || {};
-                      c._lucidRenderedThemes[renderTheme] = canvas.innerHTML;
-                      c._lucidCurrentTheme = renderTheme;
-                    }
+                    cacheRenderedMermaid(c, renderTheme);
                   }
                 }
                 setTimeout(processMermaidChunk, 0);
@@ -2462,19 +2608,19 @@
             '<div class="lucid-mermaid-modal-header">' +
               '<span class="lucid-mermaid-modal-title">Diagram Preview</span>' +
               '<div class="mermaid-toolbar" style="position:static; opacity:1; box-shadow:none; border:none; background:transparent;">' +
-                '<button class="lucid-mermaid-btn lucid-btn-pan" title="Pan Tool" onclick="window.lucid.togglePan(this)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8M6 14v-1.5a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v4a8 8 0 0 0 8 8h2a8 8 0 0 0 8-8v-3a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2"/></svg></button>' +
-                '<button class="lucid-mermaid-btn" title="Zoom In" onclick="window.lucid.zoomDiagram(this, 1.15)">+</button>' +
-                '<button class="lucid-mermaid-btn" title="Zoom Out" onclick="window.lucid.zoomDiagram(this, 0.87)">−</button>' +
-                '<button class="lucid-mermaid-btn" title="Fit to Viewport" onclick="window.lucid.fitDiagram(this)">Fit</button>' +
-                '<button class="lucid-mermaid-btn" title="Reset to Initial View" onclick="window.lucid.resetDiagram(this)">Reset</button>' +
+                '<button class="lucid-mermaid-btn lucid-btn-pan" title="Pan Tool" data-lucid-action="togglePan"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8M6 14v-1.5a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v4a8 8 0 0 0 8 8h2a8 8 0 0 0 8-8v-3a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2"/></svg></button>' +
+                '<button class="lucid-mermaid-btn" title="Zoom In" data-lucid-action="zoomDiagram" data-lucid-arg="1.15">+</button>' +
+                '<button class="lucid-mermaid-btn" title="Zoom Out" data-lucid-action="zoomDiagram" data-lucid-arg="0.87">−</button>' +
+                '<button class="lucid-mermaid-btn" title="Fit to Viewport" data-lucid-action="fitDiagram">Fit</button>' +
+                '<button class="lucid-mermaid-btn" title="Reset to Initial View" data-lucid-action="resetDiagram">Reset</button>' +
                 '<span class="mermaid-toolbar-sep"></span>' +
-                '<button class="lucid-mermaid-btn" title="Copy SVG" onclick="window.lucid.copySvg(this)">Copy SVG</button>' +
-                '<button class="lucid-mermaid-btn" title="Export SVG…" onclick="window.lucid.saveSvg(this)">Export SVG…</button>' +
+                '<button class="lucid-mermaid-btn" title="Copy SVG" data-lucid-action="copySvg">Copy SVG</button>' +
+                '<button class="lucid-mermaid-btn" title="Export SVG…" data-lucid-action="saveSvg">Export SVG…</button>' +
                 '<span class="mermaid-toolbar-sep"></span>' +
-                '<button class="lucid-mermaid-btn" title="Close (Esc)" onclick="window.lucid.closeDiagramModal()">✕</button>' +
+                '<button class="lucid-mermaid-btn" title="Close (Esc)" data-lucid-action="closeDiagramModal">✕</button>' +
               '</div>' +
             '</div>' +
-            '<div class="lucid-mermaid-modal-body" onpointerdown="window.lucid.handleDiagramPointerDown(event, this)">' +
+            '<div class="lucid-mermaid-modal-body" data-lucid-pan-surface>' +
               '<div class="mermaid-canvas" id="lucid-modal-canvas"></div>' +
             '</div>' +
           '</div>';
@@ -2669,7 +2815,10 @@
       const textNodes = [];
       let node;
       while (node = walker.nextNode()) {
-        if (node.parentElement && !['SCRIPT', 'STYLE', 'BUTTON'].includes(node.parentElement.tagName)) {
+        // Never split text inside rendered diagrams or math: a <mark> in SVG
+        // <text> or KaTeX's layout spans breaks their rendering.
+        if (node.parentElement && !['SCRIPT', 'STYLE', 'BUTTON'].includes(node.parentElement.tagName) &&
+            !node.parentElement.closest('svg, .katex, .katex-display, .mermaid-container')) {
           textNodes.push(node);
         }
       }

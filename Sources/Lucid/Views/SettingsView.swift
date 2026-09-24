@@ -58,9 +58,13 @@ struct GeneralSettingsTab: View {
 
                     LazyVGrid(columns: [GridItem(.flexible(), spacing: LucidSpacing.small), GridItem(.flexible(), spacing: LucidSpacing.small)], spacing: LucidSpacing.small) {
                         ForEach(LucidPreset.allCases) { preset in
-                            LucidSelectableCard(action: {
-                                withAnimation(LucidMotion.state) { preferences.applyPreset(preset) }
-                            }) {
+                            LucidSelectableCard(
+                                accessibilityName: "\(preset.displayName) preset",
+                                accessibilityHint: preset.description,
+                                action: {
+                                    withAnimation(LucidMotion.state) { preferences.applyPreset(preset) }
+                                }
+                            ) {
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(preset.displayName)
                                         .font(LucidTypography.labelMedium)
@@ -85,8 +89,8 @@ struct GeneralSettingsTab: View {
                     LucidSectionHeader(title: "Default Canvas")
 
                     LucidSettingRow(
-                        title: "Startup View Mode",
-                        description: "The default presentation mode when opening a document."
+                        title: "View Mode",
+                        description: "Reader, split or editor. Applies to every open window and to documents you open next."
                     ) {
                         Picker("", selection: $preferences.viewMode) {
                             ForEach(ViewMode.allCases) { mode in
@@ -94,7 +98,7 @@ struct GeneralSettingsTab: View {
                             }
                         }
                         .pickerStyle(.segmented)
-                        .accessibilityLabel("Startup View Mode")
+                        .accessibilityLabel("View Mode")
                         .fixedSize()
                     }
 
@@ -139,7 +143,7 @@ struct AppearanceSettingsTab: View {
                     LazyVGrid(columns: [GridItem(.flexible(), spacing: LucidSpacing.small), GridItem(.flexible(), spacing: LucidSpacing.small)], spacing: LucidSpacing.small) {
                         ForEach(curatedThemes, id: \.0) { mode, name, bg, fg in
                             let isSelected = preferences.theme == mode
-                            LucidSelectableCard(isSelected: isSelected, action: {
+                            LucidSelectableCard(isSelected: isSelected, accessibilityName: "\(name) theme", action: {
                                 withAnimation(LucidMotion.state) { preferences.theme = mode }
                             }) {
                                 HStack(spacing: LucidSpacing.medium) {

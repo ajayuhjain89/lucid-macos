@@ -19,6 +19,13 @@ let package = Package(
             resources: [
                 .copy("Resources/WebEngine")
             ]
+        ),
+        // Swift Testing unit tests (`swift test`). Lives under tests/ with the
+        // Node suites; a top-level Tests/ would clash on case-insensitive disks.
+        .testTarget(
+            name: "LucidTests",
+            dependencies: ["Lucid"],
+            path: "tests/LucidTests"
         )
     ]
 )

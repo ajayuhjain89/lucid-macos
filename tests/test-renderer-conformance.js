@@ -135,6 +135,7 @@ function createBrowserEnvironment() {
   vm.runInContext(fs.readFileSync(path.join(WEBENGINE_DIR, 'plugins', 'markdown-it-deflist.min.js'), 'utf8'), context);
   vm.runInContext(fs.readFileSync(path.join(WEBENGINE_DIR, 'plugins', 'markdown-it-abbr.min.js'), 'utf8'), context);
   vm.runInContext(fs.readFileSync(path.join(WEBENGINE_DIR, 'plugins', 'markdown-it-task-lists.js'), 'utf8'), context);
+  vm.runInContext(fs.readFileSync(path.join(WEBENGINE_DIR, 'plugins', 'markdown-it-footnote.min.js'), 'utf8'), context);
   vm.runInContext(fs.readFileSync(path.join(WEBENGINE_DIR, 'katex', 'katex.min.js'), 'utf8'), context);
   vm.runInContext(fs.readFileSync(path.join(WEBENGINE_DIR, 'katex', 'contrib', 'mhchem.min.js'), 'utf8'), context);
   vm.runInContext(fs.readFileSync(path.join(WEBENGINE_DIR, 'highlight', 'highlight.min.js'), 'utf8'), context);
@@ -367,6 +368,18 @@ runTest('Task lists render as disabled checkboxes, not literal [ ] text', () => 
   assert(/checked=""[^>]*>|checked[^>]*disabled|disabled[^>]*checked/.test(html), 'the done item is checked');
   assert(!/\[ \]|\[x\]/.test(html.replace(/<[^>]+>/g, '')), 'no literal [ ] / [x] text left');
   assert((html.match(/disabled/g) || []).length === 2, 'checkboxes are read-only');
+});
+
+runTest('Footnotes render as linked references with a notes section', () => {
+  context.lucid.updateContent('Claim[^1] and another[^note].\n\n[^1]: First source.\n[^note]: Named note with *emphasis*.', 'rev-fn');
+  const html = dom.contentHTML;
+  assert((html.match(/class="footnote-ref"/g) || []).length === 2, 'two footnote references expected');
+  assert(/href="#fn1"/.test(html) && /id="fn1"/.test(html), 'reference links to its note');
+  assert(/class="footnotes"/.test(html), 'notes section rendered');
+  assert(/First source\./.test(html) && /<em>emphasis<\/em>/.test(html), 'note bodies render inline markdown');
+  assert(!/\[\^1\]/.test(html.replace(/<[^>]+>/g, '')), 'no literal [^1] text left');
+  context.lucid.updateContent('Plain [^missing] text', 'rev-fn2');
+  assert(!/footnote-ref/.test(dom.contentHTML), 'an undefined footnote stays literal text');
 });
 
 runTest('YAML front matter is hidden, not rendered as a rule plus a heading', () => {
