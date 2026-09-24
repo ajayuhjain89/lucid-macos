@@ -304,7 +304,8 @@
       }
 
       const isPlainText = !lang || lang.toLowerCase() === 'text' || lang.toLowerCase() === 'plain';
-      const langLabel = isPlainText ? '' : lang.toUpperCase();
+      // The info string is document-controlled; escape it before it reaches innerHTML.
+      const langLabel = isPlainText ? '' : md.utils.escapeHtml(lang.toUpperCase());
 
       // ASCII Diagram detection
       const isAsciiDiagram = isPlainText && /[\u2500-\u257F\u2580-\u259F\u2190-\u2193\+\-\|]{4,}/.test(str);
@@ -333,6 +334,27 @@
   if (window.markdownitDeflist) md.use(window.markdownitDeflist);
   if (window.markdownitAbbr) md.use(window.markdownitAbbr);
   if (window.markdownitTaskList) md.use(window.markdownitTaskList, { enabled: true });
+
+  // Local images: the page is served from the app bundle, so relative and
+  // absolute file paths would resolve against the bundled engine folder. Route
+  // them through the native lucid-asset: scheme, which resolves them against the
+  // document's folder. The whole path travels as ONE encoded segment so "../"
+  // survives URL normalization.
+  function toLocalAssetURL(src) {
+    if (!src || /^[a-z][a-z0-9+.-]*:/i.test(src) || src.charAt(0) === '#') return src;
+    let decoded = src;
+    try { decoded = decodeURI(src); } catch (e) { /* keep as written */ }
+    if (decoded.charAt(0) === '/') {
+      return 'lucid-asset://abs/' + encodeURIComponent(decoded.slice(1));
+    }
+    return 'lucid-asset://doc/' + encodeURIComponent(decoded);
+  }
+  const defaultImageRule = md.renderer.rules.image;
+  md.renderer.rules.image = function(tokens, idx, options, env, self) {
+    const token = tokens[idx];
+    token.attrSet('src', toLocalAssetURL(token.attrGet('src')));
+    return defaultImageRule(tokens, idx, options, env, self);
+  };
 
   // Render-scoped Math Registry
   const renderMathRegistries = new Map();

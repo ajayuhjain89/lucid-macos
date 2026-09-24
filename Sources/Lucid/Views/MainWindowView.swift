@@ -251,7 +251,9 @@ public struct MainWindowView: View {
             // Typing path: schedule coalesced/cancellable analysis; never block.
             analyzer.update(text: newText)
             if isFindBarPresented && !findQuery.isEmpty {
-                performFind(findQuery)
+                // Refresh match counts only: moving the selection here would make
+                // the next keystroke overwrite the first match.
+                performFind(findQuery, moveSelection: false)
             }
         }
         .onChange(of: preferences.viewMode) { _, _ in
@@ -307,7 +309,7 @@ public struct MainWindowView: View {
         }
     }
 
-    private func performFind(_ query: String) {
+    private func performFind(_ query: String, moveSelection: Bool = true) {
         findQuery = query
         let surface = currentActiveSurface
         if surface == .reader {
@@ -333,7 +335,10 @@ public struct MainWindowView: View {
                 }
                 editorMatches = matches
                 findMatchCount = matches.count
-                if !matches.isEmpty {
+                if !moveSelection {
+                    editorMatchIndex = matches.isEmpty ? 0 : min(editorMatchIndex, matches.count - 1)
+                    findCurrentIndex = matches.isEmpty ? 0 : editorMatchIndex + 1
+                } else if !matches.isEmpty {
                     editorMatchIndex = 0
                     findCurrentIndex = 1
                     editorTextView?.setSelectedRange(matches[0])
@@ -813,8 +818,7 @@ public struct MainWindowView: View {
                 }
                 if self.document.text == self.lastSyncedText {
                     // No unsaved local edits: safe to live-reload from disk.
-                    self.document.text = updatedText
-                    self.lastSyncedText = updatedText
+                    self.reloadFromDisk(url: url, diskText: updatedText)
                 } else {
                     // Disk and buffer both diverged from the last sync point:
                     // never silently discard the user's unsaved edits.
@@ -822,6 +826,20 @@ public struct MainWindowView: View {
                 }
             }
         }
+    }
+
+    /// Reloads the document from disk through NSDocument's revert path. Writing
+    /// `document.text` directly would mark the document edited, and AppKit would
+    /// then report an autosave conflict against the file it just re-read.
+    private func reloadFromDisk(url: URL, diskText: String) {
+        if let nsDocument = NSDocumentController.shared.document(for: url),
+           let type = nsDocument.fileType,
+           (try? nsDocument.revert(toContentsOf: url, ofType: type)) != nil {
+            lastSyncedText = diskText
+            return
+        }
+        document.text = diskText
+        lastSyncedText = diskText
     }
 
     private func presentExternalChangeConflict(url: URL, diskText: String) {
@@ -833,8 +851,7 @@ public struct MainWindowView: View {
         alert.addButton(withTitle: "Reload from Disk")
         let response = alert.runModal()
         if response == .alertSecondButtonReturn {
-            document.text = diskText
-            lastSyncedText = diskText
+            reloadFromDisk(url: url, diskText: diskText)
         }
         // "Keep My Changes": leave the buffer untouched; the baseline is left as
         // is so a further on-disk change prompts again instead of silently losing edits.

@@ -42,7 +42,10 @@ public struct EditorView: NSViewRepresentable {
         scrollView.drawsBackground = true
         scrollView.backgroundColor = bgColor
 
-        let initialWidth = max(scrollView.contentSize.width, 800)
+        // Start at the clip view's real width. Width autoresizing preserves the
+        // initial difference, so any larger placeholder here would leave the text
+        // view permanently wider than its pane (lines hidden, sideways scrolling).
+        let initialWidth = scrollView.contentSize.width
         let textStorage = NSTextStorage(string: text)
         let layoutManager = NSLayoutManager()
         textStorage.addLayoutManager(layoutManager)
@@ -357,7 +360,7 @@ public final class LucidTextView: NSTextView {
             let selectedText = currentString.substring(with: selectedRange)
             let wrapped = pair.open + selectedText + pair.close
             super.insertText(wrapped, replacementRange: selectedRange)
-            setSelectedRange(NSRange(location: selectedRange.location + pair.open.count, length: selectedText.count))
+            setSelectedRange(NSRange(location: selectedRange.location + (pair.open as NSString).length, length: (selectedText as NSString).length))
             return
         }
 
@@ -366,7 +369,16 @@ public final class LucidTextView: NSTextView {
             // Only auto-pair quotes, asterisks, backticks if not in the middle of an identifier
             var shouldPair = true
             if str == "\"" || str == "`" || str == "*" || str == "_" {
-                if selectedRange.location < currentString.length {
+                // Symmetric delimiters don't pair right after a word character
+                // (snake_case, x*y, don"t) or inside a run of the same delimiter
+                // (a ``` fence, **bold**), where a closer would be left behind.
+                if selectedRange.location > 0 {
+                    let prevChar = currentString.substring(with: NSRange(location: selectedRange.location - 1, length: 1))
+                    if prevChar == str || prevChar.rangeOfCharacter(from: .alphanumerics) != nil {
+                        shouldPair = false
+                    }
+                }
+                if shouldPair && selectedRange.location < currentString.length {
                     let nextChar = currentString.substring(with: NSRange(location: selectedRange.location, length: 1))
                     if !nextChar.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !closingDelimiters.contains(nextChar) {
                         shouldPair = false
