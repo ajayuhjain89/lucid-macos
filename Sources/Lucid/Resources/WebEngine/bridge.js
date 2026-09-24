@@ -2815,7 +2815,10 @@
       const textNodes = [];
       let node;
       while (node = walker.nextNode()) {
-        if (node.parentElement && !['SCRIPT', 'STYLE', 'BUTTON'].includes(node.parentElement.tagName)) {
+        // Never split text inside rendered diagrams or math: a <mark> in SVG
+        // <text> or KaTeX's layout spans breaks their rendering.
+        if (node.parentElement && !['SCRIPT', 'STYLE', 'BUTTON'].includes(node.parentElement.tagName) &&
+            !node.parentElement.closest('svg, .katex, .katex-display, .mermaid-container')) {
           textNodes.push(node);
         }
       }
