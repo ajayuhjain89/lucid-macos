@@ -175,7 +175,7 @@ public enum LucidPreset: String, CaseIterable, Identifiable {
         case .lucidDefault: return "Signature balanced environment with Studio Dark and SF Pro."
         case .minimalWriter: return "Zero-distraction centered writing with no line numbers or sidebar."
         case .technicalDoc: return "Wide canvas with breakout layout, outline sidebar, and full STEM support."
-        case .developer: return "SF Mono editor with line numbers, compact density, and live diagrams."
+        case .developer: return "SF Mono editor with line numbers, split view, and live diagrams."
         case .academic: return "Editorial serif typography, warm paper tones, and comfortable leading."
         case .compact: return "High-density layout optimized for smaller displays or multitasking."
         case .reading: return "Reader-only presentation with large type and warm book sepia."
