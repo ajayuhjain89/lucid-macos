@@ -14,8 +14,12 @@ public struct MainWindowView: View {
     @StateObject private var analyzer = DocumentAnalyzer()
     @State private var activeHeading: HeadingItem?
     @State private var scrollToHeadingId: String?
-    @State private var previewTargetFraction: Double?
     @State private var webViewInstance: WKWebView?
+    /// Where the Split divider sits, as a fraction of the canvas (per window).
+    @State private var splitFraction: CGFloat = 0.5
+    /// Bookkeeping for mode switches and the split sync, kept out of view state
+    /// so scroll events don't re-render the window.
+    @State private var paneSync = PaneSyncState()
     /// The window hosting this document, held weakly. App-wide commands (Find,
     /// Command Palette) are posted without an object; only the key window acts.
     @State private var hostWindow = WeakWindowRef()
@@ -263,7 +267,20 @@ public struct MainWindowView: View {
             // bar still takes focus after this, on the next run-loop turn.
             if !isPresented && !isFindBarPresented { restoreFocusAfterFind() }
         }
-        .onChange(of: viewState.viewMode) { _, _ in
+        // Fires as the mode is set, before the new layout is committed: the
+        // cross-fade has to start from the old frame.
+        .onReceive(viewState.$viewMode) { newMode in
+            let oldMode = viewState.viewMode
+            guard newMode != oldMode else { return }
+            paneSync.rememberShapes(leaving: oldMode)
+            paneSync.editorPositionAtSwitch = oldMode == .editor
+                ? (editorTextView as? LucidTextView)?.readingPosition()
+                : nil
+            crossFadeModeSwitch()
+        }
+        .onChange(of: viewState.viewMode) { oldMode, newMode in
+            carryReadingPosition(from: oldMode, to: newMode)
+            DispatchQueue.main.async { focusVisiblePane(for: newMode) }
             if isFindBarPresented && !findQuery.isEmpty {
                 performFind(findQuery)
             }
@@ -453,8 +470,12 @@ public struct MainWindowView: View {
                 return nil
             }()
             let isHidden: Bool = {
-                if let view = target as? NSView { return view.isHiddenOrHasHiddenAncestor }
-                return false
+                guard let view = target as? NSView else { return false }
+                if viewState.viewMode == .editor, let webView = webViewInstance,
+                   view === webView || view.isDescendant(of: webView) {
+                    return true  // the preview is kept at alpha 0, not hidden
+                }
+                return view.isHiddenOrHasHiddenAncestor
             }()
 
             if let window = targetWindow, window == NSApp.keyWindow, !isHidden {
@@ -501,7 +522,6 @@ public struct MainWindowView: View {
             documentContent
                 .frame(minWidth: 400, maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color(hex: preferences.theme.themeTokens.windowBackground))
-                .animation(LucidMotion.respecting(reduceMotion, LucidMotion.panel), value: viewState.viewMode)
 
             // Floating glass top chrome, structurally contained in the Document Canvas
             documentTopBar(sidebarOpen: sidebarOpen)
@@ -526,10 +546,16 @@ public struct MainWindowView: View {
         .ignoresSafeArea()
     }
 
+    /// One editor and one preview for the window's lifetime. A mode switch only
+    /// moves and hides them (PaneLayout), so nothing is rebuilt: no blank
+    /// preview, no reload, and each pane keeps its place and its state.
     private var documentContent: some View {
-        Group {
-            switch viewState.viewMode {
-            case .reader:
+        GeometryReader { proxy in
+            let mode = viewState.viewMode
+            let layout = PaneLayout(mode: mode, size: proxy.size, splitFraction: splitFraction,
+                                    hiddenEditor: paneSync.hiddenEditorShape,
+                                    hiddenPreview: paneSync.hiddenPreviewShape)
+            ZStack(alignment: .topLeading) {
                 PreviewWebView(
                     preferences: preferences,
                     markdown: document.text,
@@ -543,80 +569,105 @@ public struct MainWindowView: View {
                     scrollToHeadingId: scrollToHeadingId,
                     webViewInstance: $webViewInstance,
                     documentFileURL: fileURL,
-                    onScrollIntensityChanged: { scrollIntensity = $0 },
+                    onScrollIntensityChanged: { intensity in
+                        if viewState.viewMode != .editor { scrollIntensity = intensity }
+                    },
                     isSidebarTransitioning: isSidebarTransitioning,
                     sidebarWidth: CGFloat(sidebarWidth),
                     transitionToken: sidebarTransitionToken,
                     isSidebarOpen: viewState.showOutline,
-                    focusMode: viewState.focusMode
+                    focusMode: viewState.focusMode,
+                    isActive: layout.showsPreview
                 )
-                .transition(.opacity)
-            case .split:
-                HSplitView {
-                    EditorView(
-                        text: $document.text,
-                        preferences: preferences,
-                        focusMode: viewState.focusMode,
-                        onScrollFractionChanged: { fraction in
-                            previewTargetFraction = fraction
-                        },
-                        onCursorPositionChanged: { line, col in
-                            cursorLine = line
-                            cursorCol = col
-                        },
-                        onTextViewCreated: { editorTextView = $0 },
-                        onScrollIntensityChanged: { scrollIntensity = $0 }
-                    )
-                    .overlay(alignment: .top) { editorScrollEdgeBand }
-                    // Split panes are hosted separately and would otherwise start
-                    // below the hidden title bar, 28 pt lower than Reader/Editor.
-                    .ignoresSafeArea()
-                    // 2 × 220 + dividers + the widest sidebar (320) fits the 780 pt window minimum.
-                    .frame(minWidth: 220)
+                .frame(width: layout.preview.width, height: layout.preview.height)
+                .offset(x: layout.preview.minX)
+                .accessibilityHidden(!layout.showsPreview)
 
-                    PreviewWebView(
-                        preferences: preferences,
-                        markdown: document.text,
-                        headings: headingsBinding,
-                        activeHeading: $activeHeading,
-                        onScrollFractionChanged: nil,
-                        onFindMatchesChanged: { count, index in
-                            findMatchCount = count
-                            findCurrentIndex = index
-                        },
-                        scrollToHeadingId: scrollToHeadingId,
-                        targetScrollFraction: previewTargetFraction,
-                        webViewInstance: $webViewInstance,
-                        documentFileURL: fileURL,
-                        onScrollIntensityChanged: { scrollIntensity = $0 },
-                        isSidebarTransitioning: isSidebarTransitioning,
-                        sidebarWidth: CGFloat(sidebarWidth),
-                        transitionToken: sidebarTransitionToken,
-                        isSidebarOpen: viewState.showOutline,
-                        focusMode: viewState.focusMode
-                    )
-                    .ignoresSafeArea()
-                    // 2 × 220 + dividers + the widest sidebar (320) fits the 780 pt window minimum.
-                    .frame(minWidth: 220)
-                }
-                .ignoresSafeArea()
-                .transition(.opacity)
-            case .editor:
                 EditorView(
                     text: $document.text,
                     preferences: preferences,
                     focusMode: viewState.focusMode,
+                    isActive: layout.showsEditor,
+                    onReadingPositionChanged: mode == .split ? { syncPreviewToEditor($0) } : nil,
                     onCursorPositionChanged: { line, col in
                         cursorLine = line
                         cursorCol = col
                     },
                     onTextViewCreated: { editorTextView = $0 },
-                    onScrollIntensityChanged: { scrollIntensity = $0 }
+                    onScrollIntensityChanged: { intensity in
+                        if viewState.viewMode != .reader { scrollIntensity = intensity }
+                    }
                 )
-                .overlay(alignment: .top) { editorScrollEdgeBand }
-                .transition(.opacity)
+                .overlay(alignment: .top) {
+                    editorScrollEdgeBand.opacity(layout.showsEditor ? 1 : 0)
+                }
+                .frame(width: layout.editor.width, height: layout.editor.height)
+                .accessibilityHidden(!layout.showsEditor)
+
+                if mode == .split {
+                    PaneSplitDivider(fraction: $splitFraction, totalWidth: proxy.size.width)
+                        .frame(width: PaneSplitDivider.hitWidth, height: proxy.size.height)
+                        .offset(x: layout.editor.width - (PaneSplitDivider.hitWidth - PaneLayout.dividerWidth) / 2)
+                }
             }
         }
+        .ignoresSafeArea()
+    }
+
+    /// Cross-fades the whole window from the old mode to the new one (0.19 s)
+    /// while the panes switch instantly underneath. A layer transition fades the
+    /// composited result, web content included, so nothing reflows on screen
+    /// frame by frame. Instant with Reduce Motion.
+    private func crossFadeModeSwitch() {
+        guard !reduceMotion, let layer = hostWindow.window?.contentView?.layer else { return }
+        let fade = CATransition()
+        fade.type = .fade
+        fade.duration = 0.19
+        fade.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        layer.add(fade, forKey: "lucid.modeSwitch")
+    }
+
+    /// Puts a pane that was hidden where the reader was. From Split each pane
+    /// keeps its own place (the width change is anchored in both panes).
+    private func carryReadingPosition(from oldMode: ViewMode, to newMode: ViewMode) {
+        paneSync.suppressSplitSyncUntil = CACurrentMediaTime() + 0.4
+        switch (oldMode, newMode) {
+        case (.reader, .editor), (.reader, .split):
+            webViewInstance?.evaluateJavaScript("window.lucid && window.lucid.readingPosition ? window.lucid.readingPosition() : null") { result, _ in
+                guard let position = ReadingPosition(javaScriptValue: result),
+                      let textView = editorTextView as? LucidTextView else { return }
+                paneSync.suppressSplitSyncUntil = CACurrentMediaTime() + 0.3
+                textView.scrollToReadingPosition(position)
+            }
+        case (.editor, .reader), (.editor, .split):
+            guard let position = paneSync.editorPositionAtSwitch else { return }
+            paneSync.lastSentToPreview = position
+            webViewInstance?.evaluateJavaScript("if (window.lucid && window.lucid.scrollToSourceLine) { window.lucid.scrollToSourceLine(\(position.javaScriptLiteral)); }")
+        default:
+            break
+        }
+        paneSync.editorPositionAtSwitch = nil
+    }
+
+    /// Keyboard focus follows the mode: the editor for Split and Editor, the
+    /// preview for Reader (so the arrow keys and Page Down scroll it).
+    private func focusVisiblePane(for mode: ViewMode) {
+        guard mode == viewState.viewMode, !isFindBarPresented, !isCommandPalettePresented,
+              let window = hostWindow.window else { return }
+        let target: NSView? = mode == .reader ? webViewInstance : editorTextView
+        guard let target, window.firstResponder !== target else { return }
+        window.makeFirstResponder(target)
+    }
+
+    /// Split sync: the preview follows the editor by source line, so both panes
+    /// show the same text (a scroll fraction drifts wherever diagrams or math
+    /// make the preview taller than the source).
+    private func syncPreviewToEditor(_ position: ReadingPosition) {
+        guard viewState.viewMode == .split, CACurrentMediaTime() >= paneSync.suppressSplitSyncUntil else { return }
+        if let last = paneSync.lastSentToPreview, last.top == position.top, last.end == position.end,
+           abs(last.line - position.line) < 0.05 { return }
+        paneSync.lastSentToPreview = position
+        webViewInstance?.evaluateJavaScript("if (window.lucid && window.lucid.scrollToSourceLine) { window.lucid.scrollToSourceLine(\(position.javaScriptLiteral)); }")
     }
 
     /// Hides editor text scrolled beneath the floating toolbar. The preview
@@ -729,9 +780,7 @@ public struct MainWindowView: View {
             ForEach([ViewMode.reader, ViewMode.split, ViewMode.editor], id: \.self) { mode in
                 let isSelected = viewState.viewMode == mode
                 Button(action: {
-                    withAnimation(LucidMotion.respecting(reduceMotion, LucidMotion.state)) {
-                        viewState.viewMode = mode
-                    }
+                    viewState.viewMode = mode
                 }) {
                     Image(systemName: modeIcon(mode))
                         .font(.system(size: 12, weight: isSelected ? .medium : .regular))
@@ -1069,5 +1118,79 @@ private struct CursorTrackingView: NSViewRepresentable {
             super.resetCursorRects()
             addCursorRect(bounds, cursor: cursor)
         }
+    }
+}
+
+/// Mode-switch and split-sync bookkeeping for one window. A reference type so
+/// updating it never invalidates the view.
+final class PaneSyncState {
+    /// The editor's reading position just before it was hidden or resized.
+    var editorPositionAtSwitch: ReadingPosition?
+    /// Last position sent to the preview (skips repeats while scrolling).
+    var lastSentToPreview: ReadingPosition?
+    /// The split sync ignores editor scrolls until then: a mode switch scrolls
+    /// the editor itself, and that must not bounce back to the preview.
+    var suppressSplitSyncUntil: CFTimeInterval = 0
+    /// The shape each pane had when it was last on screen (see PaneLayout).
+    var hiddenEditorShape: PaneLayout.Shape = .full
+    var hiddenPreviewShape: PaneLayout.Shape = .full
+
+    func rememberShapes(leaving mode: ViewMode) {
+        switch mode {
+        case .reader: hiddenPreviewShape = .full
+        case .editor: hiddenEditorShape = .full
+        case .split:
+            hiddenEditorShape = .split
+            hiddenPreviewShape = .split
+        }
+    }
+}
+
+/// The draggable divider between the Split panes.
+private struct PaneSplitDivider: View {
+    static let hitWidth: CGFloat = 9
+
+    @Binding var fraction: CGFloat
+    let totalWidth: CGFloat
+
+    @State private var dragStartWidth: CGFloat? = nil
+
+    var body: some View {
+        ZStack {
+            Rectangle()
+                .fill(LucidColors.subtleSeparator)
+                .frame(width: PaneLayout.dividerWidth)
+
+            CursorTrackingView(cursor: .resizeLeftRight)
+                .frame(width: 8)
+                .contentShape(Rectangle())
+        }
+        .frame(width: Self.hitWidth)
+        .contentShape(Rectangle())
+        .accessibilityElement()
+        .accessibilityLabel("Split divider")
+        .accessibilityValue("\(Int((fraction * 100).rounded())) percent")
+        .accessibilityAdjustableAction { direction in
+            let step: CGFloat = direction == .increment ? 0.05 : -0.05
+            fraction = PaneLayout.fraction(forEditorWidth: (fraction + step) * totalWidth, total: totalWidth)
+        }
+        .gesture(
+            DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                .onChanged { value in
+                    if dragStartWidth == nil {
+                        dragStartWidth = PaneLayout.editorWidth(total: totalWidth, fraction: fraction)
+                        NSCursor.resizeLeftRight.push()
+                    }
+                    if let start = dragStartWidth {
+                        fraction = PaneLayout.fraction(forEditorWidth: start + value.translation.width, total: totalWidth)
+                    }
+                }
+                .onEnded { _ in
+                    if dragStartWidth != nil {
+                        NSCursor.pop()
+                        dragStartWidth = nil
+                    }
+                }
+        )
     }
 }

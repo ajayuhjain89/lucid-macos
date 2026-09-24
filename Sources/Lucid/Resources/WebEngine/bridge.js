@@ -1839,7 +1839,131 @@
     }
   }
 
+  // Source-line reading position, carried across view-mode switches and width
+  // changes. Each top-level block remembers the source line it starts on as a
+  // DOM property (_lucidLine), so the markup, the reconcile keys and exports are
+  // unchanged. The reading position is the fractional source line at the edge
+  // where content rests below the toolbar (--lucid-top-inset).
+  let totalSourceLines = 1;
+  let readingLine = { line: 0, top: true, end: false };
+  // Set while the native side holds an elementFromPoint anchor (sidebar slide).
+  let nativeAnchorPending = false;
+
+  function assignSourceLines(container, tokens, source) {
+    const lines = [];
+    const headingLines = Object.create(null);
+    for (let i = 0; i < tokens.length; i++) {
+      const t = tokens[i];
+      if (t.level !== 0 || !t.block || t.nesting < 0) continue;
+      lines.push(t.map ? t.map[0] : null);
+      if (t.type === 'heading_open' && t.map && t.attrGet) {
+        const id = t.attrGet('id');
+        if (id) headingLines[id] = t.map[0];
+      }
+    }
+    totalSourceLines = Math.max(1, (source || '').split('\n').length);
+    // One element per top-level token, unless raw HTML or a fallback render
+    // broke the correspondence; then only headings (by id) are anchored.
+    const kids = container.children;
+    if (!kids) return;
+    const exact = kids.length === lines.length;
+    for (let i = 0; i < kids.length; i++) {
+      const el = kids[i];
+      const line = exact ? lines[i] : (el.id && el.id in headingLines ? headingLines[el.id] : null);
+      el._lucidLine = (typeof line === 'number') ? line : undefined;
+    }
+  }
+
+  function sourceMappedBlocks() {
+    const container = document.getElementById('lucid-content');
+    const out = [];
+    const kids = container && container.children;
+    if (!kids) return out;
+    for (let i = 0; i < kids.length; i++) {
+      if (kids[i]._lucidLine !== undefined) out.push(kids[i]);
+    }
+    return out;
+  }
+
+  function readingReferenceY() {
+    const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--lucid-top-inset'));
+    return isFinite(v) ? v : 48;
+  }
+
+  function maxScrollTop() {
+    return Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+  }
+
+  function computeReadingLine() {
+    const y = window.scrollY || 0;
+    const max = maxScrollTop();
+    if (y <= 1) return { line: 0, top: true, end: false };
+    const end = max > 0 && y >= max - 1;
+    const blocks = sourceMappedBlocks();
+    if (!blocks.length) return { line: max > 0 ? (y / max) * totalSourceLines : 0, top: false, end: end };
+    const ref = readingReferenceY();
+    let lo = 0, hi = blocks.length - 1, idx = -1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (blocks[mid].getBoundingClientRect().top <= ref) { idx = mid; lo = mid + 1; } else { hi = mid - 1; }
+    }
+    if (idx < 0) return { line: blocks[0]._lucidLine, top: false, end: end };
+    const a = blocks[idx], b = blocks[idx + 1];
+    const ra = a.getBoundingClientRect();
+    const topB = b ? b.getBoundingClientRect().top : ra.bottom;
+    const lineB = b ? b._lucidLine : totalSourceLines;
+    const span = topB - ra.top;
+    const frac = span > 0 ? Math.min(1, Math.max(0, (ref - ra.top) / span)) : 0;
+    return { line: a._lucidLine + frac * (lineB - a._lucidLine), top: false, end: end };
+  }
+
+  function updateReadingLine() {
+    readingLine = computeReadingLine();
+  }
+
+  // Scrolls so the given reading position rests at the reference edge.
+  function scrollToSourceLine(pos) {
+    if (!pos || typeof pos.line !== 'number') return;
+    const max = maxScrollTop();
+    let target;
+    if (pos.top || pos.line <= 0) {
+      target = 0;
+    } else if (pos.end) {
+      target = max;
+    } else {
+      const blocks = sourceMappedBlocks();
+      if (!blocks.length) {
+        target = (pos.line / totalSourceLines) * max;
+      } else {
+        let lo = 0, hi = blocks.length - 1, idx = 0;
+        while (lo <= hi) {
+          const mid = (lo + hi) >> 1;
+          if (blocks[mid]._lucidLine <= pos.line) { idx = mid; lo = mid + 1; } else { hi = mid - 1; }
+        }
+        const a = blocks[idx], b = blocks[idx + 1];
+        const sy = window.scrollY || 0;
+        const ra = a.getBoundingClientRect();
+        const topA = ra.top + sy;
+        const topB = b ? b.getBoundingClientRect().top + sy : ra.bottom + sy;
+        const lineB = b ? b._lucidLine : totalSourceLines;
+        const frac = lineB > a._lucidLine ? Math.min(1, Math.max(0, (pos.line - a._lucidLine) / (lineB - a._lucidLine))) : 0;
+        target = topA + frac * (topB - topA) - readingReferenceY();
+      }
+    }
+    target = Math.max(0, Math.min(max, target));
+    readingLine = { line: pos.line, top: !!pos.top || pos.line <= 0, end: !!pos.end };
+    if (Math.abs(target - (window.scrollY || 0)) < 1) return;
+    programmaticScrollActive = true;
+    window.scrollTo({ top: target, behavior: 'instant' });
+    lastPostedIntensity = -1;
+    setTimeout(function() {
+      programmaticScrollActive = false;
+      evaluateActiveHeading();
+    }, 50);
+  }
+
   function captureReadingAnchor() {
+    nativeAnchorPending = true;
     const READING_REFERENCE_Y = 120;
     const hit = document.elementFromPoint ? document.elementFromPoint(window.innerWidth / 2, READING_REFERENCE_Y) : null;
     const block = hit ? hit.closest('h1, h2, h3, h4, h5, h6, p, pre, blockquote, table, .mermaid-container, .lucid-math-block, li') : null;
@@ -1864,6 +1988,7 @@
   }
 
   function restoreReadingAnchor(anchorToRestore) {
+    nativeAnchorPending = false;
     const anchor = anchorToRestore || currentActiveAnchor;
     if (!anchor) return;
     const READING_REFERENCE_Y = 120;
@@ -1911,6 +2036,7 @@
   let lastPostedIntensity = -1;
   function reportScrollPosition() {
     scrollReportPending = false;
+    updateReadingLine();
     const handlers = window.webkit && window.webkit.messageHandlers;
     if (!handlers || !handlers.lucidScroll) return;
     const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
@@ -2021,6 +2147,7 @@
         container.innerHTML = html;
         insertedBlocks = [container];
       }
+      assignSourceLines(container, tokens, rawMarkdown);
       const domNodeCount = container.querySelectorAll('*').length;
       LucidPerf.mark(renderId, 't9_dom_insert_end', { nodeCount: domNodeCount });
 
@@ -2035,6 +2162,8 @@
 
       requestAnimationFrame(function() {
         LucidPerf.mark(renderId, 't10_first_raf_layout');
+        // Edits above the viewport shift source lines under a still page.
+        if (!programmaticScrollActive) updateReadingLine();
         requestAnimationFrame(function() {
           markFrpDone();
         });
@@ -3010,6 +3139,8 @@
     resolveActiveHeading: resolveActiveHeading,
     captureReadingAnchor: captureReadingAnchor,
     restoreReadingAnchor: restoreReadingAnchor,
+    readingPosition: function() { return readingLine; },
+    scrollToSourceLine: scrollToSourceLine,
     invalidateHeadingPositions: invalidateHeadingPositions,
     rebuildHeadingPositionCache: rebuildHeadingPositionCache,
     evaluateActiveHeading: evaluateActiveHeading,
@@ -3022,6 +3153,10 @@
   let resizeTimer = null;
   if (typeof window !== 'undefined') {
     window.addEventListener('resize', function() {
+      // A width change reflows the page; keep the same source line at the top.
+      const anchor = (nativeAnchorPending || anchorRestoreActive) ? null : readingLine;
+      if (anchor) scrollToSourceLine(anchor);
+      const resizedAt = (typeof performance !== 'undefined') ? performance.now() : Date.now();
       if (resizeTimer) clearTimeout(resizeTimer);
       resizeTimer = setTimeout(function() {
         // Settle logic: only update diagrams that have NOT been manually interacted with
@@ -3031,6 +3166,9 @@
             formatMermaidContainer(c);
           }
         });
+        // Refitted diagrams change height; hold the reading line unless the
+        // reader scrolled in the meantime.
+        if (anchor && lastUserScrollTimestamp < resizedAt) scrollToSourceLine(anchor);
       }, 200);
     });
   }

@@ -11,6 +11,12 @@ import AppKit
 /// container animates smoothly via SwiftUI.
 public final class LucidWebContainerView: NSView {
     public let webView: WKWebView
+    /// False while another view mode hides the preview. It stays in the window
+    /// at alpha 0 rather than being hidden, so WebKit keeps its rendered tiles
+    /// and showing it again needs no repaint; it just takes no clicks.
+    var isPaneActive = true {
+        didSet { alphaValue = isPaneActive ? 1 : 0 }
+    }
     private var isTransitioning: Bool = false
     private var activeTransitionToken: UUID? = nil
     private var frozenWidth: CGFloat? = nil
@@ -27,6 +33,10 @@ public final class LucidWebContainerView: NSView {
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    public override func hitTest(_ point: NSPoint) -> NSView? {
+        isPaneActive ? super.hitTest(point) : nil
     }
 
     public override func layout() {
@@ -108,7 +118,6 @@ public struct PreviewWebView: NSViewRepresentable {
     var onScrollFractionChanged: ((Double) -> Void)?
     var onFindMatchesChanged: ((Int, Int) -> Void)?
     var scrollToHeadingId: String?
-    var targetScrollFraction: Double?
     @Binding var webViewInstance: WKWebView?
     /// The on-disk location of the document being previewed, used to resolve
     /// relative links to sibling files when the reader clicks a cross-file link.
@@ -122,6 +131,9 @@ public struct PreviewWebView: NSViewRepresentable {
     var isSidebarOpen: Bool = false
     /// This window's Focus Mode (WindowViewState), not the app-wide default.
     var focusMode: Bool = false
+    /// False while another view mode hides the preview: edits are not rendered
+    /// until it is shown again, then the latest text renders at once.
+    var isActive: Bool = true
     @Environment(\.colorScheme) var colorScheme
 
     public func makeCoordinator() -> Coordinator {
@@ -178,6 +190,7 @@ public struct PreviewWebView: NSViewRepresentable {
         webView.underPageBackgroundColor = NSColor(Color(hex: effectiveTokens.previewBackground))
 
         context.coordinator.renderCoordinator.setWebView(webView)
+        context.coordinator.wasActive = isActive
 
         DispatchQueue.main.async {
             self.webViewInstance = webView
@@ -188,7 +201,9 @@ public struct PreviewWebView: NSViewRepresentable {
             webView.loadFileURL(indexURL, allowingReadAccessTo: indexURL.deletingLastPathComponent())
         }
 
-        return LucidWebContainerView(webView: webView)
+        let container = LucidWebContainerView(webView: webView)
+        container.isPaneActive = isActive
+        return container
     }
 
     /// The bundled preview engine page (WebEngine/index.html in the app's resources).
@@ -236,6 +251,23 @@ public struct PreviewWebView: NSViewRepresentable {
             token: transitionToken
         )
 
+        if containerView.isPaneActive != isActive {
+            containerView.isPaneActive = isActive
+        }
+        let revealing = isActive && !context.coordinator.wasActive
+        let hasPendingRender: Bool
+        if isActive {
+            hasPendingRender = context.coordinator.renderCoordinator.setRenderingPaused(false)
+        } else if context.coordinator.hasRenderedFirstContent {
+            hasPendingRender = false
+            if context.coordinator.renderCoordinator.setRenderingPaused(true, latestMarkdown: markdown) {
+                context.coordinator.needsRenderWhenRevealed = true
+            }
+        } else {
+            hasPendingRender = false
+        }
+        context.coordinator.wasActive = isActive
+
         let tokens = preferences.theme.themeTokens
         webView.underPageBackgroundColor = NSColor(Color(hex: tokens.previewBackground))
 
@@ -246,12 +278,17 @@ public struct PreviewWebView: NSViewRepresentable {
             webView.evaluateJavaScript("if (window.lucid) { window.lucid.updatePreferences(\(prefsJSON)); }")
         }
 
-        // Schedule render: immediate on first load or file change, debounced on interactive typing
+        // Schedule render: immediate on first load, file change or when a hidden
+        // preview is shown again; debounced on interactive typing. A hidden
+        // preview renders the document once (so showing it is instant) and then
+        // waits: edits made in Editor mode render when it comes back.
         let isFirstRender = !context.coordinator.hasRenderedFirstContent
         let isNewContent = context.coordinator.lastRenderedMarkdown != markdown
-        if isFirstRender || isNewContent {
+        if isFirstRender || (isNewContent && isActive) ||
+            (revealing && (context.coordinator.needsRenderWhenRevealed || hasPendingRender)) {
             context.coordinator.lastRenderedMarkdown = markdown
-            context.coordinator.renderCoordinator.scheduleRender(markdown: markdown, immediate: isFirstRender)
+            context.coordinator.renderCoordinator.scheduleRender(markdown: markdown, immediate: isFirstRender || revealing)
+            context.coordinator.needsRenderWhenRevealed = false
             if isFirstRender && context.coordinator.renderCoordinator.isBridgeReady {
                 context.coordinator.hasRenderedFirstContent = true
             }
@@ -266,12 +303,6 @@ public struct PreviewWebView: NSViewRepresentable {
         } else {
             context.coordinator.lastScrolledHeadingId = nil
         }
-
-        // Sync scroll fraction if requested
-        if let fraction = targetScrollFraction, abs(fraction - context.coordinator.lastAppliedFraction) > 0.02 {
-            context.coordinator.lastAppliedFraction = fraction
-            webView.evaluateJavaScript("if (window.lucid) { window.lucid.setScrollFraction(\(fraction)); }")
-        }
     }
 
     public final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
@@ -280,8 +311,9 @@ public struct PreviewWebView: NSViewRepresentable {
         var hasRenderedFirstContent = false
         var lastRenderedMarkdown = ""
         var lastScrolledHeadingId: String?
-        var lastAppliedFraction: Double = -1
         var lastAppliedPrefsJSON: String?
+        var wasActive = true
+        var needsRenderWhenRevealed = false
         var lastReportedIntensity: Double = -1
         var lastReportedFraction: Double = -1
         var lastActiveHeadingId: String?
@@ -332,7 +364,6 @@ public struct PreviewWebView: NSViewRepresentable {
             // Without this the preview stays blank after a WebContent crash.
             isPageLoaded = false
             hasRenderedFirstContent = false
-            lastAppliedFraction = -1
             renderCoordinator.handleContentProcessTerminated()
             webView.reload()
         }

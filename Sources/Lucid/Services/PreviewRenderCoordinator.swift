@@ -19,6 +19,7 @@ public final class PreviewRenderCoordinator: ObservableObject {
     private var lastRenderedMarkdown: String = ""
     private var pendingMarkdown: String? = nil
     private var hasRenderedInitialContent: Bool = false
+    private var isRenderingPaused: Bool = false
     /// When the current burst of edits started waiting for a render (nil = none pending).
     private var burstStartedAt: UInt64? = nil
 
@@ -34,10 +35,28 @@ public final class PreviewRenderCoordinator: ObservableObject {
 
     public func setBridgeReady(_ ready: Bool) {
         self.isBridgeReady = ready
-        if ready, let pending = pendingMarkdown {
+        if ready, !isRenderingPaused, let pending = pendingMarkdown {
             pendingMarkdown = nil
             scheduleRender(markdown: pending, immediate: true)
         }
+    }
+
+    /// Stops work that has not reached WebKit yet while the preview pane is
+    /// hidden. An in-flight JavaScript render cannot be recalled, but the latest
+    /// document is retained and can be rendered immediately when the pane is
+    /// revealed again.
+    @discardableResult
+    public func setRenderingPaused(_ paused: Bool, latestMarkdown: String? = nil) -> Bool {
+        isRenderingPaused = paused
+        guard paused else { return pendingMarkdown != nil }
+
+        pendingTask?.cancel()
+        pendingTask = nil
+        burstStartedAt = nil
+        if let latestMarkdown, latestMarkdown != lastRenderedMarkdown {
+            pendingMarkdown = latestMarkdown
+        }
+        return pendingMarkdown != nil
     }
 
     /// The web content process died (crash or memory pressure). Queue the last
@@ -64,6 +83,12 @@ public final class PreviewRenderCoordinator: ObservableObject {
         // Cancel previous pending task if any
         pendingTask?.cancel()
 
+        if isRenderingPaused {
+            pendingMarkdown = markdown
+            burstStartedAt = nil
+            return
+        }
+
         // If not an immediate/forced render, skip if markdown has not changed
         if !immediate && markdown == lastRenderedMarkdown {
             burstStartedAt = nil
@@ -75,6 +100,7 @@ public final class PreviewRenderCoordinator: ObservableObject {
             pendingMarkdown = markdown
             return
         }
+        pendingMarkdown = nil
 
         if immediate || !hasRenderedInitialContent {
             // Immediate dispatch for initial open, file switches, or bridge-ready handshakes

@@ -6,16 +6,22 @@ public struct EditorView: NSViewRepresentable {
     @ObservedObject var preferences: LucidPreferences
     /// This window's Focus Mode (WindowViewState), not the app-wide default.
     var focusMode: Bool
-    var onScrollFractionChanged: ((Double) -> Void)?
+    /// False while another view mode hides the editor. The window keeps one
+    /// editor for its lifetime, so the text view (caret, scroll position, undo)
+    /// survives mode switches; hidden, it neither draws nor takes clicks.
+    var isActive: Bool
+    /// Reports where the editor is reading (split-mode sync). Computed only when set.
+    var onReadingPositionChanged: ((ReadingPosition) -> Void)?
     var onCursorPositionChanged: ((Int, Int) -> Void)? // (line, column)
     var onTextViewCreated: ((NSTextView) -> Void)?
     var onScrollIntensityChanged: ((Double) -> Void)?
 
-    public init(
+    init(
         text: Binding<String>,
         preferences: LucidPreferences = .shared,
         focusMode: Bool = false,
-        onScrollFractionChanged: ((Double) -> Void)? = nil,
+        isActive: Bool = true,
+        onReadingPositionChanged: ((ReadingPosition) -> Void)? = nil,
         onCursorPositionChanged: ((Int, Int) -> Void)? = nil,
         onTextViewCreated: ((NSTextView) -> Void)? = nil,
         onScrollIntensityChanged: ((Double) -> Void)? = nil
@@ -23,7 +29,8 @@ public struct EditorView: NSViewRepresentable {
         self._text = text
         self.preferences = preferences
         self.focusMode = focusMode
-        self.onScrollFractionChanged = onScrollFractionChanged
+        self.isActive = isActive
+        self.onReadingPositionChanged = onReadingPositionChanged
         self.onCursorPositionChanged = onCursorPositionChanged
         self.onTextViewCreated = onTextViewCreated
         self.onScrollIntensityChanged = onScrollIntensityChanged
@@ -40,6 +47,7 @@ public struct EditorView: NSViewRepresentable {
         let selColor = NSColor(Color(hex: tokens.selection))
 
         let scrollView = LucidEditorScrollView()
+        scrollView.isHidden = !isActive
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = !preferences.wordWrap
         scrollView.autohidesScrollers = true
@@ -133,6 +141,10 @@ public struct EditorView: NSViewRepresentable {
 
         // Update preferences reference
         textView.preferences = preferences
+
+        if scrollView.isHidden == isActive {
+            scrollView.isHidden = !isActive
+        }
 
         // Update gutter visibility
         if scrollView.hasVerticalRuler != preferences.lineNumbers {
@@ -338,10 +350,8 @@ public struct EditorView: NSViewRepresentable {
             // scroll offset (it produced negative fractions and broke split sync).
             let visible = clipView.documentVisibleRect
             let offset = visible.minY - documentView.bounds.minY
-            let maxScroll = documentView.bounds.height - visible.height
-            if maxScroll > 0 {
-                let fraction = min(1, max(0, offset / maxScroll))
-                parent.onScrollFractionChanged?(Double(fraction))
+            if let report = parent.onReadingPositionChanged, let textView = documentView as? LucidTextView {
+                report(textView.readingPosition())
             }
             let intensity = min(1, max(0, Double(offset) / 28))
             parent.onScrollIntensityChanged?(intensity)
@@ -353,11 +363,20 @@ public struct EditorView: NSViewRepresentable {
 /// The editor's scroll view. NSTextView keeps its selection in view whenever
 /// it is resized, so SwiftUI's first sizing (and Split's second one) scrolled a
 /// new editor down by up to a line plus the top inset, leaving its first line
-/// under the toolbar. A resize that starts at the top now stays at the top.
+/// under the toolbar. A resize that starts at the top now stays at the top, and
+/// a width change elsewhere (mode switch, split divider, window resize) keeps
+/// the same source line at the top instead of following the caret.
 final class LucidEditorScrollView: NSScrollView {
     override func setFrameSize(_ newSize: NSSize) {
         let wasAtTop = documentView.map { contentView.bounds.minY <= $0.frame.minY + 0.5 } ?? true
+        let textView = documentView as? LucidTextView
+        let widthChanged = abs(newSize.width - frame.width) > 0.5
+        let anchor = (!wasAtTop && widthChanged && frame.width > 0 && !isHidden) ? textView?.readingPosition() : nil
         super.setFrameSize(newSize)
+        if let anchor, let textView {
+            textView.scrollToReadingPosition(anchor)
+            return
+        }
         guard wasAtTop, let documentView, contentView.bounds.minY > documentView.frame.minY + 0.5 else { return }
         contentView.scroll(to: NSPoint(x: contentView.bounds.minX, y: documentView.frame.minY))
         reflectScrolledClipView(contentView)
@@ -373,6 +392,61 @@ public final class LucidTextView: NSTextView {
     public var focusModeEnabled = false
     /// The paragraph Focus Mode currently leaves undimmed (nil = nothing dimmed).
     private var focusedParagraph: NSRange?
+
+    // MARK: - Reading Position
+
+    /// The source line resting at the top reading edge, just below the toolbar.
+    /// With the clip origin at y, the container line at y rests there (the top
+    /// text inset puts line 0 at the edge when y is 0).
+    func readingPosition() -> ReadingPosition {
+        guard let layoutManager, let textContainer, let clipView = enclosingScrollView?.contentView else {
+            return .documentTop
+        }
+        let text = string as NSString
+        let visible = clipView.documentVisibleRect
+        let edge = visible.minY - bounds.minY
+        guard edge > 1, text.length > 0 else { return .documentTop }
+        let maxOffset = bounds.height - visible.height
+        let atEnd = maxOffset > 0 && edge >= maxOffset - 1
+
+        let glyph = layoutManager.glyphIndex(for: NSPoint(x: 0, y: edge), in: textContainer)
+        let character = min(layoutManager.characterIndexForGlyph(at: glyph), text.length - 1)
+        let lineRange = text.lineRange(for: NSRange(location: character, length: 0))
+        let glyphs = layoutManager.glyphRange(forCharacterRange: lineRange, actualCharacterRange: nil)
+        let rect = layoutManager.boundingRect(forGlyphRange: glyphs, in: textContainer)
+        let fraction = rect.height > 0 ? min(1, max(0, (edge - rect.minY) / rect.height)) : 0
+        let line = ReadingPosition.lineIndex(of: lineRange.location, in: text)
+        return ReadingPosition(line: Double(line) + Double(fraction), end: atEnd)
+    }
+
+    /// Scrolls so `position` rests at the top reading edge.
+    func scrollToReadingPosition(_ position: ReadingPosition) {
+        guard let layoutManager, let textContainer, let scrollView = enclosingScrollView else { return }
+        let text = string as NSString
+        let visible = scrollView.contentView.documentVisibleRect
+        if position.end {
+            layoutManager.ensureLayout(for: textContainer)
+            scroll(NSPoint(x: visible.minX, y: bounds.maxY))
+            scrollView.reflectScrolledClipView(scrollView.contentView)
+            return
+        }
+        var y: CGFloat = 0
+        if !position.top, position.line > 0, text.length > 0 {
+            let whole = Int(position.line.rounded(.down))
+            let location = ReadingPosition.location(ofLine: whole, in: text)
+            if location >= text.length {
+                layoutManager.ensureLayout(for: textContainer)
+                y = bounds.maxY
+            } else {
+                let lineRange = text.lineRange(for: NSRange(location: location, length: 0))
+                let glyphs = layoutManager.glyphRange(forCharacterRange: lineRange, actualCharacterRange: nil)
+                let rect = layoutManager.boundingRect(forGlyphRange: glyphs, in: textContainer)
+                y = rect.minY + CGFloat(position.line - Double(whole)) * rect.height
+            }
+        }
+        scroll(NSPoint(x: visible.minX, y: bounds.minY + max(0, y)))
+        scrollView.reflectScrolledClipView(scrollView.contentView)
+    }
 
     // MARK: - Focus & Typewriter Modes
 
