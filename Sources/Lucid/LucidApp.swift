@@ -1,9 +1,14 @@
 import SwiftUI
+import AppKit
 
 @main
 struct LucidApp: App {
     @StateObject private var preferences = LucidPreferences.shared
     @StateObject private var updateController = LucidUpdateController.shared
+
+    init() {
+        LaunchUntitledCleanup.markLaunch()
+    }
 
     var body: some Scene {
         DocumentGroup(newDocument: LucidDocument()) { file in
@@ -44,6 +49,12 @@ struct LucidApp: App {
                     NotificationCenter.default.post(name: NSNotification.Name("LucidFindPrevious"), object: nil)
                 }
                 .keyboardShortcut("g", modifiers: [.command, .shift])
+
+                Divider()
+                Button("Command Palette…") {
+                    NotificationCenter.default.post(name: NSNotification.Name("LucidToggleCommandPalette"), object: nil)
+                }
+                .keyboardShortcut("k", modifiers: .command)
             }
 
             CommandMenu("View") {
@@ -119,6 +130,28 @@ struct LucidApp: App {
                     }
                 }
             }
+        }
+    }
+}
+
+/// Opening a file at launch (Finder, `open -a`) makes DocumentGroup create an
+/// empty Untitled window as well, on top of the file. Shortly after launch,
+/// close such an Untitled document once a real file is open, as long as the
+/// user hasn't touched it.
+enum LaunchUntitledCleanup {
+    private static var launchDate: Date?
+
+    static func markLaunch() {
+        launchDate = Date()
+    }
+
+    @MainActor
+    static func closeUntouchedUntitledIfOpeningFile() {
+        guard let launchDate, Date().timeIntervalSince(launchDate) < 5 else { return }
+        let documents = NSDocumentController.shared.documents
+        guard documents.contains(where: { $0.fileURL != nil }) else { return }
+        for document in documents where document.fileURL == nil && !document.isDocumentEdited {
+            document.close()
         }
     }
 }

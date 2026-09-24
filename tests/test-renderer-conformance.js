@@ -359,6 +359,26 @@ runTest('Full Fixture: renderer-conformance.md renders cleanly without unhandled
   assert(html.includes('markdown-alert'), 'Fixture must contain alerts');
 });
 
+runTest('Task lists render as disabled checkboxes, not literal [ ] text', () => {
+  context.lucid.updateContent('- [ ] open\n- [x] done\n- plain', 'rev-task');
+  const html = dom.contentHTML;
+  assert(/contains-task-list/.test(html), 'list should be marked as a task list');
+  assert((html.match(/type="checkbox"/g) || []).length === 2, 'two checkboxes expected');
+  assert(/checked=""[^>]*>|checked[^>]*disabled|disabled[^>]*checked/.test(html), 'the done item is checked');
+  assert(!/\[ \]|\[x\]/.test(html.replace(/<[^>]+>/g, '')), 'no literal [ ] / [x] text left');
+  assert((html.match(/disabled/g) || []).length === 2, 'checkboxes are read-only');
+});
+
+runTest('YAML front matter is hidden, not rendered as a rule plus a heading', () => {
+  context.lucid.updateContent('---\ntitle: Notes\ntags: [a, b]\n---\n\n# Real heading\n\nBody.', 'rev-fm');
+  const html = dom.contentHTML;
+  assert(!/<hr/.test(html), 'front matter delimiters must not become <hr>');
+  assert(!/title: Notes/.test(html), 'front matter text must not render');
+  assert(/<h1[^>]*>Real heading<\/h1>/.test(html), 'content after front matter renders');
+  context.lucid.updateContent('Intro\n\n---\n\nnot: front matter\n\n---', 'rev-fm2');
+  assert(/<hr/.test(dom.contentHTML), 'a --- rule later in the document still renders');
+});
+
 console.log(`\n=== Results: ${passedCount} passed, ${failedCount} failed ===\n`);
 
 if (failedCount > 0) {

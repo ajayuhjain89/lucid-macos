@@ -329,6 +329,15 @@ public struct PreviewWebView: NSViewRepresentable {
             decisionHandler(.cancel)
         }
 
+        public func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+            // Without this the preview stays blank after a WebContent crash.
+            isPageLoaded = false
+            hasRenderedFirstContent = false
+            lastAppliedFraction = -1
+            renderCoordinator.handleContentProcessTerminated()
+            webView.reload()
+        }
+
         public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             isPageLoaded = true
             renderCoordinator.setWebView(webView)
