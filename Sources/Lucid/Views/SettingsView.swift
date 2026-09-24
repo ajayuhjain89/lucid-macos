@@ -89,8 +89,8 @@ struct GeneralSettingsTab: View {
                     LucidSectionHeader(title: "Default Canvas")
 
                     LucidSettingRow(
-                        title: "Startup View Mode",
-                        description: "The default presentation mode when opening a document."
+                        title: "View Mode",
+                        description: "Reader, split or editor. Applies to every open window and to documents you open next."
                     ) {
                         Picker("", selection: $preferences.viewMode) {
                             ForEach(ViewMode.allCases) { mode in
@@ -98,7 +98,7 @@ struct GeneralSettingsTab: View {
                             }
                         }
                         .pickerStyle(.segmented)
-                        .accessibilityLabel("Startup View Mode")
+                        .accessibilityLabel("View Mode")
                         .fixedSize()
                     }
 

@@ -57,32 +57,24 @@ struct LucidApp: App {
                 .keyboardShortcut("k", modifiers: .command)
             }
 
-            CommandMenu("View") {
-                Button("Reader Mode") {
-                    preferences.viewMode = .reader
-                }
-                .keyboardShortcut("1", modifiers: .command)
+            // Added to the system View menu (a CommandMenu("View") made a second one).
+            // Toggles show the current mode with a checkmark.
+            CommandGroup(before: .toolbar) {
+                Toggle("Reader Mode", isOn: viewModeBinding(.reader))
+                    .keyboardShortcut("1", modifiers: .command)
 
-                Button("Split Mode") {
-                    preferences.viewMode = .split
-                }
-                .keyboardShortcut("2", modifiers: .command)
+                Toggle("Split Mode", isOn: viewModeBinding(.split))
+                    .keyboardShortcut("2", modifiers: .command)
 
-                Button("Editor Mode") {
-                    preferences.viewMode = .editor
-                }
-                .keyboardShortcut("3", modifiers: .command)
+                Toggle("Editor Mode", isOn: viewModeBinding(.editor))
+                    .keyboardShortcut("3", modifiers: .command)
 
                 Divider()
 
-                Button(preferences.focusMode ? "Disable Focus Mode" : "Enable Focus Mode") {
-                    preferences.focusMode.toggle()
-                }
-                .keyboardShortcut("d", modifiers: [.command, .shift])
+                Toggle("Focus Mode", isOn: $preferences.focusMode)
+                    .keyboardShortcut("d", modifiers: [.command, .shift])
 
-                Button(preferences.typewriterMode ? "Disable Typewriter Mode" : "Enable Typewriter Mode") {
-                    preferences.typewriterMode.toggle()
-                }
+                Toggle("Typewriter Mode", isOn: $preferences.typewriterMode)
 
                 Divider()
 
@@ -121,16 +113,28 @@ struct LucidApp: App {
                     preferences.fontSize = LucidPreferences.Defaults.fontSize
                 }
                 .keyboardShortcut("0", modifiers: .command)
+
+                Divider()
             }
 
             CommandMenu("Theme") {
                 ForEach(ThemeMode.curatedThemes) { mode in
-                    Button(mode.displayName) {
-                        preferences.theme = mode
-                    }
+                    Toggle(mode.displayName, isOn: Binding(
+                        get: { preferences.theme == mode },
+                        set: { if $0 { preferences.theme = mode } }
+                    ))
                 }
             }
         }
+    }
+
+    /// A menu checkmark binding for one view mode: on when it is the current
+    /// mode; choosing it selects that mode (choosing the current one keeps it).
+    private func viewModeBinding(_ mode: ViewMode) -> Binding<Bool> {
+        Binding(
+            get: { preferences.viewMode == mode },
+            set: { if $0 { preferences.viewMode = mode } }
+        )
     }
 }
 
