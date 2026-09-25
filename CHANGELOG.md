@@ -6,6 +6,49 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.0.5] - 2026-09-25
+
+### Added
+- Native support for rendering Markdown footnotes with linked anchors and endnotes section.
+- Multi-window independent view states: view mode, sidebar state, and Focus Mode are window-scoped.
+- Focus Mode and Typewriter Mode support within the Editor view.
+- Support for opening UTF-16 and legacy 8-bit encoded files alongside UTF-8.
+- Comprehensive Swift Testing unit test target covering decoding, list continuation, outline parsing, pane layout, presets, and window state.
+
+### Improved
+- Preserved reading position and pane state across mode switches and document reloads without jumping to the top.
+- Smoother sidebar transitions with directional hysteresis and sub-pixel deadband to eliminate outline flickering while scrolling.
+- Serialized Mermaid diagram theme rendering with WebKit yielding and theme-cached SVGs for seamless theme switches.
+- Enhanced Mermaid error presentation with reader-facing error cards while keeping the rest of the document functional.
+- Responsive Settings Editor layout with compact font pickers and single-window reuse.
+- Native macOS View menu integration with synchronized checkmarks for display modes and layout options.
+- Floating toolbar content clipping: content scrolled under the floating glass toolbar is properly clipped.
+- Search field in Command Palette automatically receives focus on open and returns focus upon dismissal.
+- Wrapped long unbroken words in preview to prevent horizontal overflow.
+- Accessible names and labels across theme, accent, and workflow preset controls in Settings.
+
+### Fixed
+- Fixed Split mode editor starting at the top of the document when opened.
+- Fixed native outline parser parity with renderer for duplicate and non-Latin Unicode heading IDs.
+- Fixed in-page Find from highlighting hidden markup inside Mermaid diagrams and KaTeX formulas.
+- Fixed live reload to remain active after file renames and external edits.
+- Fixed Developer workflow preset to apply full developer settings without leaking previous preset options.
+
+### Security
+- Enforced strict Content-Security-Policy (CSP) on the Markdown preview and removed inline event handlers.
+- Local image paths are strictly sandboxed through the custom `lucid-asset:` scheme.
+- Gated KaTeX, Mermaid, syntax highlighting, and chemistry rendering strictly behind user preferences.
+- Hardened Sparkle release signature lookup and update check availability guards.
+
+## [1.0.4] - 2026-09-22
+
+### Fixed
+- Fixed Mermaid flowchart rendering compatibility for node labels containing parenthesized mathematical notation (such as `r(t)`, `R(s)`, and `G(s)`).
+- Formatted unrecoverable Mermaid diagram syntax errors cleanly as reader-facing notification cards instead of broken SVG charts.
+
+### Added
+- First in-app update delivery via Sparkle for users on Lucid 1.0.3.
+
 ## [1.0.3] - 2026-09-21
 
 ### Added
@@ -69,6 +112,8 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Live external file watching and PDF / standalone-HTML / rich-text export.
 - Pre-packaged `Lucid-1.0.0.dmg` release artifact with verified SHA-256 checksum.
 
+[1.0.5]: https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.5
+[1.0.4]: https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.4
 [1.0.3]: https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.3
 [1.0.2]: https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.2
 [1.0.1]: https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.1

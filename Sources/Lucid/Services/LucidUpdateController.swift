@@ -57,12 +57,12 @@ public final class LucidUpdateController: ObservableObject {
         }
     }
 
-    /// User-facing short version string from Info.plist (e.g. "1.0.4").
+    /// User-facing short version string from Info.plist (e.g. "1.0.5").
     public var currentVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown"
     }
 
-    /// Machine-readable build number from Info.plist (e.g. "5").
+    /// Machine-readable build number from Info.plist (e.g. "6").
     public var currentBuild: String {
         Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "Unknown"
     }
