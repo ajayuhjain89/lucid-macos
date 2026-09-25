@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.3"><img src="https://img.shields.io/badge/release-v1.0.3--beta-blue?style=flat-square" alt="v1.0.3 Public Beta"></a>
+  <a href="https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.5"><img src="https://img.shields.io/badge/release-v1.0.5--beta-blue?style=flat-square" alt="v1.0.5 Public Beta"></a>
   <img src="https://img.shields.io/badge/platform-macOS%2014.0%2B-black?style=flat-square&logo=apple" alt="macOS 14+">
   <img src="https://img.shields.io/badge/arch-Apple%20Silicon%20(arm64)-orange?style=flat-square" alt="Apple Silicon (arm64)">
   <img src="https://img.shields.io/badge/Swift-5.9%2B-F05138?style=flat-square&logo=swift&logoColor=white" alt="Swift 5.9+">
@@ -19,9 +19,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ajayuhjain89/lucid-macos/releases/download/v1.0.3/Lucid-1.0.3.dmg"><strong>Download Lucid (5.0 MB)</strong></a> &nbsp;•&nbsp;
+  <a href="https://github.com/ajayuhjain89/lucid-macos/releases/download/v1.0.5/Lucid-1.0.5.dmg"><strong>Download Lucid (DMG)</strong></a> &nbsp;•&nbsp;
   <a href="https://website-phi-umber-70.vercel.app"><strong>Official Website</strong></a> &nbsp;•&nbsp;
-  <a href="https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.3">Release Notes</a>
+  <a href="https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.5">Release Notes</a>
 </p>
 
 ---
@@ -30,12 +30,12 @@ Lucid renders Markdown with an editorial identity and wraps it in a genuinely na
 
 ## Install
 
-1. Download [**Lucid-1.0.3.dmg**](https://github.com/ajayuhjain89/lucid-macos/releases/download/v1.0.3/Lucid-1.0.3.dmg) (~5.0 MB).
-2. Open `Lucid-1.0.3.dmg` in your Downloads folder.
+1. Download [**Lucid-1.0.5.dmg**](https://github.com/ajayuhjain89/lucid-macos/releases/download/v1.0.5/Lucid-1.0.5.dmg).
+2. Open `Lucid-1.0.5.dmg` in your Downloads folder.
 3. Drag `Lucid.app` into your `Applications` folder.
 4. Launch Lucid from Applications or Spotlight.
 
-> **Important Migration Notice**: Lucid v1.0.0, v1.0.1, and v1.0.2 do not contain an in-app updater and cannot automatically update to v1.0.3. Existing users must manually install v1.0.3 once. Lucid 1.0.3 is the first version with built-in updating; once verified, subsequent releases such as v1.0.4 can be checked and downloaded from inside Lucid.
+> **In-App Updates**: Existing Lucid users on v1.0.4 (or v1.0.3) can update directly via **Lucid → Check for Updates…**. Users on v1.0.2 or earlier must manually install Lucid once via the disk image.
 
 ### Built-In In-App Updates
 
@@ -62,8 +62,8 @@ To open Lucid:
 
 | Property | Value |
 | :--- | :--- |
-| **Release** | Lucid 1.0.3 Public Beta (`v1.0.3`) |
-| **Artifact** | `Lucid-1.0.3.dmg` |
+| **Release** | Lucid 1.0.5 Public Beta (`v1.0.5`) |
+| **Artifact** | `Lucid-1.0.5.dmg` |
 | **Minimum OS** | macOS 14.0 (Sonoma) or later |
 | **Architecture** | Apple Silicon (`arm64`) |
 | **Signing** | Ad-hoc (Beta) + Sparkle EdDSA archive signature |
@@ -71,10 +71,10 @@ To open Lucid:
 To verify the checksum of your download in Terminal:
 
 ```bash
-shasum -a 256 ~/Downloads/Lucid-1.0.3.dmg
+shasum -a 256 ~/Downloads/Lucid-1.0.5.dmg
 ```
 
-Authoritative release assets and release notes are published on [GitHub Releases](https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.3).
+Authoritative release assets and release notes are published on [GitHub Releases](https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.5).
 
 ## Features
 

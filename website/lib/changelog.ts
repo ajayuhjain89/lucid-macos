@@ -17,6 +17,129 @@ export interface ReleaseEntry {
 
 export const changelogData: ReleaseEntry[] = [
   {
+    version: "1.0.5",
+    date: "September 25, 2026",
+    channel: "Beta",
+    summary: "Lucid 1.0.5 Public Beta delivers persistent reading positions across view modes, independent multi-window state, enhanced vector PDF and HTML export, Markdown footnotes, and major preview rendering and theme-switch performance optimizations.",
+    highlights: [
+      "Persistent Reading Position & Pane State: Switching between Reader, Editor, and Split view modes preserves your exact reading anchor and cursor position.",
+      "Independent Multi-Window Controls: Each window maintains its own view mode, sidebar visibility, and Focus Mode independently.",
+      "Enhanced Export Capabilities: Export beautifully paginated vector PDFs and self-contained HTML directly from any view mode.",
+      "Markdown Footnotes Support: Render linked footnote references and an organized footnotes section automatically.",
+      "Block-Level Preview Performance: Live preview updates only re-render modified blocks with capped typing debounce, eliminating editor restyling lag.",
+    ],
+    sections: [
+      {
+        title: "Navigation & View Modes",
+        items: [
+          {
+            type: "new",
+            text: "Preserved reading position and pane state across Reader, Editor, and Split view switches without jumping to the top.",
+          },
+          {
+            type: "new",
+            text: "Independent multi-window states: each document window maintains its own view mode, sidebar toggle state, and Focus Mode.",
+          },
+          {
+            type: "improved",
+            text: "Smoother sidebar transitions with directional hysteresis and sub-pixel deadband to eliminate outline flickering while scrolling.",
+          },
+          {
+            type: "improved",
+            text: "Native macOS View menu integration with synchronized checkmarks for display modes and layout options.",
+          },
+          {
+            type: "fixed",
+            text: "Fixed Split mode editor starting at the top of the document when opened.",
+          },
+        ],
+      },
+      {
+        title: "Markdown & Rendering Engine",
+        items: [
+          {
+            type: "new",
+            text: "Markdown footnotes: render linked footnote numbers and an organized footnotes section at the bottom of the document.",
+          },
+          {
+            type: "improved",
+            text: "Block-level incremental preview rendering: typing now only re-renders modified blocks, eliminating editor lag.",
+          },
+          {
+            type: "improved",
+            text: "Serialized Mermaid diagram theme rendering with WebKit yielding and theme-cached SVGs for smooth theme switches.",
+          },
+          {
+            type: "improved",
+            text: "Mermaid syntax error presentation: unrecoverable syntax errors cleanly display reader-facing error cards without breaking the document.",
+          },
+          {
+            type: "fixed",
+            text: "Fixed outline navigation and heading ID parity for Unicode and duplicate headings.",
+          },
+          {
+            type: "fixed",
+            text: "In-page Find now avoids highlighting hidden markup inside Mermaid diagrams and KaTeX formulas.",
+          },
+          {
+            type: "fixed",
+            text: "Fixed long unbroken words overflowing preview margins.",
+          },
+        ],
+      },
+      {
+        title: "Editor & Workflows",
+        items: [
+          {
+            type: "new",
+            text: "Focus Mode and Typewriter Mode support within the Editor view.",
+          },
+          {
+            type: "new",
+            text: "Paginated vector PDF and self-contained offline HTML export directly from any view mode (Reader, Editor, or Split).",
+          },
+          {
+            type: "improved",
+            text: "Support for opening UTF-16 and legacy 8-bit encoded text files alongside UTF-8.",
+          },
+          {
+            type: "improved",
+            text: "Responsive Settings Editor tab layout with compact font pickers and single-window reuse.",
+          },
+          {
+            type: "fixed",
+            text: "Command Palette immediately focuses the search field on open and returns focus upon dismissal.",
+          },
+          {
+            type: "fixed",
+            text: "Toolbar depth: document content scrolled beneath the floating glass toolbar is properly clipped.",
+          },
+        ],
+      },
+      {
+        title: "Security & Quality",
+        items: [
+          {
+            type: "improved",
+            text: "Enforced strict Content-Security-Policy (CSP) on the Markdown preview and removed inline event handlers.",
+          },
+          {
+            type: "improved",
+            text: "Local image paths are sandboxed through the custom lucid-asset: URL scheme.",
+          },
+          {
+            type: "improved",
+            text: "STEM features (KaTeX, Mermaid, syntax highlighting, mhchem) are strictly gated by user preferences.",
+          },
+          {
+            type: "improved",
+            text: "Added descriptive accessibility labels for theme, accent, and workflow preset controls in Settings.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.0.4",
     date: "September 22, 2026",
     channel: "Beta",
