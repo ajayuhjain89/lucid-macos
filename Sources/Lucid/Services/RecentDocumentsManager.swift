@@ -79,6 +79,7 @@ public final class RecentDocumentsManager: ObservableObject {
 
     /// Attempts to open a recent document. If the file is missing, presents a non-crashing alert
     /// offering to remove the stale entry.
+    @discardableResult
     public func openRecent(
         url: URL,
         openHandler: (URL) -> Void,

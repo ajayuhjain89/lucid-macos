@@ -712,6 +712,10 @@ public struct MainWindowView: View {
                     preferences: preferences,
                     focusMode: viewState.focusMode,
                     isActive: layout.showsEditor,
+                    documentFileURL: documentManager.activeSession.fileURL,
+                    onRequestSave: {
+                        documentManager.saveSession(documentManager.activeSession, window: hostWindow.window) { _ in }
+                    },
                     onReadingPositionChanged: { position in
                         documentManager.activeSession.readingPosition = position
                         if mode == .split { syncPreviewToEditor(position) }
