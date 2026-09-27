@@ -418,7 +418,7 @@ async function runAllTests() {
     // Load new content
     context.window.lucid.updateContent('```mermaid\nflowchart LR\nC --> D\n```', 'rev-8');
     const newContainer = dom.mermaidContainers[0];
-    assert.strictEqual(newContainer._lucidRenderedThemes, undefined, 'New container must not retain old cache');
+    assert.strictEqual(Object.keys(newContainer._lucidRenderedThemes || {}).length, 0, 'New source must not retain old cached SVGs');
   });
 
   console.log(`\n=== Results: ${passedCount} passed, ${totalTests - passedCount} failed ===\n`);

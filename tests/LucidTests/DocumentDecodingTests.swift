@@ -48,4 +48,19 @@ struct DocumentDecodingTests {
     @Test func binaryWithNULBytesIsRefused() {
         #expect(LucidDocument.decodeText(Data([0x89, 0x50, 0x4E, 0x47, 0x00, 0x00, 0xFF, 0x10])) == nil)
     }
+
+    @Test func utf32BigEndianBOMPrecedesUTF8Detection() throws {
+        let data = Data([0, 0, 0xFE, 0xFF]) + "# ASCII".data(using: .utf32BigEndian)!
+        let decoded = try #require(LucidDocument.decodeText(data))
+        #expect(decoded.text == "# ASCII")
+        #expect(decoded.encoding == .utf32)
+    }
+
+    @Test func utf8CompatibleBinaryIsRefused() {
+        #expect(LucidDocument.decodeText(Data([0x61, 0, 0x62])) == nil)
+    }
+
+    @Test func invalidBOMPayloadDoesNotFallBackToLegacyText() {
+        #expect(LucidDocument.decodeText(Data([0xFF, 0xFE, 0x61])) == nil)
+    }
 }

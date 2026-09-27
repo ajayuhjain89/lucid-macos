@@ -119,7 +119,7 @@ public final class LucidCommandRegistry {
         reg(.toggleStatusBar, "Toggle Status Bar", "Show or hide the bottom document metrics bar", "menubar.dock.rectangle", nil, [], .view)
 
         // Typography & Font size
-        reg(.increaseFontSize, "Increase Font Size", "Make editor and preview text larger", "plus.magnifyingglass", "+", .command, .view)
+        reg(.increaseFontSize, "Increase Font Size", "Make editor and preview text larger", "plus.magnifyingglass", "=", .command, .view)
         reg(.decreaseFontSize, "Decrease Font Size", "Make editor and preview text smaller", "minus.magnifyingglass", "-", .command, .view)
         reg(.resetFontSize, "Reset Font Size", "Restore default font size (18 pt)", "arrow.counterclockwise", "0", .command, .view)
 

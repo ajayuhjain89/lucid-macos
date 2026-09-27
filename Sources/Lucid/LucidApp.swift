@@ -108,7 +108,7 @@ struct LucidApp: App {
                 Button("Increase Font Size") {
                     preferences.fontSize = min(LucidPreferences.Limits.fontSizeRange.upperBound, preferences.fontSize + LucidPreferences.Limits.fontSizeStep)
                 }
-                .keyboardShortcut("+", modifiers: .command)
+                .keyboardShortcut("=", modifiers: .command)
 
                 Button("Decrease Font Size") {
                     preferences.fontSize = max(LucidPreferences.Limits.fontSizeRange.lowerBound, preferences.fontSize - LucidPreferences.Limits.fontSizeStep)

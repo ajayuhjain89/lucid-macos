@@ -1172,13 +1172,11 @@ body.vscode-body .katex-display {
 /* ============================================================
    FIND HIGHLIGHTS (macOS in-page find)
    ============================================================ */
-mark.lucid-find-match {
-  padding: 0;
+::highlight(lucid-find-match) {
   color: inherit;
   background: rgba(56, 139, 253, 0.32);
-  border-radius: 2px;
 }
-mark.lucid-find-active {
+::highlight(lucid-find-active) {
   background: #ff9632;
   color: #1a1200;
 }
