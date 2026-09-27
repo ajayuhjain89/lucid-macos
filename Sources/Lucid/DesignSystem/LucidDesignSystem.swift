@@ -462,6 +462,10 @@ public struct LucidSidebarRow: View {
         }
         .buttonStyle(LucidPressableButtonStyle(pressedScale: 0.98))
         .onHover { isHovered = $0 }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(title), Heading \(level)")
+        .accessibilityValue(isActive ? "current section" : "")
+        .accessibilityAddTraits(isActive ? [.isSelected] : [])
     }
 }
 
