@@ -54,19 +54,23 @@ public struct LucidDocument: FileDocument {
     /// says so, then Windows-1252 for legacy 8-bit files. Data containing NUL
     /// bytes without a BOM is treated as binary and refused.
     public static func decodeText(_ data: Data) -> (text: String, encoding: String.Encoding)? {
-        if let text = String(data: data, encoding: .utf8) {
-            return (text, .utf8)
-        }
         let boms: [([UInt8], String.Encoding)] = [
             ([0xFF, 0xFE, 0x00, 0x00], .utf32LittleEndian), ([0x00, 0x00, 0xFE, 0xFF], .utf32BigEndian),
             ([0xFF, 0xFE], .utf16LittleEndian), ([0xFE, 0xFF], .utf16BigEndian)
         ]
         for (bom, encoding) in boms where data.starts(with: bom) {
-            if let text = String(data: data.dropFirst(bom.count), encoding: encoding) {
-                return (text, encoding == .utf16LittleEndian || encoding == .utf16BigEndian ? .utf16 : .utf32)
-            }
+            let payload = Data(data.dropFirst(bom.count))
+            // Foundation can accept truncated code units and silently drop bytes.
+            // A recognized BOM is authoritative; never reinterpret malformed
+            // Unicode as legacy text or allow a subsequent save to lose bytes.
+            guard let text = String(data: payload, encoding: encoding),
+                  text.data(using: encoding) == payload else { return nil }
+            return (text, encoding == .utf16LittleEndian || encoding == .utf16BigEndian ? .utf16 : .utf32)
         }
         if data.contains(0) { return nil }
+        if let text = String(data: data, encoding: .utf8) {
+            return (text, .utf8)
+        }
         if let text = String(data: data, encoding: .windowsCP1252) {
             return (text, .windowsCP1252)
         }

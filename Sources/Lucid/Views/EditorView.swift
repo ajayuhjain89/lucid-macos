@@ -328,16 +328,9 @@ public struct EditorView: NSViewRepresentable {
             let string = textView.string as NSString
             let location = min(selectedRange.location, string.length)
 
-            var line = 1
-            var col = 1
-            var lastLineStart = 0
-
-            string.enumerateSubstrings(in: NSRange(location: 0, length: location), options: [.byLines, .substringNotRequired]) { _, range, _, _ in
-                line += 1
-                lastLineStart = NSMaxRange(range)
-            }
-            col = location - lastLineStart + 1
-
+            let line = ReadingPosition.lineIndex(of: location, in: string) + 1
+            let lineStart = string.lineRange(for: NSRange(location: location, length: 0)).location
+            let col = string.substring(with: NSRange(location: lineStart, length: location - lineStart)).count + 1
             gutterView?.activeLineIndex = line
             parent.onCursorPositionChanged?(line, col)
         }
@@ -578,8 +571,14 @@ public final class LucidTextView: NSTextView {
     }
 
     // MARK: - Context-Aware Auto-Pairing & Delimiter Handling
+    override public func insertNewline(_ sender: Any?) {
+        if hasMarkedText() { super.insertNewline(sender); return }
+        insertText("\n", replacementRange: NSRange(location: NSNotFound, length: 0))
+    }
+
     override public func insertText(_ string: Any, replacementRange: NSRange) {
-        guard let str = string as? String, let preferences = preferences, preferences.autoPairDelimiters else {
+        guard let str = string as? String, let preferences = preferences,
+              replacementRange.location == NSNotFound, !hasMarkedText() else {
             super.insertText(string, replacementRange: replacementRange)
             return
         }
@@ -587,75 +586,89 @@ public final class LucidTextView: NSTextView {
         let currentString = self.string as NSString
         let selectedRange = self.selectedRange()
 
-        // 1. Step-over existing closing delimiter
-        let closingDelimiters: Set<String> = [")", "]", "}", "\"", "`", "*", "_"]
-        if closingDelimiters.contains(str),
-           selectedRange.length == 0,
-           selectedRange.location < currentString.length {
-            let nextChar = currentString.substring(with: NSRange(location: selectedRange.location, length: 1))
-            if nextChar == str {
-                setSelectedRange(NSRange(location: selectedRange.location + 1, length: 0))
+        if preferences.autoPairDelimiters && str != "\n" {
+            // An odd run of backslashes escapes the delimiter in Markdown.
+            var precedingSlashes = 0
+            var offset = selectedRange.location
+            while offset > 0 && currentString.character(at: offset - 1) == 92 {
+                precedingSlashes += 1
+                offset -= 1
+            }
+            if precedingSlashes % 2 == 1 {
+                super.insertText(string, replacementRange: replacementRange)
                 return
             }
-        }
 
-        // A space inside an empty `*`/`_` pair means a bullet ("* ") or spaced
-        // arithmetic ("a * b"), not emphasis: drop the auto-inserted closer.
-        if str == " ", selectedRange.length == 0,
-           selectedRange.location > 0, selectedRange.location < currentString.length {
-            let prevChar = currentString.substring(with: NSRange(location: selectedRange.location - 1, length: 1))
-            let nextChar = currentString.substring(with: NSRange(location: selectedRange.location, length: 1))
-            if (prevChar == "*" || prevChar == "_") && nextChar == prevChar {
-                super.insertText(" ", replacementRange: NSRange(location: selectedRange.location, length: 1))
-                return
-            }
-        }
-
-        // 2. Wrap selected text with delimiters
-        let pairMap: [String: (open: String, close: String)] = [
-            "(": ("(", ")"),
-            "[": ("[", "]"),
-            "{": ("{", "}"),
-            "\"": ("\"", "\""),
-            "`": ("`", "`"),
-            "*": ("*", "*"),
-            "_": ("_", "_")
-        ]
-
-        if let pair = pairMap[str], selectedRange.length > 0 {
-            let selectedText = currentString.substring(with: selectedRange)
-            let wrapped = pair.open + selectedText + pair.close
-            super.insertText(wrapped, replacementRange: selectedRange)
-            setSelectedRange(NSRange(location: selectedRange.location + (pair.open as NSString).length, length: (selectedText as NSString).length))
-            return
-        }
-
-        // 3. Auto-pair open delimiters
-        if let pair = pairMap[str], selectedRange.length == 0 {
-            // Only auto-pair quotes, asterisks, backticks if not in the middle of an identifier
-            var shouldPair = true
-            if str == "\"" || str == "`" || str == "*" || str == "_" {
-                // Symmetric delimiters don't pair right after a word character
-                // (snake_case, x*y, don"t) or inside a run of the same delimiter
-                // (a ``` fence, **bold**), where a closer would be left behind.
-                if selectedRange.location > 0 {
-                    let prevChar = currentString.substring(with: NSRange(location: selectedRange.location - 1, length: 1))
-                    if prevChar == str || prevChar.rangeOfCharacter(from: .alphanumerics) != nil {
-                        shouldPair = false
-                    }
-                }
-                if shouldPair && selectedRange.location < currentString.length {
-                    let nextChar = currentString.substring(with: NSRange(location: selectedRange.location, length: 1))
-                    if !nextChar.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !closingDelimiters.contains(nextChar) {
-                        shouldPair = false
-                    }
+            // 1. Step-over existing closing delimiter
+            let closingDelimiters: Set<String> = [")", "]", "}", "\"", "`", "*", "_"]
+            if closingDelimiters.contains(str),
+               selectedRange.length == 0,
+               selectedRange.location < currentString.length {
+                let nextChar = currentString.substring(with: NSRange(location: selectedRange.location, length: 1))
+                if nextChar == str {
+                    setSelectedRange(NSRange(location: selectedRange.location + 1, length: 0))
+                    return
                 }
             }
 
-            if shouldPair {
-                super.insertText(pair.open + pair.close, replacementRange: selectedRange)
-                setSelectedRange(NSRange(location: selectedRange.location + (pair.open as NSString).length, length: 0))
+            // A space inside an empty `*`/`_` pair means a bullet ("* ") or spaced
+            // arithmetic ("a * b"), not emphasis: drop the auto-inserted closer.
+            if str == " ", selectedRange.length == 0,
+               selectedRange.location > 0, selectedRange.location < currentString.length {
+                let prevChar = currentString.substring(with: NSRange(location: selectedRange.location - 1, length: 1))
+                let nextChar = currentString.substring(with: NSRange(location: selectedRange.location, length: 1))
+                if (prevChar == "*" || prevChar == "_") && nextChar == prevChar {
+                    super.insertText(" ", replacementRange: NSRange(location: selectedRange.location, length: 1))
+                    return
+                }
+            }
+
+            // 2. Wrap selected text with delimiters
+            let pairMap: [String: (open: String, close: String)] = [
+                "(": ("(", ")"),
+                "[": ("[", "]"),
+                "{": ("{", "}"),
+                "\"": ("\"", "\""),
+                "`": ("`", "`"),
+                "*": ("*", "*"),
+                "_": ("_", "_")
+            ]
+
+            if let pair = pairMap[str], selectedRange.length > 0 {
+                let selectedText = currentString.substring(with: selectedRange)
+                let wrapped = pair.open + selectedText + pair.close
+                super.insertText(wrapped, replacementRange: selectedRange)
+                setSelectedRange(NSRange(location: selectedRange.location + (pair.open as NSString).length, length: (selectedText as NSString).length))
                 return
+            }
+
+            // 3. Auto-pair open delimiters
+            if let pair = pairMap[str], selectedRange.length == 0 {
+                // Only auto-pair quotes, asterisks, backticks if not in the middle of an identifier
+                var shouldPair = true
+                if str == "\"" || str == "`" || str == "*" || str == "_" {
+                    // Symmetric delimiters don't pair right after a word character
+                    // (snake_case, x*y, don"t) or inside a run of the same delimiter
+                    // (a ``` fence, **bold**), where a closer would be left behind.
+                    if selectedRange.location > 0 {
+                        let prevChar = currentString.substring(with: NSRange(location: selectedRange.location - 1, length: 1))
+                        if prevChar == str || prevChar.rangeOfCharacter(from: .alphanumerics) != nil {
+                            shouldPair = false
+                        }
+                    }
+                    if shouldPair && selectedRange.location < currentString.length {
+                        let nextChar = currentString.substring(with: NSRange(location: selectedRange.location, length: 1))
+                        if !nextChar.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !closingDelimiters.contains(nextChar) {
+                            shouldPair = false
+                        }
+                    }
+                }
+
+                if shouldPair {
+                    super.insertText(pair.open + pair.close, replacementRange: selectedRange)
+                    setSelectedRange(NSRange(location: selectedRange.location + (pair.open as NSString).length, length: 0))
+                    return
+                }
             }
         }
 
@@ -668,7 +681,7 @@ public final class LucidTextView: NSTextView {
 
             // Return on an item that holds only its marker ends the list or quote.
             if selectedRange.length == 0,
-               let marker = Self.listContinuation(for: fullLine)?.marker,
+               let marker = Self.listContinuation(for: fullLine + " ")?.marker,
                fullLine.trimmingCharacters(in: .whitespaces) == marker.trimmingCharacters(in: .whitespaces) {
                 let markerRange = NSRange(location: lineStart, length: (fullLine as NSString).length)
                 super.insertText("", replacementRange: markerRange)
@@ -715,7 +728,8 @@ public final class LucidTextView: NSTextView {
         let selectedRange = self.selectedRange()
         let currentString = self.string as NSString
 
-        if selectedRange.length == 0 && selectedRange.location > 0 && selectedRange.location < currentString.length {
+        if preferences?.autoPairDelimiters == true && !hasMarkedText(),
+           selectedRange.length == 0 && selectedRange.location > 0 && selectedRange.location < currentString.length {
             let prevChar = currentString.substring(with: NSRange(location: selectedRange.location - 1, length: 1))
             let nextChar = currentString.substring(with: NSRange(location: selectedRange.location, length: 1))
 
@@ -725,8 +739,8 @@ public final class LucidTextView: NSTextView {
 
             for (open, close) in pairs {
                 if prevChar == open && nextChar == close {
-                    super.deleteBackward(sender)
-                    super.deleteForward(sender)
+                    // One edit keeps deleting an empty pair atomic for Undo.
+                    super.insertText("", replacementRange: NSRange(location: selectedRange.location - 1, length: 2))
                     return
                 }
             }
