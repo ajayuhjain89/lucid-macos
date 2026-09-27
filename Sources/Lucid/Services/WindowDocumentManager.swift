@@ -42,12 +42,35 @@ public final class WindowDocumentManager: ObservableObject {
             setupWatcher(for: first)
             RecentDocumentsManager.shared.recordRecent(url: url)
         }
+        SessionRestorationManager.shared.register(manager: self)
     }
 
     private func observeSession(_ session: DocumentSession) {
         session.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
         }.store(in: &cancellables)
+    }
+
+    /// Replaces the current sessions with a new collection (used during session restoration).
+    public func replaceSessions(_ newSessions: [DocumentSession]) {
+        guard !newSessions.isEmpty else { return }
+        for (_, watcher) in fileWatchers {
+            watcher.stopWatching()
+        }
+        fileWatchers.removeAll()
+        cancellables.removeAll()
+
+        for session in newSessions {
+            observeSession(session)
+            if let url = session.fileURL {
+                setupWatcher(for: session)
+                RecentDocumentsManager.shared.recordRecent(url: url)
+            }
+        }
+        self.sessions = newSessions
+        if !newSessions.contains(where: { $0.id == activeSessionID }) {
+            self.activeSessionID = newSessions[0].id
+        }
     }
 
     deinit {

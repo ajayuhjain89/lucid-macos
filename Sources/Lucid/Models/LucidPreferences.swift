@@ -224,6 +224,7 @@ public final class LucidPreferences: ObservableObject {
         public static let viewMode: ViewMode = .reader
         public static let showOutline: Bool = false
         public static let showStatusBar: Bool = true
+        public static let restoreSessionOnLaunch: Bool = true
 
         // Status Bar Metrics
         public static let statusWordCount: Bool = true
@@ -280,6 +281,7 @@ public final class LucidPreferences: ObservableObject {
     @AppStorage("lucid.viewMode") public var viewMode: ViewMode = Defaults.viewMode
     @AppStorage("lucid.showOutline") public var showOutline: Bool = Defaults.showOutline
     @AppStorage("lucid.showStatusBar") public var showStatusBar: Bool = Defaults.showStatusBar
+    @AppStorage("lucid.restoreSessionOnLaunch") public var restoreSessionOnLaunch: Bool = Defaults.restoreSessionOnLaunch
 
     // MARK: - Status Bar Metrics Customization
     @AppStorage("lucid.statusWordCount") public var statusWordCount: Bool = Defaults.statusWordCount

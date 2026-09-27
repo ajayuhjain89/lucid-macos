@@ -255,6 +255,15 @@ public struct MainWindowView: View {
             }
             if let url = documentManager.activeSession.fileURL {
                 RecentDocumentsManager.shared.recordRecent(url: url)
+            } else if documentManager.activeSession.isUntitled && documentManager.activeSession.text.isEmpty {
+                if SessionRestorationManager.shared.restoreInto(documentManager: documentManager) {
+                    let active = documentManager.activeSession
+                    viewState.viewMode = active.viewMode
+                    splitFraction = active.splitFraction
+                    cursorLine = active.cursorLine
+                    cursorCol = active.cursorCol
+                    document.text = active.text
+                }
             }
             // AppKit gives a new window's focus to its first text field (the
             // sidebar filter), so typing would go there. Start on the document.
