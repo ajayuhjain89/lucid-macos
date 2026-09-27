@@ -6,6 +6,7 @@ public struct MainWindowView: View {
     @Binding var document: LucidDocument
     var fileURL: URL?
 
+    @StateObject private var documentManager: WindowDocumentManager
     @StateObject private var preferences = LucidPreferences.shared
     /// This window's own view mode, sidebar and Focus Mode.
     @StateObject private var viewState = WindowViewState()
@@ -24,11 +25,6 @@ public struct MainWindowView: View {
     /// Command Palette) are posted without an object; only the key window acts.
     @State private var hostWindow = WeakWindowRef()
     @State private var editorTextView: NSTextView?
-    @State private var fileWatcher: FileWatcher?
-    /// The document text as of the last point buffer and disk were known to
-    /// agree (initial load or a save). Used to tell an innocent external change
-    /// apart from a genuine conflict with unsaved edits.
-    @State private var lastSyncedText: String = ""
     /// Graduated 0…1 depth of the content beneath the toolbar, driving the
     /// scroll-responsive glass almost subconsciously.
     @State private var scrollIntensity: Double = 0
@@ -76,8 +72,20 @@ public struct MainWindowView: View {
         Binding(get: { analyzer.headings }, set: { analyzer.headings = $0 })
     }
 
+    private var activeDocumentText: Binding<String> {
+        Binding(
+            get: { documentManager.activeSession.text },
+            set: { newText in
+                documentManager.activeSession.text = newText
+                if document.text != newText {
+                    document.text = newText
+                }
+            }
+        )
+    }
+
     private var documentTitle: String {
-        fileURL?.deletingPathExtension().lastPathComponent ?? "Untitled"
+        documentManager.activeSession.displayName
     }
 
     private var colorSchemeForTheme: ColorScheme? {
@@ -91,9 +99,27 @@ public struct MainWindowView: View {
         }
     }
 
-    public init(document: Binding<LucidDocument>, fileURL: URL? = nil) {
-        self._document = document
+    public init(
+        document: Binding<LucidDocument>? = nil,
+        fileURL: URL? = nil,
+        documentManager: WindowDocumentManager? = nil
+    ) {
+        let initialDoc = document ?? .constant(LucidDocument())
+        self._document = initialDoc
         self.fileURL = fileURL
+
+        if let dm = documentManager {
+            self._documentManager = StateObject(wrappedValue: dm)
+        } else {
+            let session = DocumentSession(
+                fileURL: fileURL,
+                text: initialDoc.wrappedValue.text,
+                savedBaselineText: initialDoc.wrappedValue.text,
+                encoding: initialDoc.wrappedValue.encoding
+            )
+            let dm = WindowDocumentManager(initialSession: session)
+            self._documentManager = StateObject(wrappedValue: dm)
+        }
     }
 
     public var body: some View {
@@ -179,10 +205,10 @@ public struct MainWindowView: View {
                     onExportPDF: { exportPDF() },
                     onExportHTML: { exportHTML() },
                     onCopyRichText: {
-                        ExportService.shared.copyRichText(markdown: document.text, documentURL: fileURL, preferences: preferences)
+                        ExportService.shared.copyRichText(markdown: documentManager.activeSession.text, documentURL: documentManager.activeSession.fileURL, preferences: preferences)
                     }
                 )
-                .padding(.top, LucidChrome.toolbarHeight + LucidSpacing.xxLarge)
+                .padding(.top, (documentManager.sessions.count > 1 ? LucidChrome.toolbarHeight + 28 : LucidChrome.toolbarHeight) + LucidSpacing.xxLarge)
                 .transition(
                     reduceMotion
                         ? AnyTransition.opacity
@@ -211,7 +237,7 @@ public struct MainWindowView: View {
         .ignoresSafeArea()
         // Configure the window: hide the native title bar so our custom top bar
         // sits flush at the top, and keep it draggable.
-        .background(WindowConfigurator(preferences: preferences, trafficLightWidth: $trafficLightReservedWidth, hostWindow: hostWindow))
+        .background(WindowConfigurator(preferences: preferences, trafficLightWidth: $trafficLightReservedWidth, hostWindow: hostWindow, documentManager: documentManager))
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEnterFullScreenNotification)) { note in
             guard isHostWindow(note.object) else { return }
             trafficLightReservedWidth = LucidSpacing.medium
@@ -227,45 +253,34 @@ public struct MainWindowView: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
                 LaunchUntitledCleanup.closeUntouchedUntitledIfOpeningFile()
             }
-            if let url = fileURL {
+            if let url = documentManager.activeSession.fileURL {
                 RecentDocumentsManager.shared.recordRecent(url: url)
             }
-            setupFileWatcher()
             // AppKit gives a new window's focus to its first text field (the
             // sidebar filter), so typing would go there. Start on the document.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 focusDocumentIfFieldHasFocus()
             }
             // Prompt initial analysis (off-main, no debounce).
-            analyzer.prime(text: document.text)
+            analyzer.prime(text: documentManager.activeSession.text)
         }
         .onDisappear {
             // Closing the document must not let in-flight analysis publish.
             analyzer.reset()
-            fileWatcher?.stopWatching()
-            fileWatcher = nil
         }
-        .onChange(of: fileURL) { _, newURL in
-            if let url = newURL {
-                RecentDocumentsManager.shared.recordRecent(url: url)
-            }
-            // Document switch: drop stale work from the previous document, then
-            // analyze the new one promptly.
-            analyzer.reset()
-            analyzer.prime(text: document.text)
-            // A rename, move or Save As changes the path; the old watcher is tied
-            // to the previous path and goes quiet, so watch the new one. Keep the
-            // sync baseline: unsaved edits must still count as unsaved.
-            setupFileWatcher(resetBaseline: false)
-        }
-        .onChange(of: document.text) { _, newText in
+        .onChange(of: documentManager.activeSession.text) { _, newText in
             // Typing path: schedule coalesced/cancellable analysis; never block.
             analyzer.update(text: newText)
+            hostWindow.window?.isDocumentEdited = documentManager.sessions.contains(where: { $0.isDirty })
             if isFindBarPresented && !findQuery.isEmpty {
                 // Refresh match counts only: moving the selection here would make
                 // the next keystroke overwrite the first match.
                 performFind(findQuery, moveSelection: false)
             }
+        }
+        .onChange(of: documentManager.activeSessionID) { oldID, newID in
+            guard oldID != newID else { return }
+            handleTabSwitch(from: oldID, to: newID)
         }
         .onChange(of: isCommandPalettePresented) { _, isPresented in
             // However the palette closed (Esc, a command, a click outside), give
@@ -307,6 +322,100 @@ public struct MainWindowView: View {
             guard isKeyDocumentWindow else { return }
             if isCommandPalettePresented { dismissCommandPalette() } else { presentCommandPalette() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("LucidNewTab"))) { _ in
+            guard isKeyDocumentWindow else { return }
+            documentManager.newTab()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("LucidCloseTab"))) { _ in
+            guard isKeyDocumentWindow else { return }
+            if documentManager.sessions.count > 1 {
+                documentManager.closeTab(id: documentManager.activeSessionID, window: hostWindow.window) { _ in }
+            } else {
+                documentManager.closeTab(id: documentManager.activeSessionID, window: hostWindow.window) { success in
+                    if success { hostWindow.window?.close() }
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("LucidNextTab"))) { _ in
+            guard isKeyDocumentWindow else { return }
+            documentManager.selectNextTab()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("LucidPreviousTab"))) { _ in
+            guard isKeyDocumentWindow else { return }
+            documentManager.selectPreviousTab()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("LucidSaveDocument"))) { _ in
+            guard isKeyDocumentWindow else { return }
+            documentManager.saveSession(documentManager.activeSession, saveAs: false, window: hostWindow.window) { _ in }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("LucidSaveDocumentAs"))) { _ in
+            guard isKeyDocumentWindow else { return }
+            documentManager.saveSession(documentManager.activeSession, saveAs: true, window: hostWindow.window) { _ in }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("LucidOpenFile"))) { _ in
+            guard isKeyDocumentWindow else { return }
+            let panel = NSOpenPanel()
+            panel.allowedContentTypes = [.markdownDocument, .plainText]
+            panel.allowsMultipleSelection = true
+            panel.canChooseDirectories = false
+            let handler: (NSApplication.ModalResponse) -> Void = { response in
+                guard response == .OK else { return }
+                for url in panel.urls {
+                    documentManager.openFile(url: url)
+                }
+            }
+            if let window = hostWindow.window {
+                panel.beginSheetModal(for: window, completionHandler: handler)
+            } else {
+                handler(panel.runModal())
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("LucidOpenRecentURL"))) { note in
+            guard isKeyDocumentWindow, let url = note.object as? URL else { return }
+            documentManager.openFile(url: url)
+        }
+    }
+
+    private func handleTabSwitch(from oldID: UUID, to newID: UUID) {
+        if let oldSession = documentManager.sessions.first(where: { $0.id == oldID }) {
+            oldSession.viewMode = viewState.viewMode
+            oldSession.splitFraction = splitFraction
+            oldSession.cursorLine = cursorLine
+            oldSession.cursorCol = cursorCol
+            if let tv = editorTextView {
+                oldSession.selectedRange = tv.selectedRange()
+                if let lucidTV = tv as? LucidTextView {
+                    oldSession.readingPosition = lucidTV.readingPosition()
+                }
+            }
+        }
+
+        let newSession = documentManager.activeSession
+        viewState.viewMode = newSession.viewMode
+        splitFraction = newSession.splitFraction
+        cursorLine = newSession.cursorLine
+        cursorCol = newSession.cursorCol
+
+        if document.text != newSession.text {
+            document.text = newSession.text
+        }
+        if let tv = editorTextView {
+            tv.string = newSession.text
+            let length = (newSession.text as NSString).length
+            let loc = min(newSession.selectedRange.location, length)
+            let len = min(newSession.selectedRange.length, length - loc)
+            tv.setSelectedRange(NSRange(location: loc, length: len))
+            (tv as? LucidTextView)?.scrollToReadingPosition(newSession.readingPosition)
+        }
+
+        analyzer.reset()
+        analyzer.prime(text: newSession.text)
+
+        paneSync.suppressSplitSyncUntil = CACurrentMediaTime() + 0.4
+        webViewInstance?.evaluateJavaScript("if (window.lucid && window.lucid.scrollToSourceLine) { window.lucid.scrollToSourceLine(\(newSession.readingPosition.javaScriptLiteral)); }")
+
+        hostWindow.window?.isDocumentEdited = documentManager.sessions.contains(where: { $0.isDirty })
+        documentManager.resolveExternalConflictIfPresent(for: newSession)
     }
 
     /// Scrolls the editor so the heading with `id` sits at the top, below the
@@ -452,11 +561,11 @@ public struct MainWindowView: View {
     // Exports render the document text in their own offscreen page, so they
     // work in every view mode, including Editor mode with no preview.
     private func exportPDF() {
-        ExportService.shared.exportPDF(markdown: document.text, documentURL: fileURL, preferences: preferences, defaultFilename: documentTitle)
+        ExportService.shared.exportPDF(markdown: documentManager.activeSession.text, documentURL: documentManager.activeSession.fileURL, preferences: preferences, defaultFilename: documentTitle)
     }
 
     private func exportHTML() {
-        ExportService.shared.exportHTML(markdown: document.text, documentURL: fileURL, preferences: preferences, defaultFilename: documentTitle)
+        ExportService.shared.exportHTML(markdown: documentManager.activeSession.text, documentURL: documentManager.activeSession.fileURL, preferences: preferences, defaultFilename: documentTitle)
     }
 
     private func focusDocumentIfFieldHasFocus() {
@@ -544,7 +653,7 @@ public struct MainWindowView: View {
                     onFindPrev: { findPrev() },
                     onDismiss: { closeFind() }
                 )
-                .padding(.top, LucidChrome.toolbarHeight + LucidSpacing.small)
+                .padding(.top, (documentManager.sessions.count > 1 ? LucidChrome.toolbarHeight + 28 : LucidChrome.toolbarHeight) + LucidSpacing.small)
                 .padding(.trailing, LucidSpacing.large)
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
@@ -564,7 +673,7 @@ public struct MainWindowView: View {
             ZStack(alignment: .topLeading) {
                 PreviewWebView(
                     preferences: preferences,
-                    markdown: document.text,
+                    markdown: documentManager.activeSession.text,
                     headings: headingsBinding,
                     activeHeading: $activeHeading,
                     onScrollFractionChanged: nil,
@@ -574,7 +683,7 @@ public struct MainWindowView: View {
                     },
                     scrollToHeadingId: scrollToHeadingId,
                     webViewInstance: $webViewInstance,
-                    documentFileURL: fileURL,
+                    documentFileURL: documentManager.activeSession.fileURL,
                     onScrollIntensityChanged: { intensity in
                         if viewState.viewMode != .editor { scrollIntensity = intensity }
                     },
@@ -590,14 +699,19 @@ public struct MainWindowView: View {
                 .accessibilityHidden(!layout.showsPreview)
 
                 EditorView(
-                    text: $document.text,
+                    text: activeDocumentText,
                     preferences: preferences,
                     focusMode: viewState.focusMode,
                     isActive: layout.showsEditor,
-                    onReadingPositionChanged: mode == .split ? { syncPreviewToEditor($0) } : nil,
+                    onReadingPositionChanged: { position in
+                        documentManager.activeSession.readingPosition = position
+                        if mode == .split { syncPreviewToEditor(position) }
+                    },
                     onCursorPositionChanged: { line, col in
                         cursorLine = line
                         cursorCol = col
+                        documentManager.activeSession.cursorLine = line
+                        documentManager.activeSession.cursorCol = col
                     },
                     onTextViewCreated: { editorTextView = $0 },
                     onScrollIntensityChanged: { intensity in
@@ -709,8 +823,10 @@ public struct MainWindowView: View {
                         .background(controlGlassBackground(cornerRadius: 6))
                     }
 
-                    documentTitleBadge
-                        .layoutPriority(0)
+                    if documentManager.sessions.count <= 1 {
+                        documentTitleBadge
+                            .layoutPriority(0)
+                    }
 
                     Spacer(minLength: LucidSpacing.medium)
 
@@ -725,8 +841,12 @@ public struct MainWindowView: View {
             .frame(height: LucidChrome.toolbarHeight)
             .frame(maxWidth: .infinity)
             .onHover { isToolbarHovered = $0 }
+
+            if documentManager.sessions.count > 1 {
+                TabBarView(documentManager: documentManager, preferences: preferences)
+            }
         }
-        .frame(height: LucidChrome.toolbarHeight)
+        .frame(height: documentManager.sessions.count > 1 ? LucidChrome.toolbarHeight + 28 : LucidChrome.toolbarHeight)
     }
 
     private func controlGlassBackground(cornerRadius: CGFloat) -> some View {
@@ -908,63 +1028,9 @@ public struct MainWindowView: View {
             }
         } else {
             // No live editor yet (e.g. just switched modes): append safely.
-            document.text += (document.text.hasSuffix("\n") ? "" : "\n") + template
+            documentManager.activeSession.text += (documentManager.activeSession.text.hasSuffix("\n") ? "" : "\n") + template
+            document.text = documentManager.activeSession.text
         }
-    }
-
-    private func setupFileWatcher(resetBaseline: Bool = true) {
-        fileWatcher?.stopWatching()
-        fileWatcher = nil
-        guard let url = fileURL else { return }
-        if resetBaseline { lastSyncedText = document.text }
-        fileWatcher = FileWatcher(url: url) {
-            guard let data = try? Data(contentsOf: url),
-                  let updatedText = LucidDocument.decodeText(data)?.text else { return }
-            DispatchQueue.main.async {
-                if updatedText == self.document.text {
-                    // Already in sync (e.g. Lucid's own save): refresh the baseline.
-                    self.lastSyncedText = updatedText
-                    return
-                }
-                if self.document.text == self.lastSyncedText {
-                    // No unsaved local edits: safe to live-reload from disk.
-                    self.reloadFromDisk(url: url, diskText: updatedText)
-                } else {
-                    // Disk and buffer both diverged from the last sync point:
-                    // never silently discard the user's unsaved edits.
-                    self.presentExternalChangeConflict(url: url, diskText: updatedText)
-                }
-            }
-        }
-    }
-
-    /// Reloads the document from disk through NSDocument's revert path. Writing
-    /// `document.text` directly would mark the document edited, and AppKit would
-    /// then report an autosave conflict against the file it just re-read.
-    private func reloadFromDisk(url: URL, diskText: String) {
-        if let nsDocument = NSDocumentController.shared.document(for: url),
-           let type = nsDocument.fileType,
-           (try? nsDocument.revert(toContentsOf: url, ofType: type)) != nil {
-            lastSyncedText = diskText
-            return
-        }
-        document.text = diskText
-        lastSyncedText = diskText
-    }
-
-    private func presentExternalChangeConflict(url: URL, diskText: String) {
-        let alert = NSAlert()
-        alert.messageText = "“\(url.lastPathComponent)” changed on disk"
-        alert.informativeText = "This file was modified by another application, but you have unsaved changes here. Reload the version on disk (discarding your changes) or keep your version?"
-        alert.alertStyle = .warning
-        alert.addButton(withTitle: "Keep My Changes")
-        alert.addButton(withTitle: "Reload from Disk")
-        let response = alert.runModal()
-        if response == .alertSecondButtonReturn {
-            reloadFromDisk(url: url, diskText: diskText)
-        }
-        // "Keep My Changes": leave the buffer untouched; the baseline is left as
-        // is so a further on-disk change prompts again instead of silently losing edits.
     }
 }
 
@@ -976,6 +1042,7 @@ private struct WindowConfigurator: NSViewRepresentable {
     @ObservedObject var preferences: LucidPreferences
     @Binding var trafficLightWidth: CGFloat
     let hostWindow: WeakWindowRef
+    let documentManager: WindowDocumentManager
 
     func makeNSView(context: Context) -> ConfiguratorView {
         let view = ConfiguratorView()
