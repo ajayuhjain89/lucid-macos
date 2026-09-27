@@ -15,12 +15,16 @@ public struct EditorView: NSViewRepresentable {
     var onCursorPositionChanged: ((Int, Int) -> Void)? // (line, column)
     var onTextViewCreated: ((NSTextView) -> Void)?
     var onScrollIntensityChanged: ((Double) -> Void)?
+    var documentFileURL: URL?
+    var onRequestSave: (() -> Void)?
 
     init(
         text: Binding<String>,
         preferences: LucidPreferences = .shared,
         focusMode: Bool = false,
         isActive: Bool = true,
+        documentFileURL: URL? = nil,
+        onRequestSave: (() -> Void)? = nil,
         onReadingPositionChanged: ((ReadingPosition) -> Void)? = nil,
         onCursorPositionChanged: ((Int, Int) -> Void)? = nil,
         onTextViewCreated: ((NSTextView) -> Void)? = nil,
@@ -30,6 +34,8 @@ public struct EditorView: NSViewRepresentable {
         self.preferences = preferences
         self.focusMode = focusMode
         self.isActive = isActive
+        self.documentFileURL = documentFileURL
+        self.onRequestSave = onRequestSave
         self.onReadingPositionChanged = onReadingPositionChanged
         self.onCursorPositionChanged = onCursorPositionChanged
         self.onTextViewCreated = onTextViewCreated
@@ -99,6 +105,8 @@ public struct EditorView: NSViewRepresentable {
         ]
         textView.delegate = context.coordinator
         textView.preferences = preferences
+        textView.documentURL = documentFileURL
+        textView.onRequestSaveForImage = onRequestSave
 
         // Apply initial typography
         applyTypography(to: textView, coordinator: context.coordinator)
@@ -141,6 +149,8 @@ public struct EditorView: NSViewRepresentable {
 
         // Update preferences reference
         textView.preferences = preferences
+        textView.documentURL = documentFileURL
+        textView.onRequestSaveForImage = onRequestSave
 
         if scrollView.isHidden == isActive {
             scrollView.isHidden = !isActive
@@ -380,11 +390,28 @@ final class LucidEditorScrollView: NSScrollView {
 public final class LucidTextView: NSTextView {
     public var preferences: LucidPreferences?
     public var strongTextStorage: NSTextStorage?
+    public var documentURL: URL?
+    public var onRequestSaveForImage: (() -> Void)?
     private var previousActiveLineRect: NSRect?
     /// Whether this window's Focus Mode is on (set by EditorView).
     public var focusModeEnabled = false
     /// The paragraph Focus Mode currently leaves undimmed (nil = nothing dimmed).
     private var focusedParagraph: NSRange?
+
+    public override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        registerForDraggedTypes([.fileURL, .png, .tiff])
+    }
+
+    public override init(frame frameRect: NSRect, textContainer: NSTextContainer?) {
+        super.init(frame: frameRect, textContainer: textContainer)
+        registerForDraggedTypes([.fileURL, .png, .tiff])
+    }
+
+    public required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        registerForDraggedTypes([.fileURL, .png, .tiff])
+    }
 
     // MARK: - Reading Position
 
@@ -747,5 +774,146 @@ public final class LucidTextView: NSTextView {
         }
 
         super.deleteBackward(sender)
+    }
+
+    // MARK: - Image Paste & Drag and Drop
+
+    public override func paste(_ sender: Any?) {
+        let pasteboard = NSPasteboard.general
+        if let payload = extractImagePayload(from: pasteboard) {
+            handleImageInsertion(payload: payload, insertionRange: selectedRange())
+            return
+        }
+        super.paste(sender)
+    }
+
+    public override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        let pasteboard = sender.draggingPasteboard
+        if containsImagePayload(in: pasteboard) {
+            return .copy
+        }
+        return super.draggingEntered(sender)
+    }
+
+    public override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        let pasteboard = sender.draggingPasteboard
+        if let payload = extractImagePayload(from: pasteboard) {
+            let dropPoint = convert(sender.draggingLocation, from: nil)
+            let dropIndex = characterIndexForInsertion(at: dropPoint)
+            let range = NSRange(location: dropIndex, length: 0)
+            handleImageInsertion(payload: payload, insertionRange: range)
+            return true
+        }
+        return super.performDragOperation(sender)
+    }
+
+    private func containsImagePayload(in pasteboard: NSPasteboard) -> Bool {
+        if pasteboard.data(forType: .png) != nil || pasteboard.data(forType: .tiff) != nil {
+            return true
+        }
+        if let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL] {
+            return urls.contains { ImageAssetManager.shared.isImageFile(url: $0) }
+        }
+        return false
+    }
+
+    private enum ImagePayload {
+        case data(Data)
+        case fileURLs([URL])
+    }
+
+    private func extractImagePayload(from pasteboard: NSPasteboard) -> ImagePayload? {
+        // 1. Check for file URLs first (e.g. dropped/copied files from Finder)
+        if let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL] {
+            let imageURLs = urls.filter { ImageAssetManager.shared.isImageFile(url: $0) }
+            if !imageURLs.isEmpty {
+                return .fileURLs(imageURLs)
+            }
+        }
+
+        // 2. Check for raw PNG data
+        if let pngData = pasteboard.data(forType: .png) {
+            return .data(pngData)
+        }
+
+        // 3. Check for raw TIFF data (convert to PNG representation)
+        if let tiffData = pasteboard.data(forType: .tiff) {
+            return .data(tiffData)
+        }
+
+        return nil
+    }
+
+    private func handleImageInsertion(payload: ImagePayload, insertionRange: NSRange) {
+        guard let docURL = documentURL else {
+            promptSaveBeforeAddingImages()
+            return
+        }
+
+        var markdownReferences: [String] = []
+
+        switch payload {
+        case .data(let data):
+            do {
+                let saved = try ImageAssetManager.shared.savePastedImageData(data, documentURL: docURL)
+                let ref = ImageAssetManager.shared.markdownImageReference(altText: "Image", relativePath: saved.relativePath)
+                markdownReferences.append(ref)
+            } catch {
+                NSSound.beep()
+                return
+            }
+
+        case .fileURLs(let urls):
+            for url in urls {
+                do {
+                    let saved = try ImageAssetManager.shared.saveDroppedImage(from: url, documentURL: docURL)
+                    let altText = url.deletingPathExtension().lastPathComponent
+                    let ref = ImageAssetManager.shared.markdownImageReference(altText: altText.isEmpty ? "Image" : altText, relativePath: saved.relativePath)
+                    markdownReferences.append(ref)
+                } catch {
+                    continue
+                }
+            }
+        }
+
+        guard !markdownReferences.isEmpty else {
+            NSSound.beep()
+            return
+        }
+
+        let replacement = markdownReferences.joined(separator: "\n\n")
+        let length = (string as NSString).length
+        let safeLocation = min(insertionRange.location, length)
+        let safeLength = min(insertionRange.length, length - safeLocation)
+        let safeRange = NSRange(location: safeLocation, length: safeLength)
+
+        if shouldChangeText(in: safeRange, replacementString: replacement) {
+            replaceCharacters(in: safeRange, with: replacement)
+            didChangeText()
+            let newCaret = safeLocation + (replacement as NSString).length
+            setSelectedRange(NSRange(location: newCaret, length: 0))
+        }
+    }
+
+    private func promptSaveBeforeAddingImages() {
+        let alert = NSAlert()
+        alert.messageText = "Save Document to Add Images"
+        alert.informativeText = "Lucid stores pasted and dropped images in an “assets” folder alongside your document. Please save your document first."
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "Save…")
+        alert.addButton(withTitle: "Cancel")
+
+        if let window = self.window {
+            alert.beginSheetModal(for: window) { [weak self] response in
+                if response == .alertFirstButtonReturn {
+                    self?.onRequestSaveForImage?()
+                }
+            }
+        } else {
+            let response = alert.runModal()
+            if response == .alertFirstButtonReturn {
+                onRequestSaveForImage?()
+            }
+        }
     }
 }
