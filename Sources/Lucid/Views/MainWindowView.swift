@@ -227,6 +227,9 @@ public struct MainWindowView: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
                 LaunchUntitledCleanup.closeUntouchedUntitledIfOpeningFile()
             }
+            if let url = fileURL {
+                RecentDocumentsManager.shared.recordRecent(url: url)
+            }
             setupFileWatcher()
             // AppKit gives a new window's focus to its first text field (the
             // sidebar filter), so typing would go there. Start on the document.
@@ -242,7 +245,10 @@ public struct MainWindowView: View {
             fileWatcher?.stopWatching()
             fileWatcher = nil
         }
-        .onChange(of: fileURL) { _, _ in
+        .onChange(of: fileURL) { _, newURL in
+            if let url = newURL {
+                RecentDocumentsManager.shared.recordRecent(url: url)
+            }
             // Document switch: drop stale work from the previous document, then
             // analyze the new one promptly.
             analyzer.reset()

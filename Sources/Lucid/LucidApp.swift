@@ -5,6 +5,7 @@ import AppKit
 struct LucidApp: App {
     @StateObject private var preferences = LucidPreferences.shared
     @StateObject private var updateController = LucidUpdateController.shared
+    @ObservedObject private var recentDocs = RecentDocumentsManager.shared
     /// The key document window's view state; view commands act on that window only.
     @FocusedObject private var windowState: WindowViewState?
 
@@ -20,6 +21,28 @@ struct LucidApp: App {
         }
         .windowStyle(.hiddenTitleBar)
         .commands {
+            CommandGroup(after: .newItem) {
+                Menu("Open Recent") {
+                    if recentDocs.recentURLs.isEmpty {
+                        Button("No Recent Documents") {}
+                            .disabled(true)
+                    } else {
+                        ForEach(recentDocs.recentURLs, id: \.self) { url in
+                            Button(recentDocs.displayName(for: url)) {
+                                recentDocs.openRecent(url: url) { targetURL in
+                                    NSDocumentController.shared.openDocument(withContentsOf: targetURL, display: true) { _, _, _ in }
+                                }
+                            }
+                            .help(url.path)
+                        }
+                        Divider()
+                        Button("Clear Menu") {
+                            recentDocs.clearRecents()
+                        }
+                    }
+                }
+            }
+
             CommandGroup(after: .appInfo) {
                 Button("Check for Updates…") {
                     updateController.checkForUpdates()

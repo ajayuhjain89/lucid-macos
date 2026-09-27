@@ -4,18 +4,18 @@ import Foundation
 /// where content rests below the toolbar. The editor and the preview both speak
 /// it, so a mode switch or the split sync can put the other pane at the same
 /// place (bridge.js: readingPosition / scrollToSourceLine).
-struct ReadingPosition: Equatable {
+public struct ReadingPosition: Equatable, Codable {
     /// Zero-based source line; the fraction is how far through that line (or,
     /// in the preview, through the block that starts on it) the edge sits.
-    var line: Double
+    public var line: Double
     /// Scrolled to the very top or the very end: the other pane follows exactly,
     /// whatever the line mapping says.
-    var top: Bool = false
-    var end: Bool = false
+    public var top: Bool = false
+    public var end: Bool = false
 
-    static let documentTop = ReadingPosition(line: 0, top: true)
+    public static let documentTop = ReadingPosition(line: 0, top: true)
 
-    init(line: Double, top: Bool = false, end: Bool = false) {
+    public init(line: Double, top: Bool = false, end: Bool = false) {
         self.line = line
         self.top = top
         self.end = end
