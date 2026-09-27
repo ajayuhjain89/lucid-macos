@@ -790,44 +790,6 @@
     return inserted;
   }
 
-  // The .mermaid nodes this render must run: diagrams in newly inserted blocks,
-  // plus kept diagrams whose earlier render never finished. Anything already in
-  // the SVG cache for the current theme is filled in directly instead.
-  function collectMermaidToRender(container, insertedBlocks) {
-    const fullRender = insertedBlocks[0] === container;
-    const containers = fullRender
-      ? Array.prototype.slice.call(container.querySelectorAll('.mermaid-container'))
-      : Array.prototype.slice.call(container.querySelectorAll('.mermaid-container')).filter(function(c) {
-          return !c._lucidCurrentTheme || insertedBlocks.some(function(b) { return b === c || b.contains(c); });
-        });
-    const pending = [];
-    for (let i = 0; i < containers.length; i++) {
-      const c = containers[i];
-      const canvas = c.querySelector('.mermaid-canvas');
-      const rawAttr = c.getAttribute('data-raw-mermaid');
-      if (!canvas || !rawAttr) continue;
-      const cached = mermaidSvgCache.get(mermaidCacheKey(currentMermaidTheme, rawAttr));
-      if (cached) {
-        canvas.innerHTML = cached;
-        c._lucidRenderedThemes = {};
-        c._lucidRenderedThemes[currentMermaidTheme] = cached;
-        c._lucidCurrentTheme = currentMermaidTheme;
-        formatMermaidContainer(c);
-        continue;
-      }
-      let node = canvas.querySelector('.mermaid');
-      if (!node || node.getAttribute('data-processed')) {
-        // A kept diagram whose earlier run was abandoned: start from its source.
-        let rawCode = '';
-        try { rawCode = decodeURIComponent(rawAttr); } catch (_) { rawCode = rawAttr; }
-        canvas.innerHTML = '<div class="mermaid">' + md.utils.escapeHtml(sanitizeMermaidSource(rawCode)) + '</div>';
-        node = canvas.querySelector('.mermaid');
-      }
-      pending.push(node);
-    }
-    return pending;
-  }
-
   // Elements matching selector inside the given blocks (including the blocks).
   function queryInBlocks(blocks, selector) {
     const out = [];
@@ -842,18 +804,11 @@
   let desiredMermaidTheme = 'dark';
   let mermaidThemeGeneration = 0;
   let isMermaidWorkerRunning = false;
+  let mermaidWorkCompleted = null;
 
   function yieldToBrowser() {
     return new Promise(function(resolve) {
-      if (typeof requestIdleCallback === 'function') {
-        requestIdleCallback(function() { resolve(); }, { timeout: 50 });
-      } else if (typeof requestAnimationFrame === 'function') {
-        requestAnimationFrame(function() {
-          setTimeout(resolve, 0);
-        });
-      } else {
-        setTimeout(resolve, 0);
-      }
+      setTimeout(resolve, 0);
     });
   }
 
@@ -879,6 +834,8 @@
           if (!canvas) continue;
 
           c._lucidRenderedThemes = c._lucidRenderedThemes || {};
+          const cached = mermaidSvgCache.get(mermaidCacheKey(targetTheme, c.getAttribute('data-raw-mermaid')));
+          if (cached) c._lucidRenderedThemes[targetTheme] = cached;
           if (c._lucidRenderedThemes[targetTheme]) {
             if (c._lucidCurrentTheme !== targetTheme) {
               canvas.innerHTML = c._lucidRenderedThemes[targetTheme];
@@ -894,6 +851,7 @@
           // All diagrams are now displaying targetTheme
           currentMermaidTheme = targetTheme;
           invalidateHeadingPositions('mermaid-theme');
+          if (mermaidWorkCompleted) mermaidWorkCompleted();
           break;
         }
 
@@ -919,7 +877,7 @@
             const res = await mermaid.render(id, preparedCode);
 
             // Stale check before mutating DOM or cache
-            if (mermaidThemeGeneration === genAtStart && desiredMermaidTheme === themeAtStart) {
+            if (mermaidThemeGeneration === genAtStart && desiredMermaidTheme === themeAtStart && c.isConnected !== false) {
               canvas.innerHTML = res.svg;
               c._lucidRenderedThemes = c._lucidRenderedThemes || {};
               c._lucidRenderedThemes[targetTheme] = res.svg;
@@ -930,11 +888,15 @@
               }
               c._lucidCurrentTheme = targetTheme;
               formatMermaidContainer(c);
+              cacheRenderedMermaid(c, targetTheme);
             }
           } catch (err) {
             console.warn('Mermaid dynamic re-render error:', err);
-            if (mermaidThemeGeneration === genAtStart && desiredMermaidTheme === themeAtStart) {
+            if (mermaidThemeGeneration === genAtStart && desiredMermaidTheme === themeAtStart && c.isConnected !== false) {
               formatMermaidContainer(c, err);
+              // A failed source is a completed result too. Cache its error card
+              // so invalid input cannot spin this worker forever.
+              cacheRenderedMermaid(c, targetTheme);
             }
           }
         }
@@ -2102,7 +2064,6 @@
       currentRenderRevision = renderId;
       lastMarkdownSource = rawMarkdown || '';
       mermaidThemeGeneration++;
-      desiredMermaidTheme = currentMermaidTheme;
       pruneOldRegistries(renderId);
       LucidPerf.mark(renderId, 't4_js_received', { length: rawMarkdown ? rawMarkdown.length : 0 });
       const container = document.getElementById('lucid-content');
@@ -2134,14 +2095,11 @@
       LucidPerf.mark(renderId, 't7_alerts_end', { htmlLength: html.length });
 
       LucidPerf.mark(renderId, 't8_dom_insert_begin');
-      // Find highlights belong to the previous render; drop them before blocks are reused.
-      const staleMarks = container.querySelectorAll('mark.lucid-find-match');
-      for (let i = 0; i < staleMarks.length; i++) {
-        const parent = staleMarks[i].parentNode;
-        parent.replaceChild(document.createTextNode(staleMarks[i].textContent), staleMarks[i]);
-        parent.normalize();
-      }
-      if (staleMarks.length) window.lucid.findMatches = [];
+      // Ranges belong to the old DOM. Preserve the query, then rebuild them
+      // against the committed render without moving the reader's position.
+      const activeFindQuery = window.lucid.findQuery;
+      const activeFindIndex = window.lucid.findCurrentIndex;
+      window.lucid.clearFind();
       let insertedBlocks = reconcileBlocks(container, html, renderId);
       if (!insertedBlocks) {
         container.innerHTML = html;
@@ -2262,8 +2220,14 @@
 
       // Asynchronous Enhancements (Math & Mermaid)
       let mathDone = !isDeferredMath;
-      const mermaidNodes = (typeof mermaid !== 'undefined') ? collectMermaidToRender(container, insertedBlocks) : [];
-      let mermaidDone = (mermaidNodes.length === 0);
+      const mermaidContainers = container.querySelectorAll('.mermaid-container');
+      let mermaidDone = typeof mermaid === 'undefined' || mermaidContainers.length === 0;
+      // Drop removed/edited sources from the bounded per-page SVG cache.
+      const liveSources = new Set(Array.prototype.map.call(mermaidContainers, c => c.getAttribute('data-raw-mermaid')));
+      for (const key of mermaidSvgCache.cache.keys()) {
+        if (!liveSources.has(key.substring(key.indexOf('\n') + 1))) mermaidSvgCache.cache.delete(key);
+      }
+
 
       function checkFullEnhancement() {
         if (currentRenderRevision !== renderId) return;
@@ -2335,103 +2299,23 @@
         }
       }
 
-      // 2. Mermaid Enhancement
+      // Initial content, edits and theme changes share one cancellable worker.
+      // Only that worker may initialize Mermaid or commit diagram output.
+      mermaidWorkCompleted = function() {
+        if (currentRenderRevision !== renderId) return;
+        mermaidDone = true;
+        LucidPerf.mark(renderId, 't16_mermaid_end', { count: mermaidContainers.length });
+        checkFullEnhancement();
+      };
       if (!mermaidDone) {
-        ensureMermaidInitialized();
-        // Cache results under the theme they were drawn with, even if the
-        // theme changes while this render is in flight.
-        const renderTheme = currentMermaidTheme;
-        const mermaidCount = mermaidNodes.length;
-        LucidPerf.mark(renderId, 't15_mermaid_begin', { count: mermaidCount });
-
-        if (mermaidCount <= 6) {
-          try {
-            mermaid.run({ nodes: mermaidNodes, suppressErrors: true }).then(function() {
-              if (currentRenderRevision !== renderId) return;
-              for (let i = 0; i < mermaidNodes.length; i++) {
-                const c = (mermaidNodes[i] && typeof mermaidNodes[i].closest === 'function') ? mermaidNodes[i].closest('.mermaid-container') : null;
-                if (c) {
-                  formatMermaidContainer(c);
-                  cacheRenderedMermaid(c, renderTheme);
-                }
-              }
-              LucidPerf.mark(renderId, 't16_mermaid_end', { count: mermaidCount });
-              mermaidDone = true;
-              checkFullEnhancement();
-            }).catch(function(err) {
-              console.warn('Mermaid batch render error:', err);
-              if (currentRenderRevision !== renderId) return;
-              for (let i = 0; i < mermaidNodes.length; i++) {
-                const c = (mermaidNodes[i] && typeof mermaidNodes[i].closest === 'function') ? mermaidNodes[i].closest('.mermaid-container') : null;
-                if (c) {
-                  formatMermaidContainer(c);
-                  cacheRenderedMermaid(c, renderTheme);
-                }
-              }
-              LucidPerf.mark(renderId, 't16_mermaid_end', { count: mermaidCount });
-              mermaidDone = true;
-              checkFullEnhancement();
-            });
-          } catch (e) {
-            console.warn('Mermaid synchronous error:', e);
-            if (currentRenderRevision !== renderId) return;
-            mermaidDone = true;
-            checkFullEnhancement();
-          }
-        } else {
-          const allNodes = Array.prototype.slice.call(mermaidNodes);
-          let chunkIndex = 0;
-          const chunkSize = 6;
-
-          function processMermaidChunk() {
-            if (currentRenderRevision !== renderId) return;
-            if (chunkIndex >= allNodes.length) {
-              LucidPerf.mark(renderId, 't16_mermaid_end', { count: mermaidCount });
-              mermaidDone = true;
-              checkFullEnhancement();
-              return;
-            }
-
-            const currentChunk = allNodes.slice(chunkIndex, chunkIndex + chunkSize);
-            chunkIndex += chunkSize;
-
-            try {
-              mermaid.run({ nodes: currentChunk, suppressErrors: true }).then(function() {
-                if (currentRenderRevision !== renderId) return;
-                for (let i = 0; i < currentChunk.length; i++) {
-                  const c = (currentChunk[i] && typeof currentChunk[i].closest === 'function') ? currentChunk[i].closest('.mermaid-container') : null;
-                  if (c) {
-                    formatMermaidContainer(c);
-                    cacheRenderedMermaid(c, renderTheme);
-                  }
-                }
-                setTimeout(processMermaidChunk, 0);
-              }).catch(function(err) {
-                console.warn('Mermaid chunk render error:', err);
-                if (currentRenderRevision !== renderId) return;
-                for (let i = 0; i < currentChunk.length; i++) {
-                  const c = (currentChunk[i] && typeof currentChunk[i].closest === 'function') ? currentChunk[i].closest('.mermaid-container') : null;
-                  if (c) {
-                    formatMermaidContainer(c);
-                    cacheRenderedMermaid(c, renderTheme);
-                  }
-                }
-                setTimeout(processMermaidChunk, 0);
-              });
-            } catch (e) {
-              console.warn('Mermaid synchronous chunk error:', e);
-              if (currentRenderRevision !== renderId) return;
-              setTimeout(processMermaidChunk, 0);
-            }
-          }
-
-          processMermaidChunk();
-        }
+        LucidPerf.mark(renderId, 't15_mermaid_begin', { count: mermaidContainers.length });
+        runSerializedMermaidWorker();
       }
 
       // 3. Immediate completion check if nothing is deferred
       checkFullEnhancement();
       invalidateHeadingPositions('updateContent');
+      if (activeFindQuery) window.lucid.find(activeFindQuery, { reveal: false, index: activeFindIndex });
     },
 
     updatePreferences: function(prefs) {
@@ -2985,118 +2869,109 @@
       }
     },
 
-    // In-Page Find Implementation
+    // Search text runs across inline formatting without splitting renderer nodes.
+    // CSS Highlights paint DOM Ranges; older WebKit falls back to native selection.
     findMatches: [],
     findCurrentIndex: 0,
+    findQuery: '',
 
-    find: function(query) {
+    find: function(query, options) {
+      options = options || {};
       window.lucid.clearFind();
+      window.lucid.findQuery = query || '';
       if (!query || !query.trim()) return;
-
       const container = document.getElementById('lucid-content');
       if (!container) return;
-
-      const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null, false);
-      const textNodes = [];
-      let node;
-      while (node = walker.nextNode()) {
-        // Never split text inside rendered diagrams or math: a <mark> in SVG
-        // <text> or KaTeX's layout spans breaks their rendering.
-        if (node.parentElement && !['SCRIPT', 'STYLE', 'BUTTON'].includes(node.parentElement.tagName) &&
-            !node.parentElement.closest('svg, .katex, .katex-display, .mermaid-container')) {
-          textNodes.push(node);
+      const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+      const groups = [];
+      let group = null, node;
+      while ((node = walker.nextNode())) {
+        const parent = node.parentElement;
+        if (!parent || parent.closest('script, style, button, svg, .katex, .katex-display, .mermaid-container, [aria-hidden="true"]')) {
+          group = null;
+          continue;
         }
+        const block = parent.closest('p, h1, h2, h3, h4, h5, h6, li, pre, td, th, dt, dd, summary') || container;
+        if (!group || group.block !== block) {
+          group = { block: block, text: '', nodes: [] };
+          groups.push(group);
+        }
+        group.nodes.push({ node: node, start: group.text.length });
+        group.text += node.nodeValue;
       }
-
-      const regex = new RegExp('(' + query.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&') + ')', 'gi');
-      window.lucid.findMatches = [];
-
-      textNodes.forEach(function(textNode) {
-        const val = textNode.nodeValue;
-        if (regex.test(val)) {
-          const frag = document.createDocumentFragment();
-          let lastIdx = 0;
-          val.replace(regex, function(match, p1, offset) {
-            if (offset > lastIdx) {
-              frag.appendChild(document.createTextNode(val.substring(lastIdx, offset)));
-            }
-            const mark = document.createElement('mark');
-            mark.className = 'lucid-find-match';
-            mark.textContent = match;
-            frag.appendChild(mark);
-            window.lucid.findMatches.push(mark);
-            lastIdx = offset + match.length;
-          });
-          if (lastIdx < val.length) {
-            frag.appendChild(document.createTextNode(val.substring(lastIdx)));
-          }
-          textNode.parentNode.replaceChild(frag, textNode);
+      const escaped = md.utils.escapeRE(query);
+      const regex = new RegExp(escaped, 'giu');
+      groups.forEach(function(g) {
+        regex.lastIndex = 0;
+        let match;
+        while ((match = regex.exec(g.text))) {
+          const start = match.index, end = start + match[0].length;
+          const first = g.nodes.find(n => n.start + n.node.length > start);
+          const last = g.nodes.find(n => n.start + n.node.length >= end);
+          if (!first || !last) continue;
+          const range = document.createRange();
+          range.setStart(first.node, start - first.start);
+          range.setEnd(last.node, end - last.start);
+          window.lucid.findMatches.push(range);
         }
       });
-
-      window.lucid.findCurrentIndex = 0;
-      if (window.lucid.findMatches.length > 0) {
-        window.lucid.highlightActiveFindMatch();
+      window.lucid.findCurrentIndex = Math.min(options.index || 0, Math.max(0, window.lucid.findMatches.length - 1));
+      if (window.CSS && CSS.highlights && window.Highlight) {
+        CSS.highlights.set('lucid-find-match', new Highlight(...window.lucid.findMatches));
       }
+      window.lucid.highlightActiveFindMatch(options.reveal !== false);
+      window.lucid.notifyFindMatches();
+    },
 
+    notifyFindMatches: function() {
       if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.lucidFindMatches) {
         window.webkit.messageHandlers.lucidFindMatches.postMessage({
           count: window.lucid.findMatches.length,
-          index: window.lucid.findMatches.length > 0 ? 1 : 0
+          index: window.lucid.findMatches.length ? window.lucid.findCurrentIndex + 1 : 0
         });
       }
     },
 
-    highlightActiveFindMatch: function() {
-      window.lucid.findMatches.forEach(function(m) { m.classList.remove('lucid-find-active'); });
-      if (window.lucid.findMatches.length === 0) return;
-      const idx = window.lucid.findCurrentIndex;
-      const active = window.lucid.findMatches[idx];
-      if (active) {
-        active.classList.add('lucid-find-active');
-        active.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    highlightActiveFindMatch: function(reveal) {
+      const active = window.lucid.findMatches[window.lucid.findCurrentIndex];
+      if (!active || !active.startContainer.isConnected) return;
+      if (window.CSS && CSS.highlights && window.Highlight) {
+        CSS.highlights.set('lucid-find-active', new Highlight(active));
+      } else if (reveal !== false) {
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(active);
+      }
+      if (reveal !== false) {
+        const rect = active.getBoundingClientRect();
+        const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        window.scrollBy({ top: rect.top - window.innerHeight / 2, behavior: reduceMotion ? 'instant' : 'smooth' });
       }
     },
 
     findNext: function() {
-      if (window.lucid.findMatches.length === 0) return;
+      if (!window.lucid.findMatches.length) return;
       window.lucid.findCurrentIndex = (window.lucid.findCurrentIndex + 1) % window.lucid.findMatches.length;
       window.lucid.highlightActiveFindMatch();
-      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.lucidFindMatches) {
-        window.webkit.messageHandlers.lucidFindMatches.postMessage({
-          count: window.lucid.findMatches.length,
-          index: window.lucid.findCurrentIndex + 1
-        });
-      }
+      window.lucid.notifyFindMatches();
     },
 
     findPrev: function() {
-      if (window.lucid.findMatches.length === 0) return;
+      if (!window.lucid.findMatches.length) return;
       window.lucid.findCurrentIndex = (window.lucid.findCurrentIndex - 1 + window.lucid.findMatches.length) % window.lucid.findMatches.length;
       window.lucid.highlightActiveFindMatch();
-      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.lucidFindMatches) {
-        window.webkit.messageHandlers.lucidFindMatches.postMessage({
-          count: window.lucid.findMatches.length,
-          index: window.lucid.findCurrentIndex + 1
-        });
-      }
+      window.lucid.notifyFindMatches();
     },
 
     clearFind: function() {
-      const marks = document.querySelectorAll('mark.lucid-find-match');
-      marks.forEach(function(mark) {
-        const parent = mark.parentNode;
-        parent.replaceChild(document.createTextNode(mark.textContent), mark);
-        parent.normalize();
-      });
+      if (window.CSS && CSS.highlights) {
+        CSS.highlights.delete('lucid-find-match');
+        CSS.highlights.delete('lucid-find-active');
+      }
+      window.lucid.findQuery = '';
       window.lucid.findMatches = [];
       window.lucid.findCurrentIndex = 0;
-      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.lucidFindMatches) {
-        window.webkit.messageHandlers.lucidFindMatches.postMessage({
-          count: 0,
-          index: 0
-        });
-      }
+      window.lucid.notifyFindMatches();
     },
 
     // Export runs in a separate, offscreen page (ExportService). Ready once math

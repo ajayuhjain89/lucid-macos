@@ -179,9 +179,7 @@ public struct MainWindowView: View {
                     onExportPDF: { exportPDF() },
                     onExportHTML: { exportHTML() },
                     onCopyRichText: {
-                        if let webView = webViewInstance {
-                            ExportService.shared.copyRichText(webView: webView)
-                        }
+                        ExportService.shared.copyRichText(markdown: document.text, documentURL: fileURL, preferences: preferences)
                     }
                 )
                 .padding(.top, LucidChrome.toolbarHeight + LucidSpacing.xxLarge)
@@ -241,6 +239,8 @@ public struct MainWindowView: View {
         .onDisappear {
             // Closing the document must not let in-flight analysis publish.
             analyzer.reset()
+            fileWatcher?.stopWatching()
+            fileWatcher = nil
         }
         .onChange(of: fileURL) { _, _ in
             // Document switch: drop stale work from the previous document, then
@@ -367,8 +367,8 @@ public struct MainWindowView: View {
         findQuery = query
         let surface = currentActiveSurface
         if surface == .reader {
-            let escaped = query.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "'", with: "\\'")
-            webViewInstance?.evaluateJavaScript("if (window.lucid) { window.lucid.find('\(escaped)'); }")
+            guard let data = try? JSONEncoder().encode(query), let literal = String(data: data, encoding: .utf8) else { return }
+            webViewInstance?.evaluateJavaScript("if (window.lucid) { window.lucid.find(\(literal), {reveal: \(moveSelection)}); }")
         } else {
             if query.isEmpty {
                 editorMatches = []
@@ -907,6 +907,8 @@ public struct MainWindowView: View {
     }
 
     private func setupFileWatcher(resetBaseline: Bool = true) {
+        fileWatcher?.stopWatching()
+        fileWatcher = nil
         guard let url = fileURL else { return }
         if resetBaseline { lastSyncedText = document.text }
         fileWatcher = FileWatcher(url: url) {

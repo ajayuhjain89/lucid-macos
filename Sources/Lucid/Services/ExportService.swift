@@ -106,21 +106,34 @@ public final class ExportService {
         }
     }
 
-    public func copyRichText(webView: WKWebView) {
-        webView.evaluateJavaScript("""
-            (function() {
-                const content = document.getElementById('lucid-content');
-                if (!content) return '';
-                const range = document.createRange();
-                range.selectNodeContents(content);
-                const selection = window.getSelection();
-                selection.removeAllRanges();
-                selection.addRange(range);
-                document.execCommand('copy');
-                selection.removeAllRanges();
-                return 'copied';
-            })()
-        """) { _, _ in }
+    public func copyRichText(markdown: String, documentURL: URL?, preferences: LucidPreferences) {
+        let json = Self.preferencesJSON(preferences, forceLightTheme: false)
+        Task { @MainActor in
+            let directory = documentURL?.deletingLastPathComponent()
+            let renderer = OffscreenDocumentRenderer(documentDirectory: directory)
+            defer { renderer.close() }
+            do {
+                // The on-screen preview can be paused while editing. Copy the
+                // current buffer, preserving the reader's selection and DOM.
+                try await renderer.render(markdown: markdown, preferencesJSON: json)
+                guard let exported = try await renderer.evaluate("window.lucid.prepareForExport()") as? String,
+                      let parts = try? JSONDecoder().decode(ExportParts.self, from: Data(exported.utf8)),
+                      let plain = try await renderer.evaluate("document.getElementById('lucid-content').innerText") as? String else {
+                    throw ExportError.renderFailed
+                }
+                let html = StandaloneHTMLBuilder.build(parts: parts, title: documentURL?.deletingPathExtension().lastPathComponent ?? "Document", documentDirectory: directory)
+                guard Self.writeRichText(html: html, plainText: plain, to: .general) else { throw ExportError.copyFailed }
+            } catch {
+                Self.showErrorAlert(message: "Failed to copy formatted text: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    static func writeRichText(html: String, plainText: String, to pasteboard: NSPasteboard) -> Bool {
+        let item = NSPasteboardItem()
+        guard item.setString(html, forType: .html), item.setString(plainText, forType: .string) else { return false }
+        pasteboard.clearContents()
+        return pasteboard.writeObjects([item])
     }
 
     private static func showErrorAlert(message: String) {
@@ -133,7 +146,7 @@ public final class ExportService {
 }
 
 enum ExportError: LocalizedError {
-    case engineMissing, timedOut, renderFailed, printFailed
+    case engineMissing, timedOut, renderFailed, printFailed, copyFailed
 
     var errorDescription: String? {
         switch self {
@@ -141,6 +154,7 @@ enum ExportError: LocalizedError {
         case .timedOut: return "The document took too long to render."
         case .renderFailed: return "The document could not be rendered."
         case .printFailed: return "The PDF could not be created."
+        case .copyFailed: return "The clipboard could not be written."
         }
     }
 }
@@ -221,6 +235,7 @@ final class OffscreenDocumentRenderer: NSObject, WKNavigationDelegate, WKScriptM
             if (try? await evaluate("window.lucid.isExportReady()")) as? Bool == true { return }
             try await Task.sleep(nanoseconds: 100_000_000)
         }
+        throw ExportError.timedOut
     }
 
     /// Prints the rendered page to a paginated PDF at `url`.
@@ -357,4 +372,3 @@ enum StandaloneHTMLBuilder {
         return result + ns.substring(from: last)
     }
 }
-

@@ -1,71 +1,65 @@
 import Foundation
 
+/// Main-queue vnode observation. The directory watch reconnects the file watch
+/// after an atomic replacement or a deletion followed by later recreation.
 public final class FileWatcher {
-    private var fileDescriptor: CInt = -1
     private var source: DispatchSourceFileSystemObject?
+    private var directorySource: DispatchSourceFileSystemObject?
+    private var isStopped = false
+    private var generation = 0
     private let url: URL
     private let onChange: () -> Void
 
     public init(url: URL, onChange: @escaping () -> Void) {
         self.url = url
         self.onChange = onChange
-        startWatching()
+        directorySource = Self.watch(url.deletingLastPathComponent(), events: [.write, .rename, .delete]) { [weak self] _ in
+            guard let self, !self.isStopped, self.source == nil else { return }
+            self.startWatchingFile()
+            if self.source != nil { self.onChange() }
+        }
+        startWatchingFile()
     }
 
-    deinit {
-        stopWatching()
+    deinit { stopWatching() }
+
+    private static func watch(_ url: URL, events: DispatchSource.FileSystemEvent,
+                              handler: @escaping (DispatchSource.FileSystemEvent) -> Void) -> DispatchSourceFileSystemObject? {
+        let descriptor = open(url.path, O_EVTONLY)
+        guard descriptor >= 0 else { return nil }
+        let source = DispatchSource.makeFileSystemObjectSource(fileDescriptor: descriptor,
+                                                              eventMask: events, queue: .main)
+        source.setEventHandler { [weak source] in
+            if let source { handler(source.data) }
+        }
+        // Close this source's descriptor even after the watcher is gone. Never
+        // close a mutable property that may already hold the replacement's fd.
+        source.setCancelHandler { close(descriptor) }
+        source.resume()
+        return source
     }
 
-    private func startWatching() {
-        fileDescriptor = open(url.path, O_EVTONLY)
-        guard fileDescriptor >= 0 else { return }
-
-        let dispatchSource = DispatchSource.makeFileSystemObjectSource(
-            fileDescriptor: fileDescriptor,
-            eventMask: [.write, .rename, .delete, .extend],
-            queue: DispatchQueue.main
-        )
-
-        dispatchSource.setEventHandler { [weak self, weak dispatchSource] in
-            guard let self = self else { return }
-            let flags = dispatchSource?.data ?? []
-            self.onChange()
-            // Atomic saves (write-temp-then-rename, as vim/VS Code do) replace the
-            // watched inode, leaving this vnode source dead. Re-establish the watch
-            // on the same path so live reload keeps working after the first such save.
+    private func startWatchingFile() {
+        guard !isStopped, source == nil else { return }
+        generation += 1
+        let token = generation
+        source = Self.watch(url, events: [.write, .rename, .delete, .extend]) { [weak self] flags in
+            guard let self, !self.isStopped, self.generation == token else { return }
             if flags.contains(.delete) || flags.contains(.rename) {
-                self.rearm()
+                self.source?.cancel()
+                self.source = nil
+                self.startWatchingFile()
             }
+            self.onChange()
         }
-
-        dispatchSource.setCancelHandler { [weak self] in
-            guard let self = self else { return }
-            if self.fileDescriptor >= 0 {
-                close(self.fileDescriptor)
-                self.fileDescriptor = -1
-            }
-        }
-
-        self.source = dispatchSource
-        dispatchSource.resume()
     }
 
     public func stopWatching() {
+        isStopped = true
+        generation += 1
         source?.cancel()
         source = nil
-    }
-
-    /// Tears down the dead vnode source and re-attaches to the current file at
-    /// the same path once it reappears (the rename gap is typically sub-millisecond).
-    private func rearm() {
-        stopWatching()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-            guard let self = self, self.source == nil else { return }
-            if FileManager.default.fileExists(atPath: self.url.path) {
-                self.startWatching()
-                // A change almost certainly landed during the re-arm gap.
-                self.onChange()
-            }
-        }
+        directorySource?.cancel()
+        directorySource = nil
     }
 }
