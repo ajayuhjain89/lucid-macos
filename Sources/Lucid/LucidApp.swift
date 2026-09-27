@@ -5,6 +5,7 @@ import AppKit
 struct LucidApp: App {
     @StateObject private var preferences = LucidPreferences.shared
     @StateObject private var updateController = LucidUpdateController.shared
+    @ObservedObject private var recentDocs = RecentDocumentsManager.shared
     /// The key document window's view state; view commands act on that window only.
     @FocusedObject private var windowState: WindowViewState?
 
@@ -20,6 +21,62 @@ struct LucidApp: App {
         }
         .windowStyle(.hiddenTitleBar)
         .commands {
+            CommandGroup(replacing: .newItem) {
+                Button("New Window") {
+                    NSDocumentController.shared.newDocument(nil)
+                }
+                .keyboardShortcut("n", modifiers: .command)
+
+                Button("New Tab") {
+                    NotificationCenter.default.post(name: NSNotification.Name("LucidNewTab"), object: nil)
+                }
+                .keyboardShortcut("t", modifiers: .command)
+
+                Button("Open…") {
+                    NotificationCenter.default.post(name: NSNotification.Name("LucidOpenFile"), object: nil)
+                }
+                .keyboardShortcut("o", modifiers: .command)
+            }
+
+            CommandGroup(after: .newItem) {
+                Menu("Open Recent") {
+                    if recentDocs.recentURLs.isEmpty {
+                        Button("No Recent Documents") {}
+                            .disabled(true)
+                    } else {
+                        ForEach(recentDocs.recentURLs, id: \.self) { url in
+                            Button(recentDocs.displayName(for: url)) {
+                                recentDocs.openRecent(url: url) { targetURL in
+                                    NSDocumentController.shared.openDocument(withContentsOf: targetURL, display: true) { _, _, _ in }
+                                }
+                            }
+                            .help(url.path)
+                        }
+                        Divider()
+                        Button("Clear Menu") {
+                            recentDocs.clearRecents()
+                        }
+                    }
+                }
+            }
+
+            CommandGroup(replacing: .saveItem) {
+                Button("Save") {
+                    NotificationCenter.default.post(name: NSNotification.Name("LucidSaveDocument"), object: nil)
+                }
+                .keyboardShortcut("s", modifiers: .command)
+
+                Button("Save As…") {
+                    NotificationCenter.default.post(name: NSNotification.Name("LucidSaveDocumentAs"), object: nil)
+                }
+                .keyboardShortcut("s", modifiers: [.command, .shift])
+
+                Button("Close Tab") {
+                    NotificationCenter.default.post(name: NSNotification.Name("LucidCloseTab"), object: nil)
+                }
+                .keyboardShortcut("w", modifiers: .command)
+            }
+
             CommandGroup(after: .appInfo) {
                 Button("Check for Updates…") {
                     updateController.checkForUpdates()
@@ -143,6 +200,19 @@ struct LucidApp: App {
                         set: { if $0 { preferences.theme = mode } }
                     ))
                 }
+            }
+
+            CommandGroup(after: .windowArrangement) {
+                Divider()
+                Button("Show Next Tab") {
+                    NotificationCenter.default.post(name: NSNotification.Name("LucidNextTab"), object: nil)
+                }
+                .keyboardShortcut("]", modifiers: [.command, .shift])
+
+                Button("Show Previous Tab") {
+                    NotificationCenter.default.post(name: NSNotification.Name("LucidPreviousTab"), object: nil)
+                }
+                .keyboardShortcut("[", modifiers: [.command, .shift])
             }
         }
     }
