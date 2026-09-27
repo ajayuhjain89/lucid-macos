@@ -21,6 +21,23 @@ struct LucidApp: App {
         }
         .windowStyle(.hiddenTitleBar)
         .commands {
+            CommandGroup(replacing: .newItem) {
+                Button("New Window") {
+                    NSDocumentController.shared.newDocument(nil)
+                }
+                .keyboardShortcut("n", modifiers: .command)
+
+                Button("New Tab") {
+                    NotificationCenter.default.post(name: NSNotification.Name("LucidNewTab"), object: nil)
+                }
+                .keyboardShortcut("t", modifiers: .command)
+
+                Button("Open…") {
+                    NotificationCenter.default.post(name: NSNotification.Name("LucidOpenFile"), object: nil)
+                }
+                .keyboardShortcut("o", modifiers: .command)
+            }
+
             CommandGroup(after: .newItem) {
                 Menu("Open Recent") {
                     if recentDocs.recentURLs.isEmpty {
@@ -41,6 +58,23 @@ struct LucidApp: App {
                         }
                     }
                 }
+            }
+
+            CommandGroup(replacing: .saveItem) {
+                Button("Save") {
+                    NotificationCenter.default.post(name: NSNotification.Name("LucidSaveDocument"), object: nil)
+                }
+                .keyboardShortcut("s", modifiers: .command)
+
+                Button("Save As…") {
+                    NotificationCenter.default.post(name: NSNotification.Name("LucidSaveDocumentAs"), object: nil)
+                }
+                .keyboardShortcut("s", modifiers: [.command, .shift])
+
+                Button("Close Tab") {
+                    NotificationCenter.default.post(name: NSNotification.Name("LucidCloseTab"), object: nil)
+                }
+                .keyboardShortcut("w", modifiers: .command)
             }
 
             CommandGroup(after: .appInfo) {
@@ -166,6 +200,19 @@ struct LucidApp: App {
                         set: { if $0 { preferences.theme = mode } }
                     ))
                 }
+            }
+
+            CommandGroup(after: .windowArrangement) {
+                Divider()
+                Button("Show Next Tab") {
+                    NotificationCenter.default.post(name: NSNotification.Name("LucidNextTab"), object: nil)
+                }
+                .keyboardShortcut("]", modifiers: [.command, .shift])
+
+                Button("Show Previous Tab") {
+                    NotificationCenter.default.post(name: NSNotification.Name("LucidPreviousTab"), object: nil)
+                }
+                .keyboardShortcut("[", modifiers: [.command, .shift])
             }
         }
     }
