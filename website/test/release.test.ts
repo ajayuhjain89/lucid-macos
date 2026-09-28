@@ -42,10 +42,10 @@ describe("Release Configuration", () => {
   it("configures verified direct download URL and public release endpoint", () => {
     expect(currentRelease.hasPublicDownloadUrl).toBe(true);
     expect(currentRelease.downloadUrl).toBe(
-      "https://github.com/ajayuhjain89/lucid-macos/releases/download/v1.0.5/Lucid-1.0.5.dmg"
+      "https://github.com/ajayuhjain89/lucid-macos/releases/download/v1.0.6/Lucid-1.0.6.dmg"
     );
     expect(currentRelease.githubReleaseUrl).toBe(
-      "https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.5"
+      "https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.6"
     );
   });
 });
