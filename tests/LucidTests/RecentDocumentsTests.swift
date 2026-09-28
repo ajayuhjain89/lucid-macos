@@ -64,6 +64,13 @@ import Testing
         #expect(reloaded.recentURLs.isEmpty)
     }
 
+    @Test func initDoesNotPolluteIsolatedDefaultsFromSystemController() {
+        let defaults = createTestDefaults()
+        let freshManager = RecentDocumentsManager(userDefaults: defaults)
+        // Fresh isolated defaults with no recorded recents must be empty and not contaminated by system-wide document controller
+        #expect(freshManager.recentURLs.isEmpty)
+    }
+
     @Test func disambiguatesDuplicateFilenamesWithParentFolder() {
         let defaults = createTestDefaults()
         let manager = RecentDocumentsManager(userDefaults: defaults)
