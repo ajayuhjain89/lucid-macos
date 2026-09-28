@@ -599,7 +599,7 @@ final class LocalAssetSchemeHandler: NSObject, WKURLSchemeHandler {
             return URL(fileURLWithPath: "/" + path).standardizedFileURL
         case "doc":
             guard let base = documentDirectory else { return nil }
-            return URL(fileURLWithPath: path, relativeTo: base).standardizedFileURL
+            return base.appendingPathComponent(path).standardizedFileURL
         default:
             return nil
         }

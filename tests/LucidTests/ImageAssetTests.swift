@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import UniformTypeIdentifiers
 @testable import Lucid
 
 @Suite("ImageAssetManager")
@@ -121,5 +122,61 @@ struct ImageAssetTests {
 
         let emptyResult = manager.sanitize("???///")
         #expect(emptyResult == "image")
+    }
+
+    // MARK: - LocalAssetSchemeHandler & Format Conformance Tests
+
+    @Test
+    func localAssetSchemeHandlerResolvesDocRelativeURLs() {
+        let docDir = URL(fileURLWithPath: "/tmp/lucid-img-test")
+        let url = URL(string: "lucid-asset://doc/assets%2Fscreenshot.png")!
+        let resolved = LocalAssetSchemeHandler.resolve(url, documentDirectory: docDir)
+        #expect(resolved != nil)
+        #expect(resolved?.path == "/tmp/lucid-img-test/assets/screenshot.png")
+    }
+
+    @Test
+    func localAssetSchemeHandlerResolvesParentTraversalURLs() {
+        let docDir = URL(fileURLWithPath: "/tmp/lucid-img-test/sub")
+        let url = URL(string: "lucid-asset://doc/..%2Fscreenshot.png")!
+        let resolved = LocalAssetSchemeHandler.resolve(url, documentDirectory: docDir)
+        #expect(resolved != nil)
+        #expect(resolved?.path == "/tmp/lucid-img-test/screenshot.png")
+    }
+
+    @Test
+    func localAssetSchemeHandlerResolvesAbsoluteURLs() {
+        let url = URL(string: "lucid-asset://abs/Users%2Fuser%2Fphoto.png")!
+        let resolved = LocalAssetSchemeHandler.resolve(url, documentDirectory: nil)
+        #expect(resolved != nil)
+        #expect(resolved?.path == "/Users/user/photo.png")
+    }
+
+    @Test
+    func localAssetSchemeHandlerRejectsNilDocumentDirectoryForDocURLs() {
+        let url = URL(string: "lucid-asset://doc/assets%2Fscreenshot.png")!
+        let resolved = LocalAssetSchemeHandler.resolve(url, documentDirectory: nil)
+        #expect(resolved == nil)
+    }
+
+    @Test
+    func localAssetSchemeHandlerRejectsUnknownHosts() {
+        let docDir = URL(fileURLWithPath: "/tmp/lucid-img-test")
+        let url = URL(string: "lucid-asset://unknown/assets%2Fscreenshot.png")!
+        let resolved = LocalAssetSchemeHandler.resolve(url, documentDirectory: docDir)
+        #expect(resolved == nil)
+    }
+
+    @Test
+    func supportedImageExtensionsConformToUTTypeImage() {
+        // 7 format families (PNG, JPEG, GIF, WebP, SVG, TIFF, BMP) mapped across 8 extensions
+        let expectedExtensions = ["png", "jpg", "jpeg", "gif", "webp", "svg", "tiff", "bmp"]
+        #expect(ImageAssetManager.supportedExtensions == Set(expectedExtensions))
+
+        for ext in expectedExtensions {
+            let type = UTType(filenameExtension: ext)
+            #expect(type != nil)
+            #expect(type?.conforms(to: .image) == true)
+        }
     }
 }

@@ -151,16 +151,6 @@ public final class RecentDocumentsManager: ObservableObject {
             }
         }
 
-        // 3. Merge with native NSDocumentController recent items if available
-        let nativeURLs = NSDocumentController.shared.recentDocumentURLs
-        for nativeURL in nativeURLs {
-            let canonical = nativeURL.standardizedFileURL.resolvingSymlinksInPath()
-            if !seenPaths.contains(canonical.path) {
-                seenPaths.insert(canonical.path)
-                urls.append(canonical)
-            }
-        }
-
         if urls.count > Self.maxRecents {
             urls = Array(urls.prefix(Self.maxRecents))
         }
