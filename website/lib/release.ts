@@ -48,20 +48,20 @@ export interface ReleaseMetadata {
 
 export const currentRelease: ReleaseMetadata = {
   productName: "Lucid",
-  version: "1.0.5",
-  buildNumber: 6,
+  version: "1.0.6",
+  buildNumber: 7,
   productState: "publicBeta",
   releaseChannel: "beta",
-  releaseDate: "2026-09-25",
+  releaseDate: "2026-09-28",
   
-  // Exact properties from canonical artifact Lucid-1.0.5.dmg
-  fileName: "Lucid-1.0.5.dmg",
-  fileSize: "6.2 MB",
-  sizeBytes: 6452701,
-  sha256: "327840d7a1fe3faa61b7f62cbaf7288557964fde49ca9254f62469e722e3c24c",
+  // Exact properties from canonical artifact Lucid-1.0.6.dmg
+  fileName: "Lucid-1.0.6.dmg",
+  fileSize: "6.3 MB",
+  sizeBytes: 6644076,
+  sha256: "0909ac994013cecb709da80a728b2f23acc6fd5e79dcffaada83d0f9523c2e06",
   
   // Sparkle update publication (verified against published GitHub release asset)
-  sparkleEdSignature: "BNFo8e2u+fS/A6B+xCac9wewdcR/sBUy1TpQGDk5xKr3I5TpU09WFimQnLSBpnx0eWf+XmMUjEWnGrfdKfLICg==",
+  sparkleEdSignature: "2yUPdzOelov2bwOKG51LpWFsVqDJmjEzPH4mTpC4F182KK+r+MFI9haFQfEbJC9jJMqq68OYHV1w3vSwO+2tBA==",
   sparklePublished: true,
   
   // Environment requirements verified from Info.plist (LSMinimumSystemVersion 14.0) and build.sh (arm64-apple-macosx14.0)
@@ -75,10 +75,10 @@ export const currentRelease: ReleaseMetadata = {
   gatekeeperVerified: false,
   
   // URL configurations
-  downloadUrl: "https://github.com/ajayuhjain89/lucid-macos/releases/download/v1.0.5/Lucid-1.0.5.dmg",
+  downloadUrl: "https://github.com/ajayuhjain89/lucid-macos/releases/download/v1.0.6/Lucid-1.0.6.dmg",
   hasPublicDownloadUrl: true,
-  githubReleaseUrl: "https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.5",
-  releaseNotesUrl: "/changelog#1-0-5",
+  githubReleaseUrl: "https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.6",
+  releaseNotesUrl: "/changelog#1-0-6",
   
   // Kept false until official accepted benchmark numbers are measured
   showPerformanceBenchmarks: false,
