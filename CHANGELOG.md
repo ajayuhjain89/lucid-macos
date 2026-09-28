@@ -6,6 +6,25 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.0.6] - 2026-09-28
+
+### Added
+- Lightweight document tabs: keep multiple Markdown files open in a single window with tab switching shortcuts (`⌘}` / `⌘{` or `⌘⇧]` / `⌘⇧[`), tab creation (`⌘T`), and tab closing (`⌘W`).
+- Same-file tab deduplication: opening an already open document switches to its existing tab without creating duplicate tabs.
+- Dirty tab protection: closing a tab with unsaved modifications prompts for confirmation to prevent accidental loss of edits.
+- Native Open Recent menu: quickly reopen recently accessed documents from File → Open Recent, with automatic deduplication, bounded history, and a Clear Menu option.
+- Automatic session restoration: restore open tabs and active document state across application relaunches.
+- Image paste & drag-and-drop: paste clipboard images (`⌘V`) or drag and drop image files directly into Markdown documents, automatically saving them to a local `assets/` directory and inserting relative Markdown image links.
+- Wide image format compatibility: supports PNG, JPEG, GIF, WebP, SVG, TIFF, and BMP image formats.
+
+### Improved
+- Single-preview tab architecture: lightweight tabs share a single active preview pipeline, so inactive tabs avoid running separate WebKit preview rendering pipelines.
+- Lazy document session restoration: restores tab list and metadata without eagerly rendering preview pipelines for inactive tabs on launch.
+
+### Fixed
+- Fixed an application startup crash when initializing recent documents.
+- Fixed document-relative image asset resolution in preview so relative image paths load reliably across documents.
+
 ## [1.0.5] - 2026-09-25
 
 ### Added
@@ -112,6 +131,7 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Live external file watching and PDF / standalone-HTML / rich-text export.
 - Pre-packaged `Lucid-1.0.0.dmg` release artifact with verified SHA-256 checksum.
 
+[1.0.6]: https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.6
 [1.0.5]: https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.5
 [1.0.4]: https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.4
 [1.0.3]: https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.3
