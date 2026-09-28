@@ -17,6 +17,79 @@ export interface ReleaseEntry {
 
 export const changelogData: ReleaseEntry[] = [
   {
+    version: "1.0.6",
+    date: "September 28, 2026",
+    channel: "Beta",
+    summary: "Lucid 1.0.6 Public Beta introduces everyday productivity features: keep multiple Markdown documents open in lightweight tabs, quickly reopen recent documents, restore your open session across relaunches, and paste or drag images directly into your documents.",
+    highlights: [
+      "Lightweight Tabs: Keep multiple Markdown documents open in one window with keyboard navigation and single-preview rendering efficiency.",
+      "Recent Files: Quickly reopen documents you've recently worked on from File → Open Recent.",
+      "Session Restoration: Return to your open documents and active reading state when you relaunch Lucid.",
+      "Paste & Drag Images: Paste screenshots or drag supported images directly into your Markdown documents with automatic local asset storage.",
+    ],
+    sections: [
+      {
+        title: "Productivity",
+        items: [
+          {
+            type: "new",
+            text: "Lightweight document tabs: keep multiple Markdown documents open in one window with keyboard shortcuts (⌘T to open a new tab, ⌘W to close, and ⌘} / ⌘{ to switch tabs).",
+          },
+          {
+            type: "new",
+            text: "Same-document deduplication: opening an already open document activates its existing tab rather than creating duplicates.",
+          },
+          {
+            type: "new",
+            text: "Dirty tab protection: confirms before closing tabs with unsaved edits to prevent accidental data loss.",
+          },
+          {
+            type: "new",
+            text: "Recent Files: quickly reopen documents you've recently worked on from File → Open Recent, with deduplicated history and a Clear Menu option.",
+          },
+          {
+            type: "new",
+            text: "Session restoration: return to your open documents and reading state when you relaunch Lucid.",
+          },
+          {
+            type: "new",
+            text: "Paste & drag images: paste screenshots or drag image files directly into the Markdown editor; Lucid organizes them in a local assets folder and inserts relative Markdown links.",
+          },
+          {
+            type: "new",
+            text: "Supports PNG, JPEG, GIF, WebP, SVG, TIFF, and BMP image formats.",
+          },
+        ],
+      },
+      {
+        title: "Architecture & Performance",
+        items: [
+          {
+            type: "improved",
+            text: "Lightweight tab architecture: inactive tabs avoid separate WebKit preview pipelines, saving memory and keeping editing responsive.",
+          },
+          {
+            type: "improved",
+            text: "Lazy session restoration: restores tab lists and document metadata cleanly on launch without blocking the UI.",
+          },
+        ],
+      },
+      {
+        title: "Fixes",
+        items: [
+          {
+            type: "fixed",
+            text: "Fixed an application startup crash when initializing recent documents on launch.",
+          },
+          {
+            type: "fixed",
+            text: "Fixed document-relative image resolution in preview so relative images load reliably from any folder structure.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.0.5",
     date: "September 25, 2026",
     channel: "Beta",
