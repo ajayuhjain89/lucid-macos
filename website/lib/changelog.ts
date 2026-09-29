@@ -17,6 +17,62 @@ export interface ReleaseEntry {
 
 export const changelogData: ReleaseEntry[] = [
   {
+    version: "1.0.7",
+    date: "September 29, 2026",
+    channel: "Beta",
+    summary: "Lucid 1.0.7 Public Beta delivers everyday productivity enhancements: an intuitive new tab empty-state card, direct file drag-and-drop, persistent toolbar and tab bar open affordances, safe multi-document application termination, and clean window closing.",
+    highlights: [
+      "New Tab Empty State: Opening a new tab (⌘T or +) presents an intuitive, welcoming card with 'Open File… (⌘O)', 'Start Writing', recent documents, and file drag-and-drop.",
+      "File Drag & Drop: Drag Markdown files directly from Finder onto empty tabs or the window to open them immediately.",
+      "Direct Open Affordances: Quickly access your files with persistent Open File (arrow.up.doc) and New Tab (+) buttons directly on the window toolbar and tab strip, with contextual tab menus.",
+      "Safe Application Termination: Quitting Lucid (⌘Q) sequentially reviews and prompts to save each modified document tab by its actual file name, preventing data loss across multi-window and multi-tab workflows.",
+    ],
+    sections: [
+      {
+        title: "Productivity",
+        items: [
+          {
+            type: "new",
+            text: "New tab empty-state card: opening a new tab (⌘T or +) presents an intuitive, welcoming card with 'Open File… (⌘O)', 'Start Writing', recent documents, and file drag-and-drop.",
+          },
+          {
+            type: "new",
+            text: "Drag-and-drop file opening: dragging Markdown files directly from Finder onto empty tabs or the window immediately opens them.",
+          },
+          {
+            type: "new",
+            text: "Direct toolbar and tab bar open affordances: added persistent Open File (arrow.up.doc) and New Tab (+) buttons on the main window toolbar and tab strip, alongside contextual tab menus.",
+          },
+          {
+            type: "new",
+            text: "Safe application termination (⌘Q): sequentially prompts to save each modified document tab by its actual file name, preventing data loss across multi-window and multi-tab workflows.",
+          },
+        ],
+      },
+      {
+        title: "Fixes & Stability",
+        items: [
+          {
+            type: "fixed",
+            text: "Fixed spurious 'save Untitled' prompts when closing clean windows or switching files by clearing change counts on clean tabs.",
+          },
+          {
+            type: "fixed",
+            text: "Fixed AppKit editor layering so the new tab empty-state view is fully interactive and responsive to clicks and typing.",
+          },
+          {
+            type: "fixed",
+            text: "Fixed empty untitled window persistence when opening files at launch or from Finder.",
+          },
+          {
+            type: "fixed",
+            text: "Fixed key window notification routing ensuring single-window setups never drop menu or shortcut actions.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.0.6",
     date: "September 28, 2026",
     channel: "Beta",

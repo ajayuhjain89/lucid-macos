@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { CopyButton } from "@/components/ui/copy-button";
 import { Button } from "@/components/ui/button";
+import { currentRelease } from "@/lib/release";
 
 export const metadata: Metadata = {
   title: "Getting Started Guide — Lucid",
@@ -44,12 +45,12 @@ export default function GettingStartedPage() {
             <div className="space-y-2">
               <h3 className="font-semibold text-text-primary text-base">Step 1: Download Lucid</h3>
               <p>
-                Click the <strong className="text-text-primary">Download Lucid</strong> button on the website. The disk image (<code className="font-mono text-xs px-1.5 py-0.5 rounded bg-surface-elevated text-accent">Lucid-1.0.3.dmg</code>) begins downloading directly to your Mac.
+                Click the <strong className="text-text-primary">Download Lucid</strong> button on the website. The disk image (<code className="font-mono text-xs px-1.5 py-0.5 rounded bg-surface-elevated text-accent">{currentRelease.fileName}</code>) begins downloading directly to your Mac.
               </p>
               <p className="text-xs text-text-tertiary">
                 Optional fallback: You can also inspect the release notes or browse the verified DMG artifact directly on{" "}
                 <a
-                  href="https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.3"
+                  href={currentRelease.githubReleaseUrl || "https://github.com/ajayuhjain89/lucid-macos/releases"}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="underline hover:text-text-secondary"
@@ -62,7 +63,7 @@ export default function GettingStartedPage() {
             <div className="space-y-2">
               <h3 className="font-semibold text-text-primary text-base">Step 2: Open the Disk Image</h3>
               <p>
-                Once downloaded, double-click <strong className="text-text-primary">Lucid-1.0.3.dmg</strong> in your Downloads folder to mount the disk image.
+                Once downloaded, double-click <strong className="text-text-primary">{currentRelease.fileName}</strong> in your Downloads folder to mount the disk image.
               </p>
             </div>
 
