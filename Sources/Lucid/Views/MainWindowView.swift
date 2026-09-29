@@ -61,6 +61,7 @@ public struct MainWindowView: View {
     // Whether the pointer is over the top chrome (used to gently reveal controls
     // when Focus Mode has quieted them).
     @State private var isToolbarHovered: Bool = false
+    @State private var startedWritingSessionIDs: Set<UUID> = []
 
     // Document metrics + outline are produced off-main by `analyzer`; these
     // computed accessors expose its published values to the existing view code.
@@ -77,11 +78,38 @@ public struct MainWindowView: View {
             get: { documentManager.activeSession.text },
             set: { newText in
                 documentManager.activeSession.text = newText
-                if document.text != newText {
-                    document.text = newText
+                if !newText.isEmpty {
+                    startedWritingSessionIDs.insert(documentManager.activeSession.id)
                 }
+                if documentManager.activeSession.fileURL == self.fileURL || (self.fileURL == nil && documentManager.activeSession.isUntitled) {
+                    if document.text != newText {
+                        document.text = newText
+                    }
+                }
+                syncHostWindowEditingState()
             }
         )
+    }
+
+    private func syncHostWindowEditingState() {
+        guard let win = hostWindow.window else { return }
+        let hasDirtyTabs = documentManager.sessions.contains(where: { $0.isDirty })
+        win.isDocumentEdited = hasDirtyTabs
+
+        let active = documentManager.activeSession
+        if let url = active.fileURL {
+            win.representedURL = url
+            win.title = active.displayName
+        } else {
+            win.representedURL = nil
+            win.title = active.displayName
+        }
+
+        if let doc = (win.windowController?.document as? NSDocument) ?? NSDocumentController.shared.document(for: win) {
+            if !hasDirtyTabs {
+                doc.updateChangeCount(.changeCleared)
+            }
+        }
     }
 
     private var documentTitle: String {
@@ -256,15 +284,19 @@ public struct MainWindowView: View {
             if let url = documentManager.activeSession.fileURL {
                 RecentDocumentsManager.shared.recordRecent(url: url)
             } else if documentManager.activeSession.isUntitled && documentManager.activeSession.text.isEmpty {
-                if SessionRestorationManager.shared.restoreInto(documentManager: documentManager) {
+                let hasOtherRealDocs = NSDocumentController.shared.documents.contains(where: { $0.fileURL != nil })
+                if !hasOtherRealDocs && SessionRestorationManager.shared.restoreInto(documentManager: documentManager) {
                     let active = documentManager.activeSession
                     viewState.viewMode = active.viewMode
                     splitFraction = active.splitFraction
                     cursorLine = active.cursorLine
                     cursorCol = active.cursorCol
-                    document.text = active.text
+                    if active.isUntitled {
+                        document.text = active.text
+                    }
                 }
             }
+            syncHostWindowEditingState()
             // AppKit gives a new window's focus to its first text field (the
             // sidebar filter), so typing would go there. Start on the document.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -276,11 +308,12 @@ public struct MainWindowView: View {
         .onDisappear {
             // Closing the document must not let in-flight analysis publish.
             analyzer.reset()
+            SessionRestorationManager.shared.unregister(manager: documentManager)
         }
         .onChange(of: documentManager.activeSession.text) { _, newText in
             // Typing path: schedule coalesced/cancellable analysis; never block.
             analyzer.update(text: newText)
-            hostWindow.window?.isDocumentEdited = documentManager.sessions.contains(where: { $0.isDirty })
+            syncHostWindowEditingState()
             if isFindBarPresented && !findQuery.isEmpty {
                 // Refresh match counts only: moving the selection here would make
                 // the next keystroke overwrite the first match.
@@ -338,12 +371,30 @@ public struct MainWindowView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("LucidCloseTab"))) { _ in
             guard isKeyDocumentWindow else { return }
             if documentManager.sessions.count > 1 {
-                documentManager.closeTab(id: documentManager.activeSessionID, window: hostWindow.window) { _ in }
+                documentManager.closeTab(id: documentManager.activeSessionID, window: hostWindow.window) { success in
+                    if success { syncHostWindowEditingState() }
+                }
             } else {
                 documentManager.closeTab(id: documentManager.activeSessionID, window: hostWindow.window) { success in
-                    if success { hostWindow.window?.close() }
+                    guard success else { return }
+                    if let win = hostWindow.window,
+                       let doc = (win.windowController?.document as? NSDocument) ?? NSDocumentController.shared.document(for: win) {
+                        doc.updateChangeCount(.changeCleared)
+                        doc.close()
+                    } else {
+                        hostWindow.window?.close()
+                    }
                 }
             }
+        }
+        .onReceive(documentManager.objectWillChange) { _ in
+            DispatchQueue.main.async {
+                syncHostWindowEditingState()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("LucidCloseWindow"))) { _ in
+            guard isKeyDocumentWindow, let win = hostWindow.window else { return }
+            win.performClose(nil)
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("LucidNextTab"))) { _ in
             guard isKeyDocumentWindow else { return }
@@ -355,37 +406,34 @@ public struct MainWindowView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("LucidSaveDocument"))) { _ in
             guard isKeyDocumentWindow else { return }
-            documentManager.saveSession(documentManager.activeSession, saveAs: false, window: hostWindow.window) { _ in }
+            documentManager.saveSession(documentManager.activeSession, saveAs: false, window: hostWindow.window) { success in
+                if success { syncHostWindowEditingState() }
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("LucidSaveDocumentAs"))) { _ in
             guard isKeyDocumentWindow else { return }
-            documentManager.saveSession(documentManager.activeSession, saveAs: true, window: hostWindow.window) { _ in }
+            documentManager.saveSession(documentManager.activeSession, saveAs: true, window: hostWindow.window) { success in
+                if success { syncHostWindowEditingState() }
+            }
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("LucidOpenFile"))) { _ in
-            guard isKeyDocumentWindow else { return }
-            let panel = NSOpenPanel()
-            panel.allowedContentTypes = [.markdownDocument, .plainText]
-            panel.allowsMultipleSelection = true
-            panel.canChooseDirectories = false
-            let handler: (NSApplication.ModalResponse) -> Void = { response in
-                guard response == .OK else { return }
-                for url in panel.urls {
-                    documentManager.openFile(url: url)
-                }
-            }
-            if let window = hostWindow.window {
-                panel.beginSheetModal(for: window, completionHandler: handler)
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("LucidOpenFile"))) { note in
+            if let targetWindow = note.object as? NSWindow {
+                guard hostWindow.window === targetWindow else { return }
             } else {
-                handler(panel.runModal())
+                guard isKeyDocumentWindow else { return }
             }
+            documentManager.promptOpenFile(window: hostWindow.window)
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("LucidOpenRecentURL"))) { note in
             guard isKeyDocumentWindow, let url = note.object as? URL else { return }
             documentManager.openFile(url: url)
+            syncHostWindowEditingState()
         }
     }
 
     private func handleTabSwitch(from oldID: UUID, to newID: UUID) {
+        guard let newSession = documentManager.sessions.first(where: { $0.id == newID }) else { return }
+
         if let oldSession = documentManager.sessions.first(where: { $0.id == oldID }) {
             oldSession.viewMode = viewState.viewMode
             oldSession.splitFraction = splitFraction
@@ -399,14 +447,15 @@ public struct MainWindowView: View {
             }
         }
 
-        let newSession = documentManager.activeSession
         viewState.viewMode = newSession.viewMode
         splitFraction = newSession.splitFraction
         cursorLine = newSession.cursorLine
         cursorCol = newSession.cursorCol
 
-        if document.text != newSession.text {
-            document.text = newSession.text
+        if newSession.fileURL == self.fileURL || (self.fileURL == nil && newSession.isUntitled) {
+            if document.text != newSession.text {
+                document.text = newSession.text
+            }
         }
         if let tv = editorTextView {
             tv.string = newSession.text
@@ -423,7 +472,7 @@ public struct MainWindowView: View {
         paneSync.suppressSplitSyncUntil = CACurrentMediaTime() + 0.4
         webViewInstance?.evaluateJavaScript("if (window.lucid && window.lucid.scrollToSourceLine) { window.lucid.scrollToSourceLine(\(newSession.readingPosition.javaScriptLiteral)); }")
 
-        hostWindow.window?.isDocumentEdited = documentManager.sessions.contains(where: { $0.isDirty })
+        syncHostWindowEditingState()
         documentManager.resolveExternalConflictIfPresent(for: newSession)
     }
 
@@ -447,7 +496,14 @@ public struct MainWindowView: View {
     }
 
     private var isKeyDocumentWindow: Bool {
-        hostWindow.window?.isKeyWindow == true
+        guard let win = hostWindow.window else { return false }
+        if win.isKeyWindow { return true }
+        if NSApp.keyWindow == nil && win.isMainWindow { return true }
+        let docWindows = NSApp.windows.filter { $0.isVisible && !($0 is NSPanel) && $0.canBecomeKey }
+        if docWindows.count == 1 && docWindows.first === win {
+            return true
+        }
+        return false
     }
 
     private func isHostWindow(_ object: Any?) -> Bool {
@@ -500,7 +556,7 @@ public struct MainWindowView: View {
                 findMatchCount = 0
                 findCurrentIndex = 0
             } else {
-                let text = document.text as NSString
+                let text = documentManager.activeSession.text as NSString
                 var matches: [NSRange] = []
                 var searchRange = NSRange(location: 0, length: text.length)
                 while searchRange.location < text.length {
@@ -577,8 +633,15 @@ public struct MainWindowView: View {
         ExportService.shared.exportHTML(markdown: documentManager.activeSession.text, documentURL: documentManager.activeSession.fileURL, preferences: preferences, defaultFilename: documentTitle)
     }
 
+    private var isShowingEmptyState: Bool {
+        documentManager.activeSession.isUntitled
+            && documentManager.activeSession.text.isEmpty
+            && !startedWritingSessionIDs.contains(documentManager.activeSession.id)
+    }
+
     private func focusDocumentIfFieldHasFocus() {
-        guard let window = hostWindow.window,
+        guard !isShowingEmptyState,
+              let window = hostWindow.window,
               let fieldEditor = window.firstResponder as? NSTextView,
               fieldEditor.isFieldEditor,
               !isFindBarPresented, !isCommandPalettePresented else { return }
@@ -587,6 +650,7 @@ public struct MainWindowView: View {
     }
 
     private func restoreFocusAfterFind() {
+        guard !isShowingEmptyState else { return }
         if let target = previousFirstResponder {
             let targetWindow: NSWindow? = {
                 if let view = target as? NSView { return view.window }
@@ -679,6 +743,11 @@ public struct MainWindowView: View {
             let layout = PaneLayout(mode: mode, size: proxy.size, splitFraction: splitFraction,
                                     hiddenEditor: paneSync.hiddenEditorShape,
                                     hiddenPreview: paneSync.hiddenPreviewShape)
+
+            let showEmptyState = documentManager.activeSession.isUntitled
+                && documentManager.activeSession.text.isEmpty
+                && !startedWritingSessionIDs.contains(documentManager.activeSession.id)
+
             ZStack(alignment: .topLeading) {
                 PreviewWebView(
                     preferences: preferences,
@@ -701,17 +770,18 @@ public struct MainWindowView: View {
                     transitionToken: sidebarTransitionToken,
                     isSidebarOpen: viewState.showOutline,
                     focusMode: viewState.focusMode,
-                    isActive: layout.showsPreview
+                    isActive: layout.showsPreview && !showEmptyState
                 )
                 .frame(width: layout.preview.width, height: layout.preview.height)
                 .offset(x: layout.preview.minX)
-                .accessibilityHidden(!layout.showsPreview)
+                .opacity(showEmptyState ? 0 : 1)
+                .accessibilityHidden(!layout.showsPreview || showEmptyState)
 
                 EditorView(
                     text: activeDocumentText,
                     preferences: preferences,
                     focusMode: viewState.focusMode,
-                    isActive: layout.showsEditor,
+                    isActive: layout.showsEditor && !showEmptyState,
                     documentFileURL: documentManager.activeSession.fileURL,
                     onRequestSave: {
                         documentManager.saveSession(documentManager.activeSession, window: hostWindow.window) { _ in }
@@ -732,15 +802,42 @@ public struct MainWindowView: View {
                     }
                 )
                 .overlay(alignment: .top) {
-                    editorScrollEdgeBand.opacity(layout.showsEditor ? 1 : 0)
+                    editorScrollEdgeBand.opacity((layout.showsEditor && !showEmptyState) ? 1 : 0)
                 }
                 .frame(width: layout.editor.width, height: layout.editor.height)
-                .accessibilityHidden(!layout.showsEditor)
+                .offset(x: layout.editor.minX)
+                .opacity(showEmptyState ? 0 : 1)
+                .accessibilityHidden(!layout.showsEditor || showEmptyState)
 
-                if mode == .split {
+                if mode == .split && !showEmptyState {
                     PaneSplitDivider(fraction: $splitFraction, totalWidth: proxy.size.width)
                         .frame(width: PaneSplitDivider.hitWidth, height: proxy.size.height)
                         .offset(x: layout.editor.width - (PaneSplitDivider.hitWidth - PaneLayout.dividerWidth) / 2)
+                }
+
+                if showEmptyState {
+                    NewDocumentEmptyStateView(
+                        preferences: preferences,
+                        onOpen: {
+                            documentManager.promptOpenFile(window: hostWindow.window)
+                        },
+                        onStartWriting: {
+                            startedWritingSessionIDs.insert(documentManager.activeSession.id)
+                            viewState.viewMode = .editor
+                            DispatchQueue.main.async {
+                                focusVisiblePane(for: .editor)
+                            }
+                        },
+                        onOpenRecent: { url in
+                            RecentDocumentsManager.shared.openRecent(url: url) { targetURL in
+                                documentManager.openFile(url: targetURL)
+                                syncHostWindowEditingState()
+                            }
+                        }
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(hex: preferences.theme.themeTokens.windowBackground))
+                    .transition(.opacity)
                 }
             }
         }
@@ -785,7 +882,8 @@ public struct MainWindowView: View {
     /// Keyboard focus follows the mode: the editor for Split and Editor, the
     /// preview for Reader (so the arrow keys and Page Down scroll it).
     private func focusVisiblePane(for mode: ViewMode) {
-        guard mode == viewState.viewMode, !isFindBarPresented, !isCommandPalettePresented,
+        guard !isShowingEmptyState,
+              mode == viewState.viewMode, !isFindBarPresented, !isCommandPalettePresented,
               let window = hostWindow.window else { return }
         let target: NSView? = mode == .reader ? webViewInstance : editorTextView
         guard let target, window.firstResponder !== target else { return }
@@ -904,12 +1002,40 @@ public struct MainWindowView: View {
     }
 
     private var rightControlsCluster: some View {
-        HStack(spacing: 2) {
-            modeSelector
-            moreMenu
+        HStack(spacing: LucidSpacing.xSmall) {
+            HStack(spacing: 2) {
+                LucidIconButton(
+                    icon: "plus",
+                    size: 26,
+                    iconSize: 12,
+                    isActive: false,
+                    helpText: "New Tab",
+                    shortcutText: "⌘T"
+                ) {
+                    documentManager.newTab()
+                }
+
+                LucidIconButton(
+                    icon: "arrow.up.doc",
+                    size: 26,
+                    iconSize: 12,
+                    isActive: false,
+                    helpText: "Open File…",
+                    shortcutText: "⌘O"
+                ) {
+                    documentManager.promptOpenFile(window: hostWindow.window)
+                }
+            }
+            .padding(2)
+            .background(controlGlassBackground(cornerRadius: 6))
+
+            HStack(spacing: 2) {
+                modeSelector
+                moreMenu
+            }
+            .padding(2)
+            .background(controlGlassBackground(cornerRadius: 6))
         }
-        .padding(2)
-        .background(controlGlassBackground(cornerRadius: 6))
         .layoutPriority(1)
         .fixedSize()
     }
@@ -954,6 +1080,12 @@ public struct MainWindowView: View {
             }
 
             Section("Actions") {
+                Button("Open File…") {
+                    NotificationCenter.default.post(name: NSNotification.Name("LucidOpenFile"), object: nil)
+                }
+                Button("New Tab") {
+                    documentManager.newTab()
+                }
                 Button("Command Palette…") {
                     presentCommandPalette()
                 }
@@ -1042,7 +1174,9 @@ public struct MainWindowView: View {
         } else {
             // No live editor yet (e.g. just switched modes): append safely.
             documentManager.activeSession.text += (documentManager.activeSession.text.hasSuffix("\n") ? "" : "\n") + template
-            document.text = documentManager.activeSession.text
+            if documentManager.activeSession.fileURL == self.fileURL || (self.fileURL == nil && documentManager.activeSession.isUntitled) {
+                document.text = documentManager.activeSession.text
+            }
         }
     }
 }
@@ -1058,7 +1192,7 @@ private struct WindowConfigurator: NSViewRepresentable {
     let documentManager: WindowDocumentManager
 
     func makeNSView(context: Context) -> ConfiguratorView {
-        let view = ConfiguratorView()
+        let view = ConfiguratorView(documentManager: documentManager)
         view.onWindowAttached = { window in
             self.applyWindowSettings(to: window)
         }
@@ -1066,6 +1200,7 @@ private struct WindowConfigurator: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: ConfiguratorView, context: Context) {
+        nsView.documentManager = documentManager
         nsView.onWindowAttached = { window in
             self.applyWindowSettings(to: window)
         }
@@ -1076,6 +1211,7 @@ private struct WindowConfigurator: NSViewRepresentable {
 
     private func applyWindowSettings(to window: NSWindow) {
         hostWindow.window = window
+        documentManager.hostWindow = window
         window.titlebarAppearsTransparent = true
         // The title stays set (NSDocument names the window) so the Window menu,
         // Mission Control and accessibility show the document name; it is just
@@ -1128,13 +1264,122 @@ private struct WindowConfigurator: NSViewRepresentable {
 
     final class ConfiguratorView: NSView {
         var onWindowAttached: ((NSWindow) -> Void)?
+        weak var documentManager: WindowDocumentManager?
+        private var willCloseObserver: Any?
+        private var delegateProxy: WindowDelegateProxy?
+
+        init(documentManager: WindowDocumentManager) {
+            self.documentManager = documentManager
+            super.init(frame: .zero)
+        }
+
+        override init(frame frameRect: NSRect) {
+            super.init(frame: frameRect)
+        }
+
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             if let window = window {
                 onWindowAttached?(window)
+                if let dm = documentManager {
+                    if delegateProxy == nil || delegateProxy?.window !== window {
+                        delegateProxy?.detach()
+                        delegateProxy = WindowDelegateProxy(window: window, documentManager: dm)
+                    }
+                }
+                if willCloseObserver == nil {
+                    willCloseObserver = NotificationCenter.default.addObserver(
+                        forName: NSWindow.willCloseNotification,
+                        object: window,
+                        queue: .main
+                    ) { [weak window] _ in
+                        guard let window = window else { return }
+                        if let doc = (window.windowController?.document as? NSDocument) ?? NSDocumentController.shared.document(for: window) {
+                            doc.updateChangeCount(.changeCleared)
+                        }
+                    }
+                }
+            } else {
+                delegateProxy?.detach()
+                delegateProxy = nil
             }
         }
+
+        deinit {
+            delegateProxy?.detach()
+            if let observer = willCloseObserver {
+                NotificationCenter.default.removeObserver(observer)
+            }
+        }
+    }
+}
+
+private final class WindowDelegateProxy: NSObject, NSWindowDelegate {
+    weak var originalDelegate: NSWindowDelegate?
+    weak var documentManager: WindowDocumentManager?
+    weak var window: NSWindow?
+    private var isClosingFromManager = false
+
+    init(window: NSWindow, documentManager: WindowDocumentManager) {
+        self.window = window
+        self.documentManager = documentManager
+        self.originalDelegate = window.delegate
+        super.init()
+        window.delegate = self
+    }
+
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        if isClosingFromManager { return true }
+        guard let dm = documentManager else { return true }
+
+        if dm.sessions.contains(where: { $0.isDirty }) {
+            dm.closeAllTabs(window: sender) { [weak self, weak sender] success in
+                if success {
+                    self?.isClosingFromManager = true
+                    if let win = sender,
+                       let doc = (win.windowController?.document as? NSDocument) ?? NSDocumentController.shared.document(for: win) {
+                        doc.updateChangeCount(.changeCleared)
+                        doc.close()
+                    } else {
+                        sender?.close()
+                    }
+                }
+            }
+            return false
+        }
+
+        if let doc = (sender.windowController?.document as? NSDocument) ?? NSDocumentController.shared.document(for: sender) {
+            doc.updateChangeCount(.changeCleared)
+        }
+        return true
+    }
+
+    override func responds(to aSelector: Selector!) -> Bool {
+        if aSelector == #selector(windowShouldClose(_:)) {
+            return true
+        }
+        return super.responds(to: aSelector) || (originalDelegate?.responds(to: aSelector) ?? false)
+    }
+
+    override func forwardingTarget(for aSelector: Selector!) -> Any? {
+        if let orig = originalDelegate, orig.responds(to: aSelector) {
+            return orig
+        }
+        return super.forwardingTarget(for: aSelector)
+    }
+
+    func detach() {
+        if window?.delegate === self {
+            window?.delegate = originalDelegate
+        }
+    }
+
+    deinit {
+        detach()
     }
 }
 

@@ -13,6 +13,7 @@ public final class WindowDocumentManager: ObservableObject {
     @Published public private(set) var sessions: [DocumentSession] = []
     @Published public var activeSessionID: UUID
 
+    public weak var hostWindow: NSWindow?
     private var fileWatchers: [UUID: FileWatcher] = [:]
     private var cancellables = Set<AnyCancellable>()
 
@@ -77,13 +78,17 @@ public final class WindowDocumentManager: ObservableObject {
         for (_, watcher) in fileWatchers {
             watcher.stopWatching()
         }
+        let managerId = id
+        Task { @MainActor in
+            SessionRestorationManager.shared.unregister(id: managerId)
+        }
     }
 
     // MARK: - Tab Creation & Opening
 
     /// Creates a new untitled document session in the current window.
     @discardableResult
-    public func newTab(title: String? = nil, text: String = "", viewMode: ViewMode = .reader) -> DocumentSession {
+    public func newTab(title: String? = nil, text: String = "", viewMode: ViewMode = .editor) -> DocumentSession {
         let untitledCount = sessions.filter { $0.isUntitled }.count
         let defaultTitle = untitledCount == 0 ? "Untitled" : "Untitled \(untitledCount + 1)"
         let session = DocumentSession(
@@ -95,6 +100,7 @@ public final class WindowDocumentManager: ObservableObject {
         observeSession(session)
         sessions.append(session)
         activeSessionID = session.id
+        SessionRestorationManager.shared.saveCurrentSession()
         return session
     }
 
@@ -129,12 +135,18 @@ public final class WindowDocumentManager: ObservableObject {
         )
         observeSession(session)
 
-        // If the current window only has a single pristine untitled session, replace it
-        if sessions.count == 1,
-           let only = sessions.first,
-           only.isUntitled,
-           only.text.isEmpty,
-           !only.isDirty {
+        // If the active session is a pristine untitled session (or the only session is pristine untitled), replace it
+        if let activeIndex = sessions.firstIndex(where: { $0.id == activeSessionID }),
+           sessions[activeIndex].isUntitled,
+           sessions[activeIndex].text.isEmpty,
+           !sessions[activeIndex].isDirty {
+            stopWatcher(for: sessions[activeIndex].id)
+            sessions[activeIndex] = session
+        } else if sessions.count == 1,
+                  let only = sessions.first,
+                  only.isUntitled,
+                  only.text.isEmpty,
+                  !only.isDirty {
             stopWatcher(for: only.id)
             sessions = [session]
         } else {
@@ -147,7 +159,28 @@ public final class WindowDocumentManager: ObservableObject {
 
         setupWatcher(for: session)
         RecentDocumentsManager.shared.recordRecent(url: canonical)
+        SessionRestorationManager.shared.saveCurrentSession()
         return session
+    }
+
+    /// Presents the system open file sheet for the given window, opening selected files into this manager.
+    public func promptOpenFile(window: NSWindow? = nil) {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.markdownDocument, .plainText]
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+        let handler: (NSApplication.ModalResponse) -> Void = { [weak self] response in
+            guard response == .OK, let self = self else { return }
+            for url in panel.urls {
+                self.openFile(url: url)
+            }
+        }
+        let targetWindow = window ?? self.hostWindow
+        if let targetWindow = targetWindow {
+            panel.beginSheetModal(for: targetWindow, completionHandler: handler)
+        } else {
+            handler(panel.runModal())
+        }
     }
 
     // MARK: - Tab Navigation
@@ -197,10 +230,11 @@ public final class WindowDocumentManager: ObservableObject {
             alert.addButton(withTitle: "Don’t Save")
             alert.addButton(withTitle: "Cancel")
 
+            let targetWindow = window ?? self.hostWindow
             let response: NSApplication.ModalResponse
-            if let window = window {
-                alert.beginSheetModal(for: window) { resp in
-                    self.handleClosePromptResponse(resp, session: session, index: index, window: window, completion: completion)
+            if let targetWindow = targetWindow {
+                alert.beginSheetModal(for: targetWindow) { resp in
+                    self.handleClosePromptResponse(resp, session: session, index: index, window: targetWindow, completion: completion)
                 }
                 return
             } else {
@@ -253,6 +287,7 @@ public final class WindowDocumentManager: ObservableObject {
                 activeSessionID = sessions[sessions.count - 1].id
             }
         }
+        SessionRestorationManager.shared.saveCurrentSession()
     }
 
     /// Closes all tabs in the window, prompting for any dirty sessions sequentially.
@@ -260,6 +295,7 @@ public final class WindowDocumentManager: ObservableObject {
         window: NSWindow? = nil,
         completion: @escaping (Bool) -> Void
     ) {
+        let targetWindow = window ?? self.hostWindow
         guard let firstDirty = sessions.first(where: { $0.isDirty }) else {
             for session in sessions {
                 stopWatcher(for: session.id)
@@ -269,9 +305,9 @@ public final class WindowDocumentManager: ObservableObject {
             return
         }
 
-        closeTab(id: firstDirty.id, window: window) { success in
+        closeTab(id: firstDirty.id, window: targetWindow) { success in
             if success {
-                self.closeAllTabs(window: window, completion: completion)
+                self.closeAllTabs(window: targetWindow, completion: completion)
             } else {
                 completion(false)
             }
@@ -287,6 +323,7 @@ public final class WindowDocumentManager: ObservableObject {
         window: NSWindow? = nil,
         completion: @escaping (Bool) -> Void
     ) {
+        let targetWindow = window ?? self.hostWindow
         if let fileURL = session.fileURL, !saveAs {
             do {
                 let data = session.text.data(using: session.encoding) ?? Data(session.text.utf8)
@@ -323,8 +360,8 @@ public final class WindowDocumentManager: ObservableObject {
                 }
             }
 
-            if let window = window {
-                panel.beginSheetModal(for: window, completionHandler: handler)
+            if let targetWindow = targetWindow {
+                panel.beginSheetModal(for: targetWindow, completionHandler: handler)
             } else {
                 handler(panel.runModal())
             }

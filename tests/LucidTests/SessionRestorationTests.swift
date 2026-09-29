@@ -213,4 +213,44 @@ struct SessionRestorationTests {
         let restored = manager.restoreInto(documentManager: docManager)
         #expect(restored == false)
     }
+
+    @MainActor
+    @Test
+    func unregisterClearsSessionWhenLastManagerUnregisters() throws {
+        let defaults = createIsolatedDefaults()
+        let manager = SessionRestorationManager(userDefaults: defaults)
+
+        let tempDir = FileManager.default.temporaryDirectory
+        let doc = tempDir.appendingPathComponent("lucid-unreg-\(UUID().uuidString).md")
+        try "# Sample".write(to: doc, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: doc) }
+
+        let docManager = WindowDocumentManager()
+        docManager.openFile(url: doc)
+        manager.register(manager: docManager)
+        manager.saveCurrentSession()
+
+        // Should have saved session
+        #expect(manager.loadSavedSession() != nil)
+
+        // When unregistering the manager
+        manager.unregister(manager: docManager)
+
+        // Session should be cleared
+        #expect(manager.loadSavedSession() == nil)
+    }
+
+    @MainActor
+    @Test
+    func activeManagersExposesRegisteredManagers() throws {
+        let defaults = createIsolatedDefaults()
+        let manager = SessionRestorationManager(userDefaults: defaults)
+
+        let docManager = WindowDocumentManager()
+        manager.register(manager: docManager)
+        #expect(manager.activeManagers.contains(where: { $0.id == docManager.id }))
+
+        manager.unregister(manager: docManager)
+        #expect(!manager.activeManagers.contains(where: { $0.id == docManager.id }))
+    }
 }

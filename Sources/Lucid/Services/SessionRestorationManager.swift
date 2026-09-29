@@ -157,12 +157,20 @@ public final class SessionRestorationManager: ObservableObject {
     }
 
     public func unregister(manager: WindowDocumentManager) {
-        registeredManagers.removeValue(forKey: manager.id)
+        unregister(id: manager.id)
+    }
+
+    public func unregister(id: UUID) {
+        registeredManagers.removeValue(forKey: id)
         if registeredManagers.isEmpty {
             clearSession()
         } else {
             saveCurrentSession()
         }
+    }
+
+    public var activeManagers: [WindowDocumentManager] {
+        liveManagers
     }
 
     private var liveManagers: [WindowDocumentManager] {
@@ -237,6 +245,9 @@ public final class SessionRestorationManager: ObservableObject {
     @discardableResult
     public func restoreInto(documentManager: WindowDocumentManager) -> Bool {
         guard LucidPreferences.shared.restoreSessionOnLaunch else { return false }
+        if NSDocumentController.shared.documents.contains(where: { $0.fileURL != nil }) {
+            return false
+        }
         guard let snapshot = loadSavedSession(), let windowRecord = snapshot.windows.first else {
             return false
         }
