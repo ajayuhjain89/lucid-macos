@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.6"><img src="https://img.shields.io/badge/release-v1.0.6--beta-blue?style=flat-square" alt="v1.0.6 Public Beta"></a>
+  <a href="https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.7"><img src="https://img.shields.io/badge/release-v1.0.7--beta-blue?style=flat-square" alt="v1.0.7 Public Beta"></a>
   <img src="https://img.shields.io/badge/platform-macOS%2014.0%2B-black?style=flat-square&logo=apple" alt="macOS 14+">
   <img src="https://img.shields.io/badge/arch-Apple%20Silicon%20(arm64)-orange?style=flat-square" alt="Apple Silicon (arm64)">
   <img src="https://img.shields.io/badge/Swift-5.9%2B-F05138?style=flat-square&logo=swift&logoColor=white" alt="Swift 5.9+">
@@ -19,9 +19,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ajayuhjain89/lucid-macos/releases/download/v1.0.6/Lucid-1.0.6.dmg"><strong>Download Lucid (DMG)</strong></a> &nbsp;•&nbsp;
+  <a href="https://github.com/ajayuhjain89/lucid-macos/releases/download/v1.0.7/Lucid-1.0.7.dmg"><strong>Download Lucid (DMG)</strong></a> &nbsp;•&nbsp;
   <a href="https://website-phi-umber-70.vercel.app"><strong>Official Website</strong></a> &nbsp;•&nbsp;
-  <a href="https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.6">Release Notes</a>
+  <a href="https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.7">Release Notes</a>
 </p>
 
 ---
@@ -30,12 +30,12 @@ Lucid renders Markdown with an editorial identity and wraps it in a genuinely na
 
 ## Install
 
-1. Download [**Lucid-1.0.6.dmg**](https://github.com/ajayuhjain89/lucid-macos/releases/download/v1.0.6/Lucid-1.0.6.dmg).
-2. Open `Lucid-1.0.6.dmg` in your Downloads folder.
+1. Download [**Lucid-1.0.7.dmg**](https://github.com/ajayuhjain89/lucid-macos/releases/download/v1.0.7/Lucid-1.0.7.dmg).
+2. Open `Lucid-1.0.7.dmg` in your Downloads folder.
 3. Drag `Lucid.app` into your `Applications` folder.
 4. Launch Lucid from Applications or Spotlight.
 
-> **In-App Updates**: Existing Lucid users on v1.0.5 (or v1.0.4, v1.0.3) can update directly via **Lucid → Check for Updates…**. Users on v1.0.2 or earlier must manually install Lucid once via the disk image.
+> **In-App Updates**: Existing Lucid users on v1.0.6 (or v1.0.5, v1.0.4, v1.0.3) can update directly via **Lucid → Check for Updates…**. Users on v1.0.2 or earlier must manually install Lucid once via the disk image.
 
 ### Built-In In-App Updates
 
@@ -62,8 +62,8 @@ To open Lucid:
 
 | Property | Value |
 | :--- | :--- |
-| **Release** | Lucid 1.0.6 Public Beta (`v1.0.6`) |
-| **Artifact** | `Lucid-1.0.6.dmg` |
+| **Release** | Lucid 1.0.7 Public Beta (`v1.0.7`) |
+| **Artifact** | `Lucid-1.0.7.dmg` |
 | **Minimum OS** | macOS 14.0 (Sonoma) or later |
 | **Architecture** | Apple Silicon (`arm64`) |
 | **Signing** | Ad-hoc (Beta) + Sparkle EdDSA archive signature |
@@ -71,13 +71,15 @@ To open Lucid:
 To verify the checksum of your download in Terminal:
 
 ```bash
-shasum -a 256 ~/Downloads/Lucid-1.0.6.dmg
+shasum -a 256 ~/Downloads/Lucid-1.0.7.dmg
 ```
 
-Authoritative release assets and release notes are published on [GitHub Releases](https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.6).
+Authoritative release assets and release notes are published on [GitHub Releases](https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.7).
 
 ## Features
 
+- ✨ **New tab empty state & direct open** (`⌘T` / `⌘O`) — welcoming quick-start card with instant file opening, recent documents, and file drag-and-drop support.
+- 🛡 **Safe multi-document exit** (`⌘Q`) — sequential save prompts per modified tab by actual document name.
 - 🗂 **Lightweight multi-document tabs** (`⌘T` / `⌘W` / `⌘}` / `⌘{`) — keep multiple Markdown files open in one window with keyboard navigation and single-preview rendering efficiency.
 - 🕒 **Native Recent Files** — quickly reopen recent documents from File → Open Recent with bounded, deduplicated history.
 - 🔄 **Session restoration** — automatic recovery of open tabs and document state across launches.
