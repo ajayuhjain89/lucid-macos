@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 import Testing
 @testable import Lucid
 
@@ -149,5 +150,79 @@ import Testing
         #expect(session.isDirty)
         #expect(session.hasExternalConflict)
         #expect(session.text == "Local unsaved edits") // Local edits preserved!
+    }
+
+    @Test func openFileReplacesPristineActiveTabWhenMultipleTabsExist() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+        let file1 = tempDir.appendingPathComponent("test_multi_1_\(UUID().uuidString).md")
+        let file2 = tempDir.appendingPathComponent("test_multi_2_\(UUID().uuidString).md")
+        try "# First".write(to: file1, atomically: true, encoding: .utf8)
+        try "# Second".write(to: file2, atomically: true, encoding: .utf8)
+        defer {
+            try? FileManager.default.removeItem(at: file1)
+            try? FileManager.default.removeItem(at: file2)
+        }
+
+        let manager = WindowDocumentManager()
+        // Open file1 into the initial untitled tab
+        manager.openFile(url: file1)
+        #expect(manager.sessions.count == 1)
+
+        // Open a new tab (pristine untitled)
+        let newTab = manager.newTab()
+        #expect(manager.sessions.count == 2)
+        #expect(manager.activeSessionID == newTab.id)
+
+        // Opening file2 while on newTab should replace newTab, keeping tab count at 2
+        let opened2 = manager.openFile(url: file2)
+        #expect(opened2 != nil)
+        #expect(manager.sessions.count == 2)
+        #expect(manager.activeSessionID == opened2?.id)
+        #expect(manager.sessions[0].fileURL?.path == file1.path)
+        #expect(manager.sessions[1].fileURL?.path == file2.path)
+    }
+
+    @Test func newTabDefaultsToEditorMode() {
+        let manager = WindowDocumentManager()
+        let tab = manager.newTab()
+        #expect(tab.viewMode == .editor)
+    }
+
+    @Test func closeAllTabsClosesCleanTabsImmediately() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+        let file1 = tempDir.appendingPathComponent("test_close_all_1_\(UUID().uuidString).md")
+        let file2 = tempDir.appendingPathComponent("test_close_all_2_\(UUID().uuidString).md")
+        try "# Clean 1".write(to: file1, atomically: true, encoding: .utf8)
+        try "# Clean 2".write(to: file2, atomically: true, encoding: .utf8)
+        defer {
+            try? FileManager.default.removeItem(at: file1)
+            try? FileManager.default.removeItem(at: file2)
+        }
+
+        let manager = WindowDocumentManager()
+        manager.openFile(url: file1)
+        manager.newTab()
+        manager.openFile(url: file2)
+        #expect(manager.sessions.count == 2)
+        #expect(!manager.sessions.contains(where: { $0.isDirty }))
+
+        var finished = false
+        var succeeded = false
+        manager.closeAllTabs { success in
+            finished = true
+            succeeded = success
+        }
+
+        #expect(finished)
+        #expect(succeeded)
+        #expect(manager.sessions.isEmpty)
+    }
+
+    @Test func hostWindowFallbackIsSetAndAccessible() {
+        let manager = WindowDocumentManager()
+        #expect(manager.hostWindow == nil)
+        let window = NSWindow()
+        manager.hostWindow = window
+        #expect(manager.hostWindow === window)
     }
 }

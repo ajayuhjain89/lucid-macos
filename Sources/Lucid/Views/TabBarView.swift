@@ -47,6 +47,24 @@ public struct TabBarView: View {
                 .buttonStyle(LucidPressableButtonStyle(pressedScale: 0.92))
                 .help("New Tab (⌘T)")
                 .accessibilityLabel("New Tab")
+
+                // Open file button
+                Button(action: {
+                    documentManager.promptOpenFile()
+                }) {
+                    Image(systemName: "arrow.up.doc")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(Color(hex: preferences.theme.themeTokens.textSecondary))
+                        .frame(width: 22, height: 22)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(Color.clear)
+                        )
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(LucidPressableButtonStyle(pressedScale: 0.92))
+                .help("Open File… (⌘O)")
+                .accessibilityLabel("Open File")
                 .padding(.trailing, 8)
             }
             .frame(height: 28)
@@ -57,6 +75,14 @@ public struct TabBarView: View {
                         alignment: .bottom
                     )
             )
+            .contextMenu {
+                Button("New Tab") {
+                    documentManager.newTab()
+                }
+                Button("Open File…") {
+                    documentManager.promptOpenFile()
+                }
+            }
             .transition(.move(edge: .top).combined(with: .opacity))
         }
     }
@@ -114,6 +140,18 @@ public struct TabBarView: View {
                 hoveredTabID = session.id
             } else if hoveredTabID == session.id {
                 hoveredTabID = nil
+            }
+        }
+        .contextMenu {
+            Button("Close Tab") {
+                documentManager.closeTab(id: session.id) { _ in }
+            }
+            Divider()
+            Button("New Tab") {
+                documentManager.newTab()
+            }
+            Button("Open File…") {
+                documentManager.promptOpenFile()
             }
         }
         .help(session.fileURL?.path ?? session.displayName)

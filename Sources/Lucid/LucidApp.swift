@@ -3,6 +3,7 @@ import AppKit
 
 @main
 struct LucidApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var preferences = LucidPreferences.shared
     @StateObject private var updateController = LucidUpdateController.shared
     @ObservedObject private var recentDocs = RecentDocumentsManager.shared
@@ -33,7 +34,20 @@ struct LucidApp: App {
                 .keyboardShortcut("t", modifiers: .command)
 
                 Button("Open…") {
-                    NotificationCenter.default.post(name: NSNotification.Name("LucidOpenFile"), object: nil)
+                    let hasKeyDocument = NSApp.windows.contains(where: { $0.isKeyWindow })
+                    if hasKeyDocument {
+                        NotificationCenter.default.post(name: NSNotification.Name("LucidOpenFile"), object: nil)
+                    } else {
+                        let panel = NSOpenPanel()
+                        panel.allowedContentTypes = [.markdownDocument, .plainText]
+                        panel.allowsMultipleSelection = true
+                        panel.canChooseDirectories = false
+                        if panel.runModal() == .OK {
+                            for url in panel.urls {
+                                NSDocumentController.shared.openDocument(withContentsOf: url, display: true) { _, _, _ in }
+                            }
+                        }
+                    }
                 }
                 .keyboardShortcut("o", modifiers: .command)
             }
@@ -75,6 +89,11 @@ struct LucidApp: App {
                     NotificationCenter.default.post(name: NSNotification.Name("LucidCloseTab"), object: nil)
                 }
                 .keyboardShortcut("w", modifiers: .command)
+
+                Button("Close Window") {
+                    NotificationCenter.default.post(name: NSNotification.Name("LucidCloseWindow"), object: nil)
+                }
+                .keyboardShortcut("w", modifiers: [.command, .shift])
             }
 
             CommandGroup(after: .appInfo) {
@@ -252,11 +271,75 @@ enum LaunchUntitledCleanup {
 
     @MainActor
     static func closeUntouchedUntitledIfOpeningFile() {
-        guard let launchDate, Date().timeIntervalSince(launchDate) < 5 else { return }
         let documents = NSDocumentController.shared.documents
         guard documents.contains(where: { $0.fileURL != nil }) else { return }
-        for document in documents where document.fileURL == nil && !document.isDocumentEdited {
-            document.close()
+
+        let managers = SessionRestorationManager.shared.activeManagers
+        for manager in managers {
+            if manager.sessions.count == 1,
+               let session = manager.sessions.first,
+               session.isUntitled,
+               session.text.isEmpty,
+               !session.isDirty {
+                if let win = manager.hostWindow,
+                   let doc = (win.windowController?.document as? NSDocument) ?? NSDocumentController.shared.document(for: win) {
+                    doc.updateChangeCount(.changeCleared)
+                    doc.close()
+                }
+            }
         }
+
+        for document in documents where document.fileURL == nil {
+            if document.windowControllers.isEmpty || !document.isDocumentEdited {
+                document.updateChangeCount(.changeCleared)
+                document.close()
+            }
+        }
+    }
+}
+
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    @MainActor
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        let managers = SessionRestorationManager.shared.activeManagers
+        let dirtyManagers = managers.filter { $0.sessions.contains(where: { $0.isDirty }) }
+
+        guard !dirtyManagers.isEmpty else {
+            for doc in NSDocumentController.shared.documents {
+                doc.updateChangeCount(.changeCleared)
+            }
+            return .terminateNow
+        }
+
+        closeDirtyManagersSequentially(dirtyManagers, sender: sender)
+        return .terminateLater
+    }
+
+    @MainActor
+    private func closeDirtyManagersSequentially(_ remaining: [WindowDocumentManager], sender: NSApplication) {
+        guard let first = remaining.first else {
+            for doc in NSDocumentController.shared.documents {
+                doc.updateChangeCount(.changeCleared)
+            }
+            sender.reply(toApplicationShouldTerminate: true)
+            return
+        }
+
+        first.closeAllTabs(window: first.hostWindow) { [weak self] success in
+            if success {
+                self?.closeDirtyManagersSequentially(Array(remaining.dropFirst()), sender: sender)
+            } else {
+                sender.reply(toApplicationShouldTerminate: false)
+            }
+        }
+    }
+
+    @MainActor
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag {
+            NSDocumentController.shared.newDocument(nil)
+            return true
+        }
+        return true
     }
 }
