@@ -6,6 +6,20 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.0.7] - 2026-09-29
+
+### Added
+- New tab empty-state card: opening a new tab (`⌘T` or `+`) presents an intuitive, welcoming card with "Open File… (⌘O)", "Start Writing", and quick access to recent documents.
+- Drag-and-drop file opening: dragging Markdown files directly from Finder onto empty tabs or the window immediately opens them.
+- Direct toolbar and tab bar open affordances: added persistent `arrow.up.doc` (Open File…) and `+` (New Tab) buttons on the main window toolbar and tab strip.
+- Safe application termination (`⌘Q`): sequentially prompts to save each modified document tab by its actual file name, preventing data loss across multi-window and multi-tab workflows.
+
+### Fixed
+- Fixed spurious "save Untitled" prompts when closing clean windows or switching files.
+- Fixed AppKit editor layering so the new tab empty-state view is fully interactive and responsive to clicks and typing.
+- Fixed empty untitled window persistence when opening files at launch or from Finder.
+- Fixed key window notification routing ensuring single-window setups never drop menu or shortcut actions.
+
 ## [1.0.6] - 2026-09-28
 
 ### Added
@@ -131,6 +145,7 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Live external file watching and PDF / standalone-HTML / rich-text export.
 - Pre-packaged `Lucid-1.0.0.dmg` release artifact with verified SHA-256 checksum.
 
+[1.0.7]: https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.7
 [1.0.6]: https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.6
 [1.0.5]: https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.5
 [1.0.4]: https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.4
