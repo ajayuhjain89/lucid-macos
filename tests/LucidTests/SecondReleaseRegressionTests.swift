@@ -80,7 +80,8 @@ import Testing
             #expect(b.text == "B" && a.text == base + "!")
             editor.redo(nil)
             restorer.saveSession(managers: [manager])
-            let record = try #require(restorer.loadSavedSession()?.windows.flatMap(\.tabs).first(where: { $0.id == b.id }))
+            let snapshot = try #require(restorer.loadSavedSession())
+            let record = try #require(snapshot.windows.flatMap(\.tabs).first(where: { $0.id == b.id }))
             #expect(record.draftText == "B?")
             editor.delegate = nil
             a.undoManager.removeAllActions(); b.undoManager.removeAllActions()
