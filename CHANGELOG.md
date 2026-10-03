@@ -4,11 +4,7 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project aims to
 follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
-### Planned for 1.0.8 (build 9)
-
-This candidate is awaiting stable-release qualification and is not published.
+## [1.0.8] - 2026-10-03
 
 ### Fixed
 - Keep editing and Undo/Redo attached to the displayed tab during rapid tab changes.
@@ -162,6 +158,7 @@ This candidate is awaiting stable-release qualification and is not published.
 - Live external file watching and PDF / standalone-HTML / rich-text export.
 - Pre-packaged `Lucid-1.0.0.dmg` release artifact with verified SHA-256 checksum.
 
+[1.0.8]: https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.8
 [1.0.7]: https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.7
 [1.0.6]: https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.6
 [1.0.5]: https://github.com/ajayuhjain89/lucid-macos/releases/tag/v1.0.5

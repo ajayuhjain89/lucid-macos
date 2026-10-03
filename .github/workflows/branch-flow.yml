@@ -19,6 +19,7 @@ name: Branch Flow Policy
 
 on:
   pull_request:
+    branches: [main]
     types: [opened, reopened, edited, synchronize, labeled, unlabeled]
   workflow_dispatch:
 
