@@ -52,6 +52,14 @@ To open Lucid:
 - **Primary**: In Finder, open your `Applications` folder, right-click (or Control-click) `Lucid.app`, select **Open**, and click **Open** in the confirmation prompt.
 - **Alternative**: Navigate to **System Settings → Privacy & Security**, scroll down to the Security section, and click **Open Anyway** next to the notification for Lucid.
 
+## Release status
+
+The published download remains **1.0.7 Public Beta**. The source candidate is
+**1.0.8, build 9**, awaiting stable qualification. See the
+[prepared release notes](docs/releases/1.0.8.md),
+[document safety guide](docs/document-safety.md), and
+[qualification record](docs/releases/1.0.8-qualification.md).
+
 ## System Requirements
 
 - **Operating System**: macOS 14.0 (Sonoma) or later
@@ -137,14 +145,14 @@ Read our full [Privacy Policy](https://website-phi-umber-70.vercel.app/privacy).
 git clone https://github.com/ajayuhjain89/lucid-macos.git
 cd lucid-macos
 
-# Compile, bundle, ad-hoc sign Lucid.app, and produce Lucid-1.0.0.dmg
+# Compile, bundle, ad-hoc sign Lucid.app, and produce Lucid-local.dmg
 ./build.sh
 
 # Launch the built application
 open Lucid.app
 ```
 
-The build script compiles an optimized arm64 binary, assembles `Lucid.app`, ad-hoc code-signs it, and creates the disk image (`Lucid-1.0.2.dmg` with `--release`).
+The build script compiles an optimized arm64 binary, assembles `Lucid.app`, ad-hoc code-signs it, and creates `Lucid-local.dmg`. `./build.sh --release` creates a versioned DMG with overwrite protection. Ad-hoc signing is development packaging; it does not provide Developer ID signing or notarization.
 
 > Note: A `Package.swift` is included for Swift Package Manager and editor tooling integration. For complete development guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
