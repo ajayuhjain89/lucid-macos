@@ -88,7 +88,7 @@ jobs:
           TEST_EXE="$BIN/LucidPackageTests.xctest/Contents/MacOS/LucidPackageTests"
           if [ ! -x "$TEST_EXE" ]; then TEST_EXE="$BIN/LucidPackageTests"; fi
           if [ -x "$TEST_EXE" ]; then
-            lldb --batch -o run -o "thread backtrace all" -- "$TEST_EXE" --testing-library swift-testing
+            lldb --batch -o "settings set target.process.stop-on-exec false" -o run -o "thread backtrace all" -- "$TEST_EXE" --testing-library swift-testing
           fi
           find "$HOME/Library/Logs/DiagnosticReports" -maxdepth 1 -type f -name '*Lucid*' -print -exec cat {} \;
 
