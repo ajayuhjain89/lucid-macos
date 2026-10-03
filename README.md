@@ -54,9 +54,8 @@ To open Lucid:
 
 ## Release status
 
-The published download remains **1.0.7 Public Beta**. The source candidate is
-**1.0.8, build 9**, awaiting stable qualification. See the
-[prepared release notes](docs/releases/1.0.8.md),
+The published release is **1.0.8 Public Beta (build 9)**. See the
+[release notes](docs/releases/1.0.8.md),
 [document safety guide](docs/document-safety.md), and
 [qualification record](docs/releases/1.0.8-qualification.md).
 
