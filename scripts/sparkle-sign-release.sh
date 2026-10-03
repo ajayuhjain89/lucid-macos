@@ -80,7 +80,13 @@ if [ -z "$ED_SIGNATURE" ] || [ "$ED_SIGNATURE" = "$SIGN_OUTPUT" ]; then
 fi
 
 # Verify signature immediately using sign_update --verify
-"$SIGN_UPDATE" --verify "$DMG_PATH" "$ED_SIGNATURE" >/dev/null
+if [ -n "${SPARKLE_ED_KEY:-}" ]; then
+  echo "$SPARKLE_ED_KEY" | "$SIGN_UPDATE" -f - --verify "$DMG_PATH" "$ED_SIGNATURE" >/dev/null
+elif [ -n "${SPARKLE_ED_KEY_FILE:-}" ]; then
+  "$SIGN_UPDATE" -f "$SPARKLE_ED_KEY_FILE" --verify "$DMG_PATH" "$ED_SIGNATURE" >/dev/null
+else
+  "$SIGN_UPDATE" --verify "$DMG_PATH" "$ED_SIGNATURE" >/dev/null
+fi
 
 echo "==> Sparkle EdDSA Signing Verified Successfully"
 echo "Artifact:  $DMG_BASENAME"
