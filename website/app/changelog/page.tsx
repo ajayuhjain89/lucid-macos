@@ -12,6 +12,11 @@ export const metadata: Metadata = {
 };
 
 export default function ChangelogPage() {
+  // A pending candidate is hidden once its version has shipped into changelogData.
+  const pending = pendingRelease;
+  const unreleased =
+    pending && !changelogData.some((entry) => entry.version === pending.version) ? pending : null;
+
   return (
     <div className="py-16 md:py-24 px-6 md:px-12 max-w-4xl mx-auto">
       {/* Header */}
@@ -27,13 +32,15 @@ export default function ChangelogPage() {
         </p>
       </div>
 
-      <article id="unreleased" className="mb-16 p-8 rounded-window border border-border-subtle bg-surface space-y-4">
-        <h2 className="text-2xl font-semibold text-text-primary">Unreleased — v{pendingRelease.version}</h2>
-        <p className="text-sm text-text-secondary">{pendingRelease.status}</p>
-        <ul className="list-disc pl-5 space-y-2 text-sm text-text-secondary">
-          {pendingRelease.highlights.map((highlight) => <li key={highlight}>{highlight}</li>)}
-        </ul>
-      </article>
+      {unreleased && (
+        <article id="unreleased" className="mb-16 p-8 rounded-window border border-border-subtle bg-surface space-y-4">
+          <h2 className="text-2xl font-semibold text-text-primary">Unreleased — v{unreleased.version}</h2>
+          <p className="text-sm text-text-secondary">{unreleased.status}</p>
+          <ul className="list-disc pl-5 space-y-2 text-sm text-text-secondary">
+            {unreleased.highlights.map((highlight) => <li key={highlight}>{highlight}</li>)}
+          </ul>
+        </article>
+      )}
 
       {/* Changelog Entries */}
       <div className="space-y-16">
