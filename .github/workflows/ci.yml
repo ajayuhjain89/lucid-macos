@@ -75,6 +75,22 @@ jobs:
           DEVELOPER_DIR="$XCODE/Contents/Developer" swift --version
           DEVELOPER_DIR="$XCODE/Contents/Developer" ./scripts/swift-test.sh
 
+      - name: Diagnose native test failure
+        if: failure() && matrix.os == 'macos-14'
+        continue-on-error: true
+        env:
+          SWIFT_BACKTRACE: enable=yes,interactive=no
+        run: |
+          set -uo pipefail
+          XCODE="$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
+          export DEVELOPER_DIR="$XCODE/Contents/Developer"
+          BIN="$(swift build --show-bin-path)"
+          TEST_EXE="$(find "$BIN" -type f -name LucidPackageTests | head -1)"
+          if [ -n "$TEST_EXE" ]; then
+            lldb --batch -o run -o "thread backtrace all" -- "$TEST_EXE" --testing-library swift-testing
+          fi
+          find "$HOME/Library/Logs/DiagnosticReports" -maxdepth 1 -type f -name '*Lucid*' -print -exec cat {} \;
+
       - name: Branch-flow policy suite
         run: bash tests/test-branch-flow-policy.sh
 
