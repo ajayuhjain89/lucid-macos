@@ -6,7 +6,7 @@ describe("Download API Route (/api/download)", () => {
     const response = await GET();
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe(
-      "https://github.com/ajayuhjain89/lucid-macos/releases/download/v1.0.7/Lucid-1.0.7.dmg"
+      "https://github.com/ajayuhjain89/lucid-macos/releases/download/v1.0.8/Lucid-1.0.8.dmg"
     );
   });
 });
