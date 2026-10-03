@@ -53,7 +53,12 @@ struct LayoutInteractionTests {
             }
             #expect((try await page.web.evaluateJavaScript("innerWidth")) as? Double == width)
             _ = try await page.web.evaluateJavaScript("window.dispatchEvent(new Event('resize')); true")
-            try await flushFrames(page)
+            for _ in 0..<50 {
+                try await flushFrames(page)
+                let diff = try await page.web.evaluateJavaScript("Math.abs(lucid.readingPosition().line - savedLine)") as? Double ?? 999.0
+                if diff < 1.0 { break }
+                try await Task.sleep(nanoseconds: 10_000_000)
+            }
             let snapshot = try await page.web.evaluateJavaScript("JSON.stringify({width:innerWidth, savedLine, actual:lucid.readingPosition(), savedMatches, matches:lucid.findMatches.length, connected:lucid.findMatches.every(r => r.startContainer.isConnected)})")
             #expect(try await page.check("Math.abs(lucid.readingPosition().line - savedLine) < 1 && lucid.findMatches.length === savedMatches && lucid.findMatches.every(r => r.startContainer.isConnected)"), "Resize state: \(snapshot)")
         }

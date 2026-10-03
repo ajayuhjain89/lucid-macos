@@ -311,7 +311,10 @@ import WebKit
         let web = try #require(state.web)
         #expect((try await web.evaluateJavaScript("document.querySelector('#lucid-content img')?.naturalWidth ?? 0")) as? Int == 1)
         state.url = dirs[1].appendingPathComponent("doc.md")
-        try await Task.sleep(nanoseconds: 500_000_000)
+        for _ in 0..<200 {
+            if (try? await web.evaluateJavaScript("document.querySelector('#lucid-content img')?.naturalWidth ?? 0")) as? Int == 2 { break }
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
         #expect((try await web.evaluateJavaScript("document.querySelector('#lucid-content img')?.naturalWidth ?? 0")) as? Int == 2)
     }
 

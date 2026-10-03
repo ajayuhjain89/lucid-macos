@@ -3041,15 +3041,18 @@
   let geometryFrame = null;
   let pendingGeometry = null;
   function scheduleGeometryUpdate(refitDiagrams) {
+    const isResize = !!refitDiagrams;
     if (!pendingGeometry || pendingGeometry.revision !== currentRenderRevision) {
       pendingGeometry = {
         revision: currentRenderRevision,
         anchor: (nativeAnchorPending || anchorRestoreActive) ? null : readingLine,
         userScroll: lastUserScrollTimestamp,
-        refitDiagrams: !!refitDiagrams
+        refitDiagrams: isResize,
+        isResize: isResize
       };
     } else {
-      pendingGeometry.refitDiagrams = pendingGeometry.refitDiagrams || refitDiagrams;
+      pendingGeometry.refitDiagrams = pendingGeometry.refitDiagrams || isResize;
+      pendingGeometry.isResize = pendingGeometry.isResize || isResize;
     }
     if (geometryFrame !== null) return;
     geometryFrame = requestAnimationFrame(function() {
@@ -3063,7 +3066,7 @@
           if (canvas && !canvas.dataset.userInteracted) formatMermaidContainer(c, undefined, true);
         });
       }
-      if (update.anchor && lastUserScrollTimestamp === update.userScroll) scrollToSourceLine(update.anchor);
+      if (update.anchor && (update.isResize || lastUserScrollTimestamp === update.userScroll)) scrollToSourceLine(update.anchor);
       invalidateHeadingPositions('geometry');
     });
   }
