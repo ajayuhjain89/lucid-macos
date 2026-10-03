@@ -17,6 +17,68 @@ export interface ReleaseEntry {
 
 export const changelogData: ReleaseEntry[] = [
   {
+    version: "1.0.8",
+    date: "October 3, 2026",
+    channel: "Beta",
+    summary: "Lucid 1.0.8 Public Beta delivers enhanced document safety, improved session recovery across tabs and windows, reliable relative image refreshing, and smoother sidebar interactions.",
+    highlights: [
+      "Editing and Undo/Redo stay strictly isolated to the displayed tab, even during rapid tab switching.",
+      "Multi-tab and window session recovery retains unsaved edits in named files and separate windows, including drafts whose original file disappeared.",
+      "Cancelling close or quit keeps every tab available; failed saves preserve unsaved text.",
+      "Save follows same-volume file moves instead of recreating an abandoned filename, and prompts for a destination when the file cannot be identified.",
+      "Local relative images refresh when switching documents, returning to replaced assets, or revealing the preview pane.",
+      "Smoother sidebar toggles and resizing preserve filter text, editor focus, reading position, and find matches.",
+    ],
+    sections: [
+      {
+        title: "Session Recovery & Document Safety",
+        items: [
+          {
+            type: "improved",
+            text: "Recovery retains unsaved edits in named files and separate windows, including drafts whose original file disappeared.",
+          },
+          {
+            type: "fixed",
+            text: "Opening another file at launch preserves pending recovery windows and documents without data loss.",
+          },
+          {
+            type: "fixed",
+            text: "Cancelling close or quit keeps every tab available; failed saves preserve unsaved text without losing edits.",
+          },
+          {
+            type: "improved",
+            text: "Save follows same-volume file moves instead of recreating an abandoned filename, asking you to choose a destination when unresolved.",
+          },
+          {
+            type: "fixed",
+            text: "Saving and immediately continuing to type no longer triggers a false external-change alert.",
+          },
+        ],
+      },
+      {
+        title: "Editing & Preview Fidelity",
+        items: [
+          {
+            type: "improved",
+            text: "Editing and Undo/Redo remain strictly isolated to the displayed tab, including during rapid tab switching.",
+          },
+          {
+            type: "fixed",
+            text: "Local relative images refresh accurately when switching tabs, returning to replaced assets, or revealing the preview pane.",
+          },
+          {
+            type: "improved",
+            text: "Smoother sidebar toggles and resizing preserve filter text, editor focus, reading position, and find matches.",
+          },
+          {
+            type: "improved",
+            text: "Multiple open windows resize their sidebars independently.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "1.0.1",
     date: "September 21, 2026",
     channel: "Beta",

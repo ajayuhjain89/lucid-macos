@@ -64,7 +64,9 @@ import WebKit
         let session = try #require(manager.openFile(url: url))
         _ = manager.newTab()
         try "External replacement".write(to: url, atomically: true, encoding: .utf8)
-        try await Task.sleep(nanoseconds: 600_000_000)
+        for _ in 0..<100 where session.text != "External replacement" {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
         #expect(session.text == "External replacement")
         #expect(!session.isDirty)
     }
@@ -247,7 +249,9 @@ import WebKit
         let manager = WindowDocumentManager()
         restorer.register(manager: manager)
         manager.activeSession.text = "Typed after opening the window"
-        try await Task.sleep(nanoseconds: 400_000_000)
+        for _ in 0..<100 where restorer.loadSavedSession()?.windows.first?.tabs.first?.draftText != manager.activeSession.text {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
         #expect(restorer.loadSavedSession()?.windows.first?.tabs.first?.draftText == manager.activeSession.text)
         restorer.prepareForTermination()
         restorer.unregister(manager: manager)
@@ -304,18 +308,21 @@ import WebKit
         let index = repo.appendingPathComponent("Sources/Lucid/Resources/WebEngine/index.html")
         (hostedWeb.navigationDelegate as? PreviewWebView.Coordinator)?.allowedFileURL = index
         hostedWeb.loadFileURL(index, allowingReadAccessTo: index.deletingLastPathComponent())
+        var firstWidth: Int?
         for _ in 0..<200 {
-            if let web = state.web, (try? await web.evaluateJavaScript("document.querySelector('#lucid-content img')?.naturalWidth ?? 0")) as? Int == 1 { break }
+            firstWidth = (try? await hostedWeb.evaluateJavaScript("document.querySelector('#lucid-content img')?.naturalWidth ?? 0")) as? Int
+            if firstWidth == 1 { break }
             try await Task.sleep(nanoseconds: 20_000_000)
         }
-        let web = try #require(state.web)
-        #expect((try await web.evaluateJavaScript("document.querySelector('#lucid-content img')?.naturalWidth ?? 0")) as? Int == 1)
+        #expect(firstWidth == 1)
         state.url = dirs[1].appendingPathComponent("doc.md")
+        var secondWidth: Int?
         for _ in 0..<200 {
-            if (try? await web.evaluateJavaScript("document.querySelector('#lucid-content img')?.naturalWidth ?? 0")) as? Int == 2 { break }
+            secondWidth = (try? await hostedWeb.evaluateJavaScript("document.querySelector('#lucid-content img')?.naturalWidth ?? 0")) as? Int
+            if secondWidth == 2 { break }
             try await Task.sleep(nanoseconds: 20_000_000)
         }
-        #expect((try await web.evaluateJavaScript("document.querySelector('#lucid-content img')?.naturalWidth ?? 0")) as? Int == 2)
+        #expect(secondWidth == 2)
     }
 
 }
