@@ -32,12 +32,13 @@ final class DocumentCloseReview {
         managers: [WindowDocumentManager],
         sessions: [DocumentSession]? = nil,
         window: NSWindow? = nil,
-        prompt: @escaping Prompt = presentPrompt,
+        prompt: Prompt? = nil,
         save: Saver? = nil,
         completion: @escaping (Approval?) -> Void
     ) {
         guard !managers.contains(where: { $0.isReviewingClose }) else { completion(nil); return }
         managers.forEach { $0.isReviewingClose = true }
+        let prompt = prompt ?? presentPrompt
         var approvedDiscards: [UUID: String] = [:]
 
         func finish(_ approval: Approval?) {

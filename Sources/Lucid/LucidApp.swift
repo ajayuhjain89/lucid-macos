@@ -283,7 +283,8 @@ enum LaunchUntitledCleanup {
     }
 
     @MainActor
-    static func closeUntouchedUntitledIfOpeningFile(restorationManager: SessionRestorationManager = .shared) {
+    static func closeUntouchedUntitledIfOpeningFile(restorationManager: SessionRestorationManager? = nil) {
+        let restorationManager = restorationManager ?? .shared
         // Blank native windows may still be waiting to hydrate recovery records.
         guard !restorationManager.hasPendingRestorationWindows else { return }
         guard let launchDate, Date().timeIntervalSince(launchDate) < 2 else { return }
