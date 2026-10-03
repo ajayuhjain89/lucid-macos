@@ -3,12 +3,9 @@ import WebKit
 import UniformTypeIdentifiers
 import AppKit
 
-/// A custom NSView container that hosts WKWebView with strict layout clipping and
-/// geometry freeze-and-settle control during sidebar open/close transitions.
-///
-/// Prevents WebKit from reflowing document contents (Markdown, tables, KaTeX, Mermaid)
-/// on every animation frame by freezing or pre-sizing the WKWebView frame while the outer
-/// container animates smoothly via SwiftUI.
+/// A clipped, persistent preview host. Geometry has one owner: the current
+/// container bounds. WebKit's resize handler anchors and refits the page before
+/// its next paint, without native asynchronous frame assignments.
 public final class LucidWebContainerView: NSView {
     public let webView: WKWebView
     /// False while another view mode hides the preview. It stays in the window
@@ -17,9 +14,6 @@ public final class LucidWebContainerView: NSView {
     var isPaneActive = true {
         didSet { alphaValue = isPaneActive ? 1 : 0 }
     }
-    private var isTransitioning: Bool = false
-    private var activeTransitionToken: UUID? = nil
-    private var frozenWidth: CGFloat? = nil
 
     public init(webView: WKWebView) {
         self.webView = webView
@@ -43,70 +37,7 @@ public final class LucidWebContainerView: NSView {
         super.layout()
         guard bounds.width > 0, bounds.height > 0 else { return }
 
-        if isTransitioning, let frozen = frozenWidth {
-            // During transition, maintain the frozen width and match container height
-            webView.frame = CGRect(x: 0, y: 0, width: frozen, height: bounds.height)
-        } else {
-            // Normal layout: match container bounds exactly
-            webView.frame = bounds
-        }
-    }
-
-    public func handleSidebarTransition(
-        isTransitioning: Bool,
-        isSidebarOpen: Bool,
-        sidebarWidth: CGFloat,
-        token: UUID?
-    ) {
-        if self.isTransitioning == isTransitioning && self.activeTransitionToken == token {
-            return
-        }
-
-        let previousTransitioning = self.isTransitioning
-        self.isTransitioning = isTransitioning
-        self.activeTransitionToken = token
-
-        if isTransitioning && !previousTransitioning {
-            // Transition is starting
-            if isSidebarOpen {
-                // OPENING: Container starts wide and will narrow.
-                // Freeze current wide bounds so the document does not reflow during the slide.
-                let currentWidth = bounds.width > 0 ? bounds.width : (webView.frame.width > 0 ? webView.frame.width : 800)
-                self.frozenWidth = currentWidth
-                webView.frame = CGRect(x: 0, y: 0, width: currentWidth, height: bounds.height)
-            } else {
-                // CLOSING: Container starts narrow and will widen.
-                // Pre-resize WKWebView to wide width so newly exposed space reveals already-rendered content.
-                let currentWidth = bounds.width > 0 ? bounds.width : 600
-                let wideWidth = currentWidth + sidebarWidth
-                self.frozenWidth = wideWidth
-
-                webView.evaluateJavaScript("if (window.lucid && window.lucid.captureReadingAnchor) { window.lucid.captureReadingAnchor(); }") { [weak self] _, _ in
-                    guard let self = self else { return }
-                    self.webView.frame = CGRect(x: 0, y: 0, width: wideWidth, height: self.bounds.height)
-                    self.webView.evaluateJavaScript("if (window.lucid && window.lucid.restoreReadingAnchor) { window.lucid.restoreReadingAnchor(); }")
-                }
-            }
-        } else if !isTransitioning && previousTransitioning {
-            // Transition has settled
-            self.frozenWidth = nil
-
-            if isSidebarOpen {
-                // OPENING SETTLE:
-                // Capture anchor before committing narrow geometry
-                webView.evaluateJavaScript("if (window.lucid && window.lucid.captureReadingAnchor) { window.lucid.captureReadingAnchor(); }") { [weak self] _, _ in
-                    guard let self = self else { return }
-                    self.webView.frame = self.bounds
-                    DispatchQueue.main.async {
-                        self.webView.evaluateJavaScript("if (window.lucid && window.lucid.restoreReadingAnchor) { window.lucid.restoreReadingAnchor(); }")
-                    }
-                }
-            } else {
-                // CLOSING SETTLE:
-                // Commit exact final bounds
-                self.webView.frame = bounds
-            }
-        }
+        if webView.frame != bounds { webView.frame = bounds }
     }
 }
 
@@ -125,10 +56,6 @@ public struct PreviewWebView: NSViewRepresentable {
     /// Reports a graduated 0…1 intensity of how far the content has scrolled away
     /// from the top, so the chrome can raise its glass depth almost subconsciously.
     var onScrollIntensityChanged: ((Double) -> Void)? = nil
-    var isSidebarTransitioning: Bool = false
-    var sidebarWidth: CGFloat = 240
-    var transitionToken: UUID? = nil
-    var isSidebarOpen: Bool = false
     /// This window's Focus Mode (WindowViewState), not the app-wide default.
     var focusMode: Bool = false
     /// False while another view mode hides the preview: edits are not rendered
@@ -190,6 +117,7 @@ public struct PreviewWebView: NSViewRepresentable {
         webView.underPageBackgroundColor = NSColor(Color(hex: effectiveTokens.previewBackground))
 
         context.coordinator.renderCoordinator.setWebView(webView)
+        context.coordinator.renderCoordinator.setDocumentIdentity(documentFileURL?.standardizedFileURL.path ?? "")
         context.coordinator.wasActive = isActive
 
         DispatchQueue.main.async {
@@ -242,29 +170,21 @@ public struct PreviewWebView: NSViewRepresentable {
     public func updateNSView(_ containerView: LucidWebContainerView, context: Context) {
         let webView = containerView.webView
         context.coordinator.parent = self
-
-        // Forward sidebar transition state to container view
-        containerView.handleSidebarTransition(
-            isTransitioning: isSidebarTransitioning,
-            isSidebarOpen: isSidebarOpen,
-            sidebarWidth: sidebarWidth,
-            token: transitionToken
-        )
+        let documentIdentity = documentFileURL?.standardizedFileURL.path ?? ""
+        let isNewDocument = documentIdentity != context.coordinator.lastDocumentIdentity
+        context.coordinator.lastDocumentIdentity = documentIdentity
+        context.coordinator.renderCoordinator.setDocumentIdentity(documentIdentity)
 
         if containerView.isPaneActive != isActive {
             containerView.isPaneActive = isActive
         }
         let revealing = isActive && !context.coordinator.wasActive
-        let hasPendingRender: Bool
         if isActive {
-            hasPendingRender = context.coordinator.renderCoordinator.setRenderingPaused(false)
+            context.coordinator.renderCoordinator.setRenderingPaused(false)
         } else if context.coordinator.hasRenderedFirstContent {
-            hasPendingRender = false
             if context.coordinator.renderCoordinator.setRenderingPaused(true, latestMarkdown: markdown) {
                 context.coordinator.needsRenderWhenRevealed = true
             }
-        } else {
-            hasPendingRender = false
         }
         context.coordinator.wasActive = isActive
 
@@ -284,10 +204,10 @@ public struct PreviewWebView: NSViewRepresentable {
         // waits: edits made in Editor mode render when it comes back.
         let isFirstRender = !context.coordinator.hasRenderedFirstContent
         let isNewContent = context.coordinator.lastRenderedMarkdown != markdown
-        if isFirstRender || (isNewContent && isActive) ||
-            (revealing && (context.coordinator.needsRenderWhenRevealed || hasPendingRender)) {
+        if isFirstRender || isNewDocument || (isNewContent && isActive) ||
+            revealing {
             context.coordinator.lastRenderedMarkdown = markdown
-            context.coordinator.renderCoordinator.scheduleRender(markdown: markdown, immediate: isFirstRender || revealing)
+            context.coordinator.renderCoordinator.scheduleRender(markdown: markdown, immediate: isFirstRender || isNewDocument || revealing)
             context.coordinator.needsRenderWhenRevealed = false
             if isFirstRender && context.coordinator.renderCoordinator.isBridgeReady {
                 context.coordinator.hasRenderedFirstContent = true
@@ -310,6 +230,7 @@ public struct PreviewWebView: NSViewRepresentable {
         var isPageLoaded = false
         var hasRenderedFirstContent = false
         var lastRenderedMarkdown = ""
+        var lastDocumentIdentity: String?
         var lastScrolledHeadingId: String?
         var lastAppliedPrefsJSON: String?
         var wasActive = true
@@ -598,7 +519,11 @@ final class LocalAssetSchemeHandler: NSObject, WKURLSchemeHandler {
         case "abs":
             return URL(fileURLWithPath: "/" + path).standardizedFileURL
         case "doc":
-            guard let base = documentDirectory else { return nil }
+            // In-flight requests retain the document that produced their URL,
+            // even if the shared preview has already selected another tab.
+            let identity = components.queryItems?.first(where: { $0.name == "document" })?.value
+            let base = identity.flatMap { $0.hasPrefix("/") ? URL(fileURLWithPath: $0).deletingLastPathComponent() : nil } ?? documentDirectory
+            guard let base else { return nil }
             return base.appendingPathComponent(path).standardizedFileURL
         default:
             return nil

@@ -105,6 +105,7 @@ public struct TabBarView: View {
                 Circle()
                     .fill(Color(hex: preferences.accentColor))
                     .frame(width: 6, height: 6)
+                    .frame(width: 14, height: 14)
                     .help("Unsaved changes")
                     .accessibilityLabel("Unsaved changes")
             } else {

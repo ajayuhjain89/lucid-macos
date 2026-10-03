@@ -10,30 +10,50 @@ RESOURCES="$CONTENTS/Resources"
 
 RELEASE_MODE=false
 OVERWRITE=false
+NOTARIZE=false
+IDENTITY=""
+NOTARY_PROFILE="${NOTARY_PROFILE:-Lucid}"
 
-for arg in "$@"; do
-  case "$arg" in
+while [ $# -gt 0 ]; do
+  case "$1" in
     --release)
       RELEASE_MODE=true
+      shift
       ;;
     --overwrite|--force)
       OVERWRITE=true
+      shift
+      ;;
+    --identity)
+      IDENTITY="$2"
+      shift 2
+      ;;
+    --notarize)
+      NOTARIZE=true
+      shift
+      ;;
+    --keychain-profile)
+      NOTARY_PROFILE="$2"
+      shift 2
       ;;
     --help|-h)
       echo "Usage: ./build.sh [OPTIONS]"
       echo ""
       echo "Options:"
-      echo "  --release    Package a versioned release artifact (Lucid-<version>.dmg)."
-      echo "               Refuses to overwrite an existing release artifact unless --overwrite is passed."
-      echo "  --overwrite  Allow overwriting an existing release artifact when --release is specified."
-      echo "  --help, -h   Show this help message."
+      echo "  --release                Package a versioned release artifact (Lucid-<version>.dmg)."
+      echo "                           Refuses to overwrite an existing release artifact unless --overwrite is passed."
+      echo "  --overwrite              Allow overwriting an existing release artifact when --release is specified."
+      echo "  --identity <name>        Code signing identity (defaults to DEVELOPER_ID_APPLICATION or ad-hoc '-')."
+      echo "  --notarize               Submit the packaged release DMG to Apple for notarization and staple tickets."
+      echo "  --keychain-profile <p>   notarytool keychain profile name (default: Lucid)."
+      echo "  --help, -h               Show this help message."
       echo ""
       echo "Default (no flags): Produces Lucid.app and a local development disk image (Lucid-local.dmg)."
       echo "                    Never modifies or overwrites canonical release artifacts."
       exit 0
       ;;
     *)
-      echo "Unknown argument: $arg" >&2
+      echo "Unknown argument: $1" >&2
       echo "Run './build.sh --help' for usage." >&2
       exit 1
       ;;
@@ -77,6 +97,10 @@ fi
 
 FRAMEWORKS="$CONTENTS/Frameworks"
 
+if [[ -z "${SDKROOT:-}" && -d "/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk" ]]; then
+  export SDKROOT="/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk"
+fi
+
 echo "==> Compiling $APP_NAME for macOS (arm64)..."
 SWIFT_BUILD_ARGS=(-c release --arch arm64 -Xlinker -rpath -Xlinker @executable_path/../Frameworks)
 if ! swift build "${SWIFT_BUILD_ARGS[@]}"; then
@@ -107,17 +131,48 @@ cp -R "$DIR/Sources/Lucid/Resources/WebEngine" "$RESOURCES/WebEngine"
 echo "==> Copying Sparkle framework..."
 cp -R "$BIN_DIR/Sparkle.framework" "$FRAMEWORKS/"
 
-echo "==> Signing application bundle (inside-out)..."
-SPARKLE_DIR="$FRAMEWORKS/Sparkle.framework"
-if [ -d "$SPARKLE_DIR" ]; then
-  codesign --force -s - "$SPARKLE_DIR/Versions/B/XPCServices/Downloader.xpc"
-  codesign --force -s - "$SPARKLE_DIR/Versions/B/XPCServices/Installer.xpc"
-  codesign --force -s - "$SPARKLE_DIR/Versions/B/Autoupdate"
-  codesign --force -s - "$SPARKLE_DIR/Versions/B/Updater.app"
-  codesign --force -s - "$SPARKLE_DIR/Versions/B"
+# Resolve signing identity
+SIGN_IDENTITY="${IDENTITY:-${DEVELOPER_ID_APPLICATION:-${CODE_SIGN_IDENTITY:-}}}"
+if [ -z "$SIGN_IDENTITY" ]; then
+  DEV_ID="$(security find-identity -p codesigning -v 2>/dev/null | grep 'Developer ID Application:' | head -n1 | sed -E 's/.*"Developer ID Application: ([^"]+)".*/Developer ID Application: \1/' || true)"
+  if [ -n "$DEV_ID" ]; then
+    SIGN_IDENTITY="$DEV_ID"
+    echo "==> Using detected Developer ID signing identity: $SIGN_IDENTITY"
+  else
+    SIGN_IDENTITY="-"
+  fi
 fi
-codesign --force -s - "$APP_BUNDLE"
-codesign --verify --deep --strict "$APP_BUNDLE"
+
+SPARKLE_DIR="$FRAMEWORKS/Sparkle.framework"
+
+if [ "$SIGN_IDENTITY" = "-" ]; then
+  echo "==> Signing application bundle (ad-hoc)..."
+  if [ -d "$SPARKLE_DIR" ]; then
+    codesign --force -s - "$SPARKLE_DIR/Versions/B/XPCServices/Downloader.xpc"
+    codesign --force -s - "$SPARKLE_DIR/Versions/B/XPCServices/Installer.xpc"
+    codesign --force -s - "$SPARKLE_DIR/Versions/B/Autoupdate"
+    codesign --force -s - "$SPARKLE_DIR/Versions/B/Updater.app"
+    codesign --force -s - "$SPARKLE_DIR/Versions/B"
+  fi
+  codesign --force -s - "$APP_BUNDLE"
+  codesign --verify --deep --strict "$APP_BUNDLE"
+else
+  echo "==> Signing application bundle with Developer ID ($SIGN_IDENTITY)..."
+  ENTITLEMENTS_ARGS=()
+  if [ -f "$DIR/Lucid.entitlements" ]; then
+    ENTITLEMENTS_ARGS=(--entitlements "$DIR/Lucid.entitlements")
+  fi
+  if [ -d "$SPARKLE_DIR" ]; then
+    codesign --force --timestamp --options runtime -s "$SIGN_IDENTITY" "$SPARKLE_DIR/Versions/B/XPCServices/Downloader.xpc"
+    codesign --force --timestamp --options runtime -s "$SIGN_IDENTITY" "$SPARKLE_DIR/Versions/B/XPCServices/Installer.xpc"
+    codesign --force --timestamp --options runtime -s "$SIGN_IDENTITY" "$SPARKLE_DIR/Versions/B/Autoupdate"
+    codesign --force --timestamp --options runtime -s "$SIGN_IDENTITY" "$SPARKLE_DIR/Versions/B/Updater.app"
+    codesign --force --timestamp --options runtime -s "$SIGN_IDENTITY" "$SPARKLE_DIR/Versions/B"
+  fi
+  codesign --force --timestamp --options runtime "${ENTITLEMENTS_ARGS[@]}" -s "$SIGN_IDENTITY" "$APP_BUNDLE"
+  codesign --verify --deep --strict "$APP_BUNDLE"
+  spctl --assess --type exec -vv "$APP_BUNDLE" || true
+fi
 
 echo "==> Done! $APP_BUNDLE is ready."
 
@@ -130,11 +185,34 @@ ln -s /Applications "$DMG_STAGING/Applications"
 hdiutil create -volname "$APP_NAME" -srcfolder "$DMG_STAGING" -ov -format UDZO "$DMG_PATH"
 rm -rf "$DMG_STAGING"
 
+if [ "$SIGN_IDENTITY" != "-" ]; then
+  echo "==> Signing DMG installer ($DMG_NAME)..."
+  codesign --force --timestamp -s "$SIGN_IDENTITY" "$DMG_PATH"
+fi
+
+if [ "$NOTARIZE" = "true" ]; then
+  echo "==> Submitting DMG to Apple for notarization..."
+  if ! command -v xcrun &>/dev/null; then
+    echo "Error: xcrun not found for notarization." >&2
+    exit 1
+  fi
+  xcrun notarytool submit "$DMG_PATH" --keychain-profile "$NOTARY_PROFILE" --wait
+  echo "==> Stapling notarization ticket to DMG..."
+  xcrun stapler staple "$DMG_PATH"
+  xcrun stapler staple "$APP_BUNDLE" 2>/dev/null || true
+  spctl --assess --type open --context context:primary-signature -vv "$DMG_PATH" || true
+fi
+
 echo ""
 if [ "$RELEASE_MODE" = "true" ]; then
   echo "Release packaging complete:"
   echo "  App: $APP_BUNDLE"
   echo "  Release DMG: $DMG_PATH"
+  if [ "$SIGN_IDENTITY" = "-" ]; then
+    echo ""
+    echo "  NOTE: Packaged with ad-hoc signature (-). Developer ID signing and notarization"
+    echo "        are required before publishing as a stable public release."
+  fi
 else
   echo "Build complete:"
   echo "  App: $APP_BUNDLE"

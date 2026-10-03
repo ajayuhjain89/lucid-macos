@@ -30,10 +30,9 @@ public struct MainWindowView: View {
     @State private var scrollIntensity: Double = 0
     /// Dynamic clearance for the native traffic-light cluster, derived from NSWindow geometry.
     @State private var trafficLightReservedWidth: CGFloat = 77
-    @AppStorage("lucid.sidebarWidth") private var sidebarWidth: Double = 220
-    @State private var isSidebarTransitioning: Bool = false
-    @State private var sidebarTransitionToken: UUID? = nil
-    @State private var sidebarTransitionTask: Task<Void, Never>? = nil
+    // Per-window width: dragging one outline must not resize every window.
+    // Persist at the end of the drag for the next window, off the layout path.
+    @State private var sidebarWidth: Double = min(320, max(180, UserDefaults.standard.object(forKey: "lucid.sidebarWidth") as? Double ?? 220))
     @Namespace private var modeSelectorNamespace
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
@@ -74,17 +73,13 @@ public struct MainWindowView: View {
     }
 
     private var activeDocumentText: Binding<String> {
-        Binding(
-            get: { documentManager.activeSession.text },
+        let session = documentManager.activeSession
+        return Binding(
+            get: { session.text },
             set: { newText in
-                documentManager.activeSession.text = newText
+                session.text = newText
                 if !newText.isEmpty {
-                    startedWritingSessionIDs.insert(documentManager.activeSession.id)
-                }
-                if documentManager.activeSession.fileURL == self.fileURL || (self.fileURL == nil && documentManager.activeSession.isUntitled) {
-                    if document.text != newText {
-                        document.text = newText
-                    }
+                    startedWritingSessionIDs.insert(session.id)
                 }
                 syncHostWindowEditingState()
             }
@@ -94,7 +89,6 @@ public struct MainWindowView: View {
     private func syncHostWindowEditingState() {
         guard let win = hostWindow.window else { return }
         let hasDirtyTabs = documentManager.sessions.contains(where: { $0.isDirty })
-        win.isDocumentEdited = hasDirtyTabs
 
         let active = documentManager.activeSession
         if let url = active.fileURL {
@@ -106,10 +100,11 @@ public struct MainWindowView: View {
         }
 
         if let doc = (win.windowController?.document as? NSDocument) ?? NSDocumentController.shared.document(for: win) {
-            if !hasDirtyTabs {
-                doc.updateChangeCount(.changeCleared)
-            }
+            // FileDocument supplies the initial file only. Tab sessions own saves
+            // and recovery; a second native dirty buffer causes duplicate prompts.
+            doc.updateChangeCount(.changeCleared)
         }
+        win.isDocumentEdited = hasDirtyTabs
     }
 
     private var documentTitle: String {
@@ -157,42 +152,47 @@ public struct MainWindowView: View {
             // a reserved opaque band.
             VStack(spacing: 0) {
                 HStack(spacing: 0) {
-                    if viewState.showOutline {
-                        HStack(spacing: 0) {
-                            // Outline Sidebar — owns its own compact top row with traffic light clearance and toggle
-                            OutlineSidebarView(
-                                headings: headings,
-                                activeHeadingId: activeHeading?.id,
-                                preferences: preferences,
-                                wordCount: wordCount,
-                                charCount: charCount,
-                                readingTimeMinutes: readingTimeMinutes,
-                                trafficLightWidth: trafficLightReservedWidth,
-                                onToggleSidebar: {
-                                    viewState.showOutline = false
-                                }
-                            ) { id in
-                                activeHeading = headings.first(where: { $0.id == id })
-                                if viewState.viewMode != .reader {
-                                    scrollEditor(toHeadingId: id)
-                                }
-                                scrollToHeadingId = id
-                                DispatchQueue.main.async {
-                                    scrollToHeadingId = nil
-                                }
+                    // Keep the outline mounted, including its filter and scroll position.
+                    HStack(spacing: 0) {
+                        // Outline Sidebar — owns its own compact top row with traffic light clearance and toggle
+                        OutlineSidebarView(
+                            headings: headings,
+                            activeHeadingId: activeHeading?.id,
+                            preferences: preferences,
+                            wordCount: wordCount,
+                            charCount: charCount,
+                            readingTimeMinutes: readingTimeMinutes,
+                            trafficLightWidth: trafficLightReservedWidth,
+                            onToggleSidebar: {
+                                viewState.showOutline = false
                             }
-                            .frame(width: CGFloat(sidebarWidth))
-
-                            // Draggable divider between sidebar and canvas
-                            SidebarDivider(width: $sidebarWidth, minWidth: 180, maxWidth: 320)
+                        ) { id in
+                            activeHeading = headings.first(where: { $0.id == id })
+                            if viewState.viewMode != .reader {
+                                scrollEditor(toHeadingId: id)
+                            }
+                            scrollToHeadingId = id
+                            DispatchQueue.main.async {
+                                scrollToHeadingId = nil
+                            }
                         }
-                        .clipped()
-                        .transition(.move(edge: .leading))
+                        .frame(width: CGFloat(sidebarWidth))
+
+                        // Draggable divider between sidebar and canvas
+                        SidebarDivider(width: $sidebarWidth, minWidth: 180, maxWidth: 320)
                     }
+                    .offset(x: viewState.showOutline ? 0 : -CGFloat(sidebarWidth) - 1)
+                    .frame(width: viewState.showOutline ? CGFloat(sidebarWidth) + 1 : 0, alignment: .leading)
+                    .clipped()
+                    .allowsHitTesting(viewState.showOutline)
+                    .accessibilityHidden(!viewState.showOutline)
 
                     // Document Canvas — fills remaining space, continuously mounted across sidebar toggles
                     documentCanvas(sidebarOpen: viewState.showOutline)
                 }
+                // One layout animation owns both the sidebar and native panes.
+                // WebKit follows the actual bounds; no frozen width or delayed
+                // settle can add a second reflow or override a reversal.
                 .animation(LucidMotion.respecting(reduceMotion, LucidMotion.panel), value: viewState.showOutline)
 
                 // Minimal, Serene Status Bar
@@ -246,21 +246,8 @@ public struct MainWindowView: View {
         }
         .preferredColorScheme(colorSchemeForTheme)
         .animation(LucidMotion.respecting(reduceMotion, LucidMotion.panel), value: preferences.showStatusBar)
-        .onChange(of: viewState.showOutline) { oldValue, newValue in
-            let token = UUID()
-            sidebarTransitionToken = token
-            if reduceMotion {
-                isSidebarTransitioning = false
-            } else {
-                isSidebarTransitioning = true
-                sidebarTransitionTask?.cancel()
-                sidebarTransitionTask = Task { @MainActor in
-                    try? await Task.sleep(nanoseconds: 210_000_000)
-                    if !Task.isCancelled && sidebarTransitionToken == token {
-                        isSidebarTransitioning = false
-                    }
-                }
-            }
+        .onChange(of: viewState.showOutline) { _, isOpen in
+            if !isOpen { focusDocumentIfFieldHasFocus() }
         }
         .ignoresSafeArea()
         // Configure the window: hide the native title bar so our custom top bar
@@ -276,6 +263,7 @@ public struct MainWindowView: View {
         }
         .focusedSceneObject(viewState)
         .onAppear {
+            var restoredSession = false
             LaunchUntitledCleanup.closeUntouchedUntitledIfOpeningFile()
             // The Untitled window can appear just after the file's window.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
@@ -284,17 +272,19 @@ public struct MainWindowView: View {
             if let url = documentManager.activeSession.fileURL {
                 RecentDocumentsManager.shared.recordRecent(url: url)
             } else if documentManager.activeSession.isUntitled && documentManager.activeSession.text.isEmpty {
-                let hasOtherRealDocs = NSDocumentController.shared.documents.contains(where: { $0.fileURL != nil })
-                if !hasOtherRealDocs && SessionRestorationManager.shared.restoreInto(documentManager: documentManager) {
+                if SessionRestorationManager.shared.restoreInto(documentManager: documentManager) {
+                    restoredSession = true
                     let active = documentManager.activeSession
                     viewState.viewMode = active.viewMode
                     splitFraction = active.splitFraction
                     cursorLine = active.cursorLine
                     cursorCol = active.cursorCol
-                    if active.isUntitled {
-                        document.text = active.text
-                    }
+                    SessionRestorationManager.shared.requestAdditionalRestorationWindow()
                 }
+            }
+            if !restoredSession {
+                documentManager.activeSession.viewMode = viewState.viewMode
+                documentManager.activeSession.splitFraction = splitFraction
             }
             syncHostWindowEditingState()
             // AppKit gives a new window's focus to its first text field (the
@@ -311,6 +301,7 @@ public struct MainWindowView: View {
             SessionRestorationManager.shared.unregister(manager: documentManager)
         }
         .onChange(of: documentManager.activeSession.text) { _, newText in
+            if !newText.isEmpty { startedWritingSessionIDs.insert(documentManager.activeSession.id) }
             // Typing path: schedule coalesced/cancellable analysis; never block.
             analyzer.update(text: newText)
             syncHostWindowEditingState()
@@ -339,14 +330,18 @@ public struct MainWindowView: View {
             paneSync.editorPositionAtSwitch = oldMode == .editor
                 ? (editorTextView as? LucidTextView)?.readingPosition()
                 : nil
-            crossFadeModeSwitch()
+            crossFadeLayoutChange()
         }
         .onChange(of: viewState.viewMode) { oldMode, newMode in
+            documentManager.activeSession.viewMode = newMode
             carryReadingPosition(from: oldMode, to: newMode)
             DispatchQueue.main.async { focusVisiblePane(for: newMode) }
             if isFindBarPresented && !findQuery.isEmpty {
                 performFind(findQuery)
             }
+        }
+        .onChange(of: splitFraction) { _, fraction in
+            documentManager.activeSession.splitFraction = fraction
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("LucidToggleFind"))) { _ in
             guard isKeyDocumentWindow else { return }
@@ -368,8 +363,8 @@ public struct MainWindowView: View {
             guard isKeyDocumentWindow else { return }
             documentManager.newTab()
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("LucidCloseTab"))) { _ in
-            guard isKeyDocumentWindow else { return }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("LucidCloseTab"))) { note in
+            guard isKeyDocumentWindow, note.object == nil || isHostWindow(note.object) else { return }
             if documentManager.sessions.count > 1 {
                 documentManager.closeTab(id: documentManager.activeSessionID, window: hostWindow.window) { success in
                     if success { syncHostWindowEditingState() }
@@ -392,9 +387,19 @@ public struct MainWindowView: View {
                 syncHostWindowEditingState()
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("LucidCloseWindow"))) { _ in
-            guard isKeyDocumentWindow, let win = hostWindow.window else { return }
-            win.performClose(nil)
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("LucidCloseWindow"))) { note in
+            guard isKeyDocumentWindow, note.object == nil || isHostWindow(note.object), let win = hostWindow.window else { return }
+            documentManager.closeAllTabs(window: win) { success in
+                guard success else { return }
+                DispatchQueue.main.async {
+                    if let doc = (win.windowController?.document as? NSDocument) ?? NSDocumentController.shared.document(for: win) {
+                        doc.updateChangeCount(.changeCleared)
+                        doc.close()
+                    } else {
+                        win.close()
+                    }
+                }
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("LucidNextTab"))) { _ in
             guard isKeyDocumentWindow else { return }
@@ -439,11 +444,9 @@ public struct MainWindowView: View {
             oldSession.splitFraction = splitFraction
             oldSession.cursorLine = cursorLine
             oldSession.cursorCol = cursorCol
-            if let tv = editorTextView {
+            if let tv = editorTextView as? LucidTextView, tv.documentSession === oldSession {
                 oldSession.selectedRange = tv.selectedRange()
-                if let lucidTV = tv as? LucidTextView {
-                    oldSession.readingPosition = lucidTV.readingPosition()
-                }
+                oldSession.readingPosition = tv.readingPosition()
             }
         }
 
@@ -452,19 +455,7 @@ public struct MainWindowView: View {
         cursorLine = newSession.cursorLine
         cursorCol = newSession.cursorCol
 
-        if newSession.fileURL == self.fileURL || (self.fileURL == nil && newSession.isUntitled) {
-            if document.text != newSession.text {
-                document.text = newSession.text
-            }
-        }
-        if let tv = editorTextView {
-            tv.string = newSession.text
-            let length = (newSession.text as NSString).length
-            let loc = min(newSession.selectedRange.location, length)
-            let len = min(newSession.selectedRange.length, length - loc)
-            tv.setSelectedRange(NSRange(location: loc, length: len))
-            (tv as? LucidTextView)?.scrollToReadingPosition(newSession.readingPosition)
-        }
+        (editorTextView as? LucidTextView)?.displaySession(newSession)
 
         analyzer.reset()
         analyzer.prime(text: newSession.text)
@@ -739,6 +730,7 @@ public struct MainWindowView: View {
     /// preview, no reload, and each pane keeps its place and its state.
     private var documentContent: some View {
         GeometryReader { proxy in
+            let session = documentManager.activeSession
             let mode = viewState.viewMode
             let layout = PaneLayout(mode: mode, size: proxy.size, splitFraction: splitFraction,
                                     hiddenEditor: paneSync.hiddenEditorShape,
@@ -765,10 +757,6 @@ public struct MainWindowView: View {
                     onScrollIntensityChanged: { intensity in
                         if viewState.viewMode != .editor { scrollIntensity = intensity }
                     },
-                    isSidebarTransitioning: isSidebarTransitioning,
-                    sidebarWidth: CGFloat(sidebarWidth),
-                    transitionToken: sidebarTransitionToken,
-                    isSidebarOpen: viewState.showOutline,
                     focusMode: viewState.focusMode,
                     isActive: layout.showsPreview && !showEmptyState
                 )
@@ -783,18 +771,22 @@ public struct MainWindowView: View {
                     focusMode: viewState.focusMode,
                     isActive: layout.showsEditor && !showEmptyState,
                     documentFileURL: documentManager.activeSession.fileURL,
-                    onRequestSave: {
-                        documentManager.saveSession(documentManager.activeSession, window: hostWindow.window) { _ in }
+                    documentSession: documentManager.activeSession,
+                    onRequestSave: { displayedSession in
+                        guard let displayedSession,
+                              documentManager.sessions.contains(where: { $0 === displayedSession }) else { return }
+                        documentManager.saveSession(displayedSession, window: hostWindow.window) { _ in }
                     },
                     onReadingPositionChanged: { position in
-                        documentManager.activeSession.readingPosition = position
-                        if mode == .split { syncPreviewToEditor(position) }
+                        session.readingPosition = position
+                        if documentManager.activeSession === session && mode == .split { syncPreviewToEditor(position) }
                     },
                     onCursorPositionChanged: { line, col in
+                        session.cursorLine = line
+                        session.cursorCol = col
+                        guard documentManager.activeSession === session else { return }
                         cursorLine = line
                         cursorCol = col
-                        documentManager.activeSession.cursorLine = line
-                        documentManager.activeSession.cursorCol = col
                     },
                     onTextViewCreated: { editorTextView = $0 },
                     onScrollIntensityChanged: { intensity in
@@ -844,17 +836,20 @@ public struct MainWindowView: View {
         .ignoresSafeArea()
     }
 
-    /// Cross-fades the whole window from the old mode to the new one (0.19 s)
-    /// while the panes switch instantly underneath. A layer transition fades the
-    /// composited result, web content included, so nothing reflows on screen
-    /// frame by frame. Instant with Reduce Motion.
-    private func crossFadeModeSwitch() {
-        guard !reduceMotion, let layer = hostWindow.window?.contentView?.layer else { return }
+    /// One composited fade for mode changes. Geometry commits
+    /// immediately; no animation timer or deferred frame can overwrite a newer
+    /// toggle. Reusing the layer key replaces an interrupted fade.
+    private func crossFadeLayoutChange() {
+        guard let layer = hostWindow.window?.contentView?.layer else { return }
+        guard !reduceMotion else {
+            layer.removeAnimation(forKey: "lucid.layoutChange")
+            return
+        }
         let fade = CATransition()
         fade.type = .fade
-        fade.duration = 0.19
+        fade.duration = LucidMotion.panelDuration
         fade.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-        layer.add(fade, forKey: "lucid.modeSwitch")
+        layer.add(fade, forKey: "lucid.layoutChange")
     }
 
     /// Puts a pane that was hidden where the reader was. From Split each pane
@@ -863,8 +858,10 @@ public struct MainWindowView: View {
         paneSync.suppressSplitSyncUntil = CACurrentMediaTime() + 0.4
         switch (oldMode, newMode) {
         case (.reader, .editor), (.reader, .split):
+            let sessionID = documentManager.activeSessionID
             webViewInstance?.evaluateJavaScript("window.lucid && window.lucid.readingPosition ? window.lucid.readingPosition() : null") { result, _ in
-                guard let position = ReadingPosition(javaScriptValue: result),
+                guard viewState.viewMode == newMode, documentManager.activeSessionID == sessionID,
+                      let position = ReadingPosition(javaScriptValue: result),
                       let textView = editorTextView as? LucidTextView else { return }
                 paneSync.suppressSplitSyncUntil = CACurrentMediaTime() + 0.3
                 textView.scrollToReadingPosition(position)
@@ -971,7 +968,7 @@ public struct MainWindowView: View {
                     )
             }
         }
-        .animation(.easeOut(duration: 0.15), value: scrollIntensity > 0.05)
+        .animation(LucidMotion.respecting(reduceMotion, LucidMotion.hover), value: scrollIntensity > 0.05)
     }
 
     private var titleVisibility: Double {
@@ -1174,9 +1171,6 @@ public struct MainWindowView: View {
         } else {
             // No live editor yet (e.g. just switched modes): append safely.
             documentManager.activeSession.text += (documentManager.activeSession.text.hasSuffix("\n") ? "" : "\n") + template
-            if documentManager.activeSession.fileURL == self.fileURL || (self.fileURL == nil && documentManager.activeSession.isUntitled) {
-                document.text = documentManager.activeSession.text
-            }
         }
     }
 }
@@ -1206,12 +1200,28 @@ private struct WindowConfigurator: NSViewRepresentable {
         }
         if let window = nsView.window {
             applyWindowSettings(to: window)
+            nsView.ensureCloseDelegate()
         }
+        // SwiftUI installs its own document delegate during the same update.
+        DispatchQueue.main.async { [weak nsView] in nsView?.ensureCloseDelegate() }
     }
 
     private func applyWindowSettings(to window: NSWindow) {
         hostWindow.window = window
         documentManager.hostWindow = window
+        // DocumentGroup can create an additional launch placeholder after
+        // AppKit and Lucid have both completed their saved-window restoration.
+        if LaunchUntitledCleanup.isLaunching,
+           SessionRestorationManager.shared.isExtraRestorationWindow(documentManager) {
+            DispatchQueue.main.async {
+                guard LaunchUntitledCleanup.isLaunching,
+                      SessionRestorationManager.shared.isExtraRestorationWindow(documentManager) else { return }
+                if let document = (window.windowController?.document as? NSDocument) ?? NSDocumentController.shared.document(for: window) {
+                    document.updateChangeCount(.changeCleared)
+                    document.close()
+                }
+            }
+        }
         window.titlebarAppearsTransparent = true
         // The title stays set (NSDocument names the window) so the Window menu,
         // Mission Control and accessibility show the document name; it is just
@@ -1291,6 +1301,7 @@ private struct WindowConfigurator: NSViewRepresentable {
                         delegateProxy = WindowDelegateProxy(window: window, documentManager: dm)
                     }
                 }
+                DispatchQueue.main.async { [weak self] in self?.ensureCloseDelegate() }
                 if willCloseObserver == nil {
                     willCloseObserver = NotificationCenter.default.addObserver(
                         forName: NSWindow.willCloseNotification,
@@ -1307,6 +1318,12 @@ private struct WindowConfigurator: NSViewRepresentable {
                 delegateProxy?.detach()
                 delegateProxy = nil
             }
+        }
+
+        func ensureCloseDelegate() {
+            guard let window, let documentManager, window.delegate !== delegateProxy else { return }
+            delegateProxy?.detach()
+            delegateProxy = WindowDelegateProxy(window: window, documentManager: documentManager)
         }
 
         deinit {
@@ -1409,6 +1426,16 @@ private struct SidebarDivider: View {
         }
         .frame(width: 1)
         .zIndex(10)
+        .accessibilityElement()
+        .accessibilityLabel("Sidebar divider")
+        .accessibilityValue("\(Int(width)) points")
+        .accessibilityAdjustableAction { direction in
+            width = min(maxWidth, max(minWidth, width + (direction == .increment ? 10 : -10)))
+            UserDefaults.standard.set(width, forKey: "lucid.sidebarWidth")
+        }
+        .onDisappear {
+            if dragStartWidth != nil { NSCursor.pop(); dragStartWidth = nil }
+        }
         .gesture(
             DragGesture(minimumDistance: 1, coordinateSpace: .global)
                 .onChanged { value in
@@ -1425,6 +1452,7 @@ private struct SidebarDivider: View {
                     if dragStartWidth != nil {
                         NSCursor.pop()
                         dragStartWidth = nil
+                        UserDefaults.standard.set(width, forKey: "lucid.sidebarWidth")
                     }
                 }
         )
@@ -1506,6 +1534,9 @@ private struct PaneSplitDivider: View {
         .accessibilityAdjustableAction { direction in
             let step: CGFloat = direction == .increment ? 0.05 : -0.05
             fraction = PaneLayout.fraction(forEditorWidth: (fraction + step) * totalWidth, total: totalWidth)
+        }
+        .onDisappear {
+            if dragStartWidth != nil { NSCursor.pop(); dragStartWidth = nil }
         }
         .gesture(
             DragGesture(minimumDistance: 1, coordinateSpace: .global)
