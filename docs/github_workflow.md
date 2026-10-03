@@ -349,7 +349,7 @@ failure:
 | :---- | :-------- | :-------------- | :---- |
 | **1** | GitHub branch protections | force-push, deletion, direct pushes to protected branches, missing required checks | server |
 | **2** | Local **pre-push** transition guard | a push that would introduce develop/main ancestry into a category branch | your machine |
-| **3** | Required **PR** direction + ancestry CI | disallowed PR directions and backward-merge ancestry in a PR | server (Actions) |
+| **3** | Required **PR** direction + ancestry CI | disallowed PR directions and backward-merge ancestry in a PR into `main` | server (Actions) |
 | **4** | This canonical workflow documentation | human/agent behavior, cherry-pick policy, conflict strategy | process |
 | **5** | Manual audit (`--audit-history`) | topology drift, incident-commit reachability | on demand |
 
@@ -410,8 +410,10 @@ The automation is truthful about what it can and cannot prove:
 ## 15. Pull request directions
 
 The only allowed permanent-branch PR directions (the **Branch Flow Policy**
-check — job *Validate PR direction* — enforces both direction **and** ancestry;
-add the `workflow:override` label to bypass for a reviewed maintenance merge):
+check — job *Validate PR direction* — enforces both direction **and** ancestry
+on PRs into `main`; add the `workflow:override` label to bypass for a reviewed
+maintenance merge). PRs into `develop` and the category branches run no CI, so
+their direction is enforced by this policy and the local pre-push guard only:
 
 | PR type | Source → Target |
 | :------ | :-------------- |
@@ -471,17 +473,22 @@ v1.0.0   v1.0.1   v1.0.2   v1.0.3                             # releases
 Configured at the GitHub level (not merely advisory):
 
 - **`main`** — require a PR before merging; require the `Build (macOS, Apple
-  Silicon)` status check; **admin enforcement ON** (no bypass); force pushes
+  Silicon)` and `Validate PR direction` status checks; **admin enforcement ON** (no bypass); force pushes
   **OFF**; deletions **OFF**; conversation resolution required. "Require branches
   to be up to date before merging" is intentionally **OFF** — requiring it would
   force a `main → develop` back-merge on every release, which contradicts the
   no-back-merge model. Merge commits are used (linear history is **not**
   required).
-- **`develop`** — require a PR before merging; require the `Build (macOS, Apple
-  Silicon)` status check; **admin enforcement ON**; force pushes **OFF**;
-  deletions **OFF**.
+- **`develop`** — require a PR before merging; **no required status checks**;
+  **admin enforcement ON**; force pushes **OFF**; deletions **OFF**.
 - **`logic` / `design` / `docs`** — working category branches; direct pushes by
   the owner/agents are expected; force pushes **OFF**; deletions **OFF**.
+
+**CI/CD runs only for `main`.** GitHub Actions (`CI`, `Branch Flow Policy`) trigger
+only on pushes to `main` and PRs targeting `main`, so a `develop → main` PR runs
+every check. Pushes to `logic`/`design`/`docs`/`develop` and PRs into them run
+nothing. Vercel deploys only `main` (`website/vercel.json`, plus the dashboard
+Ignored Build Step for `docs`/`design`).
 
 `Require linear history` is **not** enabled on any branch — Lucid intentionally
 uses merge commits for PR integration.
