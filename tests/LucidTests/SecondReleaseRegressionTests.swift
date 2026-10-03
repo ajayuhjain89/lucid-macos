@@ -465,7 +465,7 @@ import Testing
         web.loadFileURL(index, allowingReadAccessTo: index.deletingLastPathComponent())
         var initialWidth: Int?
         for _ in 0..<200 {
-            initialWidth = (try? await web.evaluateJavaScript("document.querySelector('#lucid-content img')?.naturalWidth")) as? Int
+            initialWidth = (try? await web.evaluateJavaScript("document.querySelector('#lucid-content img')?.naturalWidth ?? 0")) as? Int
             if initialWidth == 1 { break }
             try await Task.sleep(nanoseconds: 20_000_000)
         }
@@ -497,7 +497,7 @@ import Testing
             state.visible = true
             var revealedWidth: Int?
             for _ in 0..<250 {
-                revealedWidth = (try? await web.evaluateJavaScript("document.querySelector('#lucid-content img')?.naturalWidth")) as? Int
+                revealedWidth = (try? await web.evaluateJavaScript("document.querySelector('#lucid-content img')?.naturalWidth ?? 0")) as? Int
                 if revealedWidth == width + 40 { break }
                 try await Task.sleep(nanoseconds: 20_000_000)
             }

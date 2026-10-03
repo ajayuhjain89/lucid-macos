@@ -90,7 +90,7 @@ jobs:
           HELPER="$(dirname "$(xcrun --find swift)")/../libexec/swift/pm/swiftpm-testing-helper"
           if [ -f "$TEST_EXE" ] && [ -x "$HELPER" ]; then
             export DYLD_FRAMEWORK_PATH="$DEVELOPER_DIR/Platforms/MacOSX.platform/Developer/Library/Frameworks:$BIN"
-            lldb --batch -o "settings set target.process.stop-on-exec false" -o run -o "thread backtrace all" -- "$HELPER" --test-bundle-path "$TEST_EXE" "$TEST_EXE" --testing-library swift-testing
+            lldb --batch -o "settings set target.process.stop-on-exec false" -o run -k "thread backtrace all" -- "$HELPER" --test-bundle-path "$TEST_EXE" "$TEST_EXE" --testing-library swift-testing
           fi
           find "$HOME/Library/Logs/DiagnosticReports" -maxdepth 1 -type f -name '*Lucid*' -print -exec cat {} \;
 

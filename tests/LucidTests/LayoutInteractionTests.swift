@@ -40,7 +40,7 @@ struct LayoutInteractionTests {
         try await controlFrames(page)
         let markdown = (0..<100).map { "## Section \($0)\n\n" + String(repeating: "Wrapping text and a searchable phrase. ", count: 12) }.joined(separator: "\n\n")
         _ = try await page.web.callAsyncJavaScript(
-            "lucid.updateContent(markdown, 'resize1'); lucid.scrollToSourceLine({line:120, top:false, end:false}); lucid.find('searchable phrase', {reveal:false});",
+            "lucid.updateContent(markdown, 'resize1'); lucid.scrollToSourceLine({line:120, top:false, end:false}); lucid.find('searchable phrase', {reveal:false}); return true;",
             arguments: ["markdown": markdown], in: nil, contentWorld: .page
         )
         try await flushFrames(page)
@@ -54,7 +54,8 @@ struct LayoutInteractionTests {
             #expect((try await page.web.evaluateJavaScript("innerWidth")) as? Double == width)
             _ = try await page.web.evaluateJavaScript("window.dispatchEvent(new Event('resize')); true")
             try await flushFrames(page)
-            #expect(try await page.check("Math.abs(lucid.readingPosition().line - savedLine) < 1 && lucid.findMatches.length === savedMatches && lucid.findMatches.every(r => r.startContainer.isConnected)"))
+            let snapshot = try await page.web.evaluateJavaScript("JSON.stringify({width:innerWidth, savedLine, actual:lucid.readingPosition(), savedMatches, matches:lucid.findMatches.length, connected:lucid.findMatches.every(r => r.startContainer.isConnected)})")
+            #expect(try await page.check("Math.abs(lucid.readingPosition().line - savedLine) < 1 && lucid.findMatches.length === savedMatches && lucid.findMatches.every(r => r.startContainer.isConnected)"), "Resize state: \(snapshot)")
         }
     }
 
