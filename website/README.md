@@ -138,3 +138,21 @@ When a new version of Lucid is prepared for release:
 ## License
 
 MIT License. Copyright © 2026 Ayush Jain.
+
+## Stable candidate and deployment
+
+The website is `website/` in the **lucid-macos repository**, not a separate Git repository.
+Vercel's Git integration deploys `main` to production and integration/category pushes to previews
+(`docs` and `design` deployments are disabled by `vercel.json`). Production is
+https://website-phi-umber-70.vercel.app; the same origin serves `/api/appcast` and `/api/download`.
+
+`lib/release.ts` still describes the available **1.0.7 Public Beta**. `lib/pending-release.ts`
+and `/changelog#unreleased` prepare **1.0.8, build 9** without advertising a missing download
+or publishing an update. The private website package version is not the app version.
+
+Before stable publication, complete `../docs/releases/1.0.8-qualification.md`, build the final
+release commit, verify Developer ID signing/notarization and the Sparkle signature against
+Info.plist's public key, then publish the GitHub asset before deploying metadata that links to it.
+Update the release date, checksum, byte length, URLs and signing flags from the final artifact;
+move the pending notes into `lib/changelog.ts` as Stable only after qualification.
+Verify the production download redirect, appcast, changelog and asset bytes after Vercel deployment.

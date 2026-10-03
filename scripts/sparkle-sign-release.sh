@@ -58,7 +58,13 @@ BYTE_SIZE="$(stat -f%z "$DMG_PATH" 2>/dev/null || wc -c < "$DMG_PATH" | tr -d ' 
 
 # Generate Sparkle EdDSA signature
 # sign_update outputs: sparkle:edSignature="..." length="..."
-SIGN_OUTPUT="$("$SIGN_UPDATE" "$DMG_PATH")"
+if [ -n "${SPARKLE_ED_KEY:-}" ]; then
+  SIGN_OUTPUT="$(echo "$SPARKLE_ED_KEY" | "$SIGN_UPDATE" -f - "$DMG_PATH")"
+elif [ -n "${SPARKLE_ED_KEY_FILE:-}" ]; then
+  SIGN_OUTPUT="$("$SIGN_UPDATE" -f "$SPARKLE_ED_KEY_FILE" "$DMG_PATH")"
+else
+  SIGN_OUTPUT="$("$SIGN_UPDATE" "$DMG_PATH")"
+fi
 
 if [ -z "$SIGN_OUTPUT" ]; then
   echo "Error: sign_update produced empty output." >&2

@@ -373,10 +373,13 @@
     if (!src || /^[a-z][a-z0-9+.-]*:/i.test(src) || src.charAt(0) === '#') return src;
     let decoded = src;
     try { decoded = decodeURI(src); } catch (e) { /* keep as written */ }
+    const identity = window.lucid && window.lucid.documentIdentity;
+    const version = '?generation=' + encodeURIComponent((window.lucid && window.lucid.assetGeneration) || currentRenderRevision) +
+      (identity ? '&document=' + encodeURIComponent(identity) : '');
     if (decoded.charAt(0) === '/') {
-      return 'lucid-asset://abs/' + encodeURIComponent(decoded.slice(1));
+      return 'lucid-asset://abs/' + encodeURIComponent(decoded.slice(1)) + version;
     }
-    return 'lucid-asset://doc/' + encodeURIComponent(decoded);
+    return 'lucid-asset://doc/' + encodeURIComponent(decoded) + version;
   }
   const defaultImageRule = md.renderer.rules.image;
   md.renderer.rules.image = function(tokens, idx, options, env, self) {
@@ -1331,7 +1334,7 @@
             });
   }
 
-  function formatMermaidContainer(c, optErr) {
+  function formatMermaidContainer(c, optErr, resizing) {
     if (!c) return;
     // An error card restored from the cache: keep it, hide the toolbar, add detail.
     if (!optErr && c.querySelector('.mermaid-canvas .lucid-mermaid-error')) {
@@ -1381,9 +1384,13 @@
       if (viewport && canvas) {
         // Horizontal padding: 20px left + 20px right = 40px
         const availWidth = Math.max(100, (viewport.clientWidth || 800) - 40);
+        if (resizing && viewport._lucidFitSVG === svg && viewport._lucidFitWidth === availWidth) return;
+        viewport._lucidFitSVG = svg;
+        viewport._lucidFitWidth = availWidth;
 
         // 1. Inspect real SVG label typography geometry
-        const baseFontSize = getRepresentativeFontSize(svg);
+        const metrics = resizing ? svg._lucidFitMetrics : null;
+        const baseFontSize = metrics ? metrics.fontSize : getRepresentativeFontSize(svg);
 
         // 2. Smart layout: DEFAULT = SMART READABLE COMPLETE VIEW WHEN POSSIBLE
         const layout = computeSmartDiagramLayout(
@@ -1403,7 +1410,8 @@
         let contentOffsetX = 0;
         let contentOffsetY = 0;
         try {
-          const bbox = svg.getBBox();
+          const bbox = metrics ? metrics.bbox : svg.getBBox();
+          svg._lucidFitMetrics = { fontSize: baseFontSize, bbox: bbox };
           if (bbox && bbox.width > 0) {
             const contentCenterX = bbox.x + bbox.width / 2;
             const contentCenterY = bbox.y + bbox.height / 2;
@@ -1594,7 +1602,8 @@
       window.addEventListener('scrollend', onScrollEndOnce, { once: true });
     }
 
-    targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    targetEl.scrollIntoView({ behavior: reduceMotion ? 'instant' : 'smooth', block: 'start' });
   }
 
   function onScrollEndOnce() {
@@ -3025,27 +3034,52 @@
     isProgrammaticScrollActive: function() { return programmaticScrollActive; }
   };
 
-  let resizeTimer = null;
-  if (typeof window !== 'undefined') {
-    window.addEventListener('resize', function() {
-      // A width change reflows the page; keep the same source line at the top.
-      const anchor = (nativeAnchorPending || anchorRestoreActive) ? null : readingLine;
-      if (anchor) scrollToSourceLine(anchor);
-      const resizedAt = (typeof performance !== 'undefined') ? performance.now() : Date.now();
-      if (resizeTimer) clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(function() {
-        // Settle logic: only update diagrams that have NOT been manually interacted with
+  // Resize and image completion share a single pre-paint geometry pass. A
+  // timer here produced a second visible jump after the native layout settled.
+  // A render or user scroll supersedes the saved position; never restore an
+  // anchor from an older document into a newer one.
+  let geometryFrame = null;
+  let pendingGeometry = null;
+  function scheduleGeometryUpdate(refitDiagrams) {
+    const isResize = !!refitDiagrams;
+    if (!pendingGeometry || pendingGeometry.revision !== currentRenderRevision) {
+      pendingGeometry = {
+        revision: currentRenderRevision,
+        anchor: (nativeAnchorPending || anchorRestoreActive) ? null : readingLine,
+        userScroll: lastUserScrollTimestamp,
+        refitDiagrams: isResize,
+        isResize: isResize
+      };
+    } else {
+      pendingGeometry.refitDiagrams = pendingGeometry.refitDiagrams || isResize;
+      pendingGeometry.isResize = pendingGeometry.isResize || isResize;
+    }
+    if (geometryFrame !== null) return;
+    geometryFrame = requestAnimationFrame(function() {
+      geometryFrame = null;
+      const update = pendingGeometry;
+      pendingGeometry = null;
+      if (!update || update.revision !== currentRenderRevision) return;
+      if (update.refitDiagrams) {
         document.querySelectorAll('.mermaid-container').forEach(function(c) {
           const canvas = c.querySelector('.mermaid-canvas');
-          if (canvas && !canvas.dataset.userInteracted) {
-            formatMermaidContainer(c);
-          }
+          if (canvas && !canvas.dataset.userInteracted) formatMermaidContainer(c, undefined, true);
         });
-        // Refitted diagrams change height; hold the reading line unless the
-        // reader scrolled in the meantime.
-        if (anchor && lastUserScrollTimestamp < resizedAt) scrollToSourceLine(anchor);
-      }, 200);
+      }
+      if (update.anchor && (update.isResize || lastUserScrollTimestamp === update.userScroll)) scrollToSourceLine(update.anchor);
+      invalidateHeadingPositions('geometry');
     });
+  }
+  if (typeof window !== 'undefined') {
+    window.addEventListener('resize', function() { scheduleGeometryUpdate(true); });
+    // load/error do not bubble. Capture completion only for content images,
+    // including local assets; their intrinsic height can move the reading edge.
+    document.addEventListener('load', function(event) {
+      if (event.target && event.target.tagName === 'IMG') scheduleGeometryUpdate(false);
+    }, true);
+    document.addEventListener('error', function(event) {
+      if (event.target && event.target.tagName === 'IMG') scheduleGeometryUpdate(false);
+    }, true);
   }
 
   function isRenderingStackReady() {

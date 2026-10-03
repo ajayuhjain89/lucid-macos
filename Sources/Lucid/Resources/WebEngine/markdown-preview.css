@@ -1283,3 +1283,12 @@ body.lucid-focus-mode #lucid-content > .lucid-active-block {
   body.vscode-body .lucid-table-wrapper { overflow: visible !important; }
   body.vscode-body th, body.vscode-body td { overflow-wrap: anywhere; }
 }
+
+/* Native Reduce Motion also governs reader navigation and contextual chrome. */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}

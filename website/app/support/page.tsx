@@ -23,10 +23,10 @@ const commonIssues = [
   {
     id: "intel-macs",
     question: "Does Lucid run on Intel (x86_64) Macs?",
-    answer: "Lucid is currently compiled natively for Apple Silicon (arm64: M1, M2, M3, M4). Native Intel (x86_64) builds are planned for an upcoming release. In the meantime, you can compile Lucid from source on Intel Macs if Xcode is installed.",
+    answer: "Lucid is currently compiled natively for Apple Silicon (arm64: M1, M2, M3, M4). Intel (x86_64) Macs are not currently supported by the published download or the supported build script.",
     solution: (
       <div className="text-xs">
-        <p>To compile from source on Intel: clone the repository and run <code className="font-mono bg-surface-elevated px-1 py-0.5 rounded text-accent">./build.sh</code>.</p>
+        <p>Use an Apple Silicon Mac for the supported app and build process.</p>
       </div>
     ),
   },

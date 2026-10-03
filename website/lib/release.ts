@@ -94,7 +94,7 @@ export const systemRequirements: SystemRequirement[] = [
   {
     label: "Operating System",
     value: `macOS ${currentRelease.minimumMacOS} (${currentRelease.minimumMacOSCodeName}) or later`,
-    note: "Tested on macOS 14 Sonoma and macOS 15 Sequoia",
+    note: "Declared minimum: macOS 14.0. Candidate runtime checks currently cover macOS 27.0.1; older-OS qualification is pending.",
   },
   {
     label: "Architecture",

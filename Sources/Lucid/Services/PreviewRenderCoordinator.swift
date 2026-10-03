@@ -17,6 +17,9 @@ public final class PreviewRenderCoordinator: ObservableObject {
     private var pendingTask: Task<Void, Never>?
     private weak var webView: WKWebView?
     private var lastRenderedMarkdown: String = ""
+    private var documentIdentity: String = ""
+    private let assetNamespace = UUID().uuidString
+    private var lastRenderedDocumentIdentity: String = ""
     private var pendingMarkdown: String? = nil
     private var hasRenderedInitialContent: Bool = false
     private var isRenderingPaused: Bool = false
@@ -31,6 +34,10 @@ public final class PreviewRenderCoordinator: ObservableObject {
 
     public func setWebView(_ webView: WKWebView) {
         self.webView = webView
+    }
+
+    public func setDocumentIdentity(_ identity: String) {
+        documentIdentity = identity
     }
 
     public func setBridgeReady(_ ready: Bool) {
@@ -90,7 +97,7 @@ public final class PreviewRenderCoordinator: ObservableObject {
         }
 
         // If not an immediate/forced render, skip if markdown has not changed
-        if !immediate && markdown == lastRenderedMarkdown {
+        if !immediate && markdown == lastRenderedMarkdown && documentIdentity == lastRenderedDocumentIdentity {
             burstStartedAt = nil
             return
         }
@@ -135,6 +142,7 @@ public final class PreviewRenderCoordinator: ObservableObject {
 
     private func dispatchRender(markdown: String, revision: UInt64) {
         burstStartedAt = nil
+        lastRenderedDocumentIdentity = documentIdentity
         guard let webView = webView else { return }
 
         let payload: [String: Any] = [
@@ -146,9 +154,11 @@ public final class PreviewRenderCoordinator: ObservableObject {
 
         if let data = try? JSONSerialization.data(withJSONObject: payload),
            let jsonString = String(data: data, encoding: .utf8) {
-            let script = "if (window.lucid && window.lucid.handleMessage) { window.lucid.handleMessage(\(jsonString)); true; } else { false; }"
+            let identityData = try? JSONEncoder().encode(documentIdentity)
+            let identityLiteral = identityData.flatMap { String(data: $0, encoding: .utf8) } ?? "\"\""
+            let script = "if (window.lucid && window.lucid.handleMessage) { window.lucid.documentIdentity = \(identityLiteral); window.lucid.assetGeneration = '\(assetNamespace)-\(revision)'; window.lucid.handleMessage(\(jsonString)); true; } else { false; }"
             webView.evaluateJavaScript(script) { [weak self] result, error in
-                guard let self = self else { return }
+                guard let self = self, revision == self.currentRevision else { return }
                 if let success = result as? Bool, success {
                     // Successfully delivered
                 } else if let error {

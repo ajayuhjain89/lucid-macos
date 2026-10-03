@@ -8,6 +8,8 @@ import Combine
 /// session drives the window's single editor and preview rendering pipeline.
 public final class DocumentSession: Identifiable, ObservableObject {
     public let id: UUID
+    /// The shared editor uses this tab's history while its buffer is displayed.
+    public let undoManager = UndoManager()
 
     @Published public var fileURL: URL?
     @Published public var title: String
@@ -90,6 +92,7 @@ public final class DocumentSession: Identifiable, ObservableObject {
 
     /// Updates session text from external disk reload without marking dirty.
     public func updateFromDisk(text: String) {
+        undoManager.removeAllActions()
         self.text = text
         self.savedBaselineText = text
         self.hasExternalConflict = false

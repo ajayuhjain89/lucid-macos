@@ -17,6 +17,8 @@ public struct TabRestorationRecord: Codable, Equatable {
     public var viewMode: ViewMode
     public var splitFraction: CGFloat
     public var draftText: String?
+    public var savedBaselineText: String?
+    public var encodingRawValue: UInt?
 
     public init(
         id: UUID = UUID(),
@@ -31,7 +33,9 @@ public struct TabRestorationRecord: Codable, Equatable {
         readingPosition: ReadingPosition = .documentTop,
         viewMode: ViewMode = .reader,
         splitFraction: CGFloat = 0.5,
-        draftText: String? = nil
+        draftText: String? = nil,
+        savedBaselineText: String? = nil,
+        encodingRawValue: UInt? = nil
     ) {
         self.id = id
         self.fileURL = fileURL
@@ -46,6 +50,8 @@ public struct TabRestorationRecord: Codable, Equatable {
         self.viewMode = viewMode
         self.splitFraction = splitFraction
         self.draftText = draftText
+        self.savedBaselineText = savedBaselineText
+        self.encodingRawValue = encodingRawValue
     }
 
     public init(from session: DocumentSession) {
@@ -58,13 +64,15 @@ public struct TabRestorationRecord: Codable, Equatable {
                 relativeTo: nil
             )
             self.fallbackPath = url.standardizedFileURL.resolvingSymlinksInPath().path
-            self.draftText = nil
+            self.draftText = session.isDirty ? session.text : nil
         } else {
             self.bookmarkData = nil
             self.fallbackPath = nil
             // Save untitled tab draft if not empty
             self.draftText = session.text.isEmpty ? nil : session.text
         }
+        self.savedBaselineText = session.isDirty ? session.savedBaselineText : nil
+        self.encodingRawValue = session.encoding.rawValue
         self.title = session.displayName
         self.cursorLine = session.cursorLine
         self.cursorCol = session.cursorCol
@@ -139,10 +147,27 @@ public final class SessionRestorationManager: ObservableObject {
 
     /// Active window managers tracked for autosave upon termination
     private var registeredManagers: [UUID: WeakManagerRef] = [:]
+    private var managerOrder: [UUID] = []
+    private var managerObservers: [UUID: AnyCancellable] = [:]
+    private var pendingSaveTask: Task<Void, Never>?
+    private var remainingRestorationWindows: [WindowRestorationRecord]?
+    private var restoredWindowCount = 0
+    private var nativeWindowRestorationFinished = false
+    private var isTerminating = false
     private var cancellables = Set<AnyCancellable>()
 
     public init(userDefaults: UserDefaults = .standard) {
         self.userDefaults = userDefaults
+        // Native restoration may finish without creating a Lucid manager (for
+        // example when its named document was deleted). Recovery must already
+        // be known so the launch notification can request a fresh window.
+        protectPendingRecovery()
+        NotificationCenter.default.publisher(for: NSApplication.didFinishRestoringWindowsNotification)
+            .sink { [weak self] _ in
+                self?.nativeWindowRestorationFinished = true
+                self?.requestAdditionalRestorationWindow()
+            }
+            .store(in: &cancellables)
         NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)
             .sink { [weak self] _ in
                 self?.saveCurrentSession()
@@ -152,8 +177,19 @@ public final class SessionRestorationManager: ObservableObject {
 
     // MARK: - Registration
 
+    private func protectPendingRecovery() {
+        if remainingRestorationWindows == nil {
+            remainingRestorationWindows = loadSavedSession()?.windows
+        }
+    }
+
     public func register(manager: WindowDocumentManager) {
+        protectPendingRecovery()
+        if registeredManagers[manager.id] == nil { managerOrder.append(manager.id) }
         registeredManagers[manager.id] = WeakManagerRef(manager)
+        managerObservers[manager.id] = manager.objectWillChange.sink { [weak self] _ in
+            self?.scheduleRecoverySave()
+        }
     }
 
     public func unregister(manager: WindowDocumentManager) {
@@ -162,11 +198,10 @@ public final class SessionRestorationManager: ObservableObject {
 
     public func unregister(id: UUID) {
         registeredManagers.removeValue(forKey: id)
-        if registeredManagers.isEmpty {
-            clearSession()
-        } else {
-            saveCurrentSession()
-        }
+        managerOrder.removeAll { $0 == id }
+        managerObservers.removeValue(forKey: id)
+        guard !isTerminating else { return }
+        saveCurrentSession()
     }
 
     public var activeManagers: [WindowDocumentManager] {
@@ -174,14 +209,60 @@ public final class SessionRestorationManager: ObservableObject {
     }
 
     private var liveManagers: [WindowDocumentManager] {
-        registeredManagers.values.compactMap { $0.manager }
+        managerOrder.compactMap { registeredManagers[$0]?.manager }
     }
 
     // MARK: - Saving
 
     /// Captures the current open windows and tabs and persists them to UserDefaults.
     public func saveCurrentSession() {
+        guard !isTerminating else { return }
+        pendingSaveTask?.cancel()
+        pendingSaveTask = nil
         saveSession(managers: liveManagers)
+        // Future saves must not mistake our own live snapshot for old recovery.
+        if remainingRestorationWindows == nil { remainingRestorationWindows = [] }
+    }
+
+    private func scheduleRecoverySave() {
+        guard !isTerminating else { return }
+        pendingSaveTask?.cancel()
+        pendingSaveTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            guard !Task.isCancelled, let self else { return }
+            self.saveCurrentSession()
+        }
+    }
+
+    /// Preserve the approved session before native document windows tear down.
+    public func prepareForTermination() {
+        saveCurrentSession()
+        isTerminating = true
+    }
+
+    public var hasPendingRestorationWindows: Bool {
+        !(remainingRestorationWindows ?? []).isEmpty
+    }
+
+    /// Native restoration can create several windows before their SwiftUI
+    /// content appears. Wait for those windows to hydrate before creating more.
+    public func requestAdditionalRestorationWindow() {
+        guard nativeWindowRestorationFinished else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.hasPendingRestorationWindows else { return }
+            let nativeWindows = NSDocumentController.shared.documents.filter { $0.fileURL == nil }.count
+            guard self.needsAdditionalRestorationWindow(nativeWindowCount: nativeWindows) else { return }
+            NSDocumentController.shared.newDocument(nil)
+        }
+    }
+
+    func needsAdditionalRestorationWindow(nativeWindowCount: Int) -> Bool {
+        hasPendingRestorationWindows && nativeWindowCount <= restoredWindowCount
+    }
+
+    func isExtraRestorationWindow(_ manager: WindowDocumentManager) -> Bool {
+        restoredWindowCount > 0 && !hasPendingRestorationWindows &&
+            manager.sessions.allSatisfy { $0.isUntitled && $0.text.isEmpty }
     }
 
     /// Saves session state for the provided window managers.
@@ -191,11 +272,12 @@ public final class SessionRestorationManager: ObservableObject {
             return
         }
 
+        protectPendingRecovery()
         var windowRecords: [WindowRestorationRecord] = []
         for manager in managers {
             let tabRecords = manager.sessions.compactMap { session -> TabRestorationRecord? in
                 if let url = session.fileURL {
-                    guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+                    guard session.isDirty || FileManager.default.fileExists(atPath: url.path) else { return nil }
                     return TabRestorationRecord(from: session)
                 } else if !session.text.isEmpty {
                     // Retain untitled tab if it contains content
@@ -215,6 +297,24 @@ public final class SessionRestorationManager: ObservableObject {
                 tabs: tabRecords
             ))
         }
+
+        // New windows can publish while launch restoration is still in progress.
+        // Never overwrite records that have not yet been hydrated into a window.
+        // A snapshot seeded in this process may also be represented by live
+        // sessions. Keep only records that have not been adopted by a manager.
+        let liveIDs = Set(windowRecords.flatMap { $0.tabs.map(\.id) })
+        remainingRestorationWindows = remainingRestorationWindows.map { records in
+            records.compactMap { record in
+                var pending = record
+                pending.tabs.removeAll { liveIDs.contains($0.id) }
+                guard !pending.tabs.isEmpty else { return nil }
+                if !pending.tabs.contains(where: { $0.id == pending.activeTabID }) {
+                    pending.activeTabID = pending.tabs[0].id
+                }
+                return pending
+            }
+        }
+        windowRecords.append(contentsOf: remainingRestorationWindows ?? [])
 
         guard !windowRecords.isEmpty else {
             clearSession()
@@ -245,63 +345,56 @@ public final class SessionRestorationManager: ObservableObject {
     @discardableResult
     public func restoreInto(documentManager: WindowDocumentManager) -> Bool {
         guard LucidPreferences.shared.restoreSessionOnLaunch else { return false }
-        if NSDocumentController.shared.documents.contains(where: { $0.fileURL != nil }) {
-            return false
+        protectPendingRecovery()
+        // Never replace an explicitly opened file or a buffer already in use.
+        guard documentManager.sessions.allSatisfy({ $0.isUntitled && $0.text.isEmpty }) else { return false }
+        if remainingRestorationWindows == nil { remainingRestorationWindows = [] }
+        while var remaining = remainingRestorationWindows, !remaining.isEmpty {
+            let windowRecord = remaining.removeFirst()
+            remainingRestorationWindows = remaining
+            if restore(windowRecord, into: documentManager) {
+                restoredWindowCount += 1
+                return true
+            }
         }
-        guard let snapshot = loadSavedSession(), let windowRecord = snapshot.windows.first else {
-            return false
-        }
+        return false
+    }
+
+    private func restore(_ windowRecord: WindowRestorationRecord, into documentManager: WindowDocumentManager) -> Bool {
 
         var restoredSessions: [DocumentSession] = []
 
         for tabRecord in windowRecord.tabs {
-            if let existingURL = tabRecord.resolveExistingURL() {
-                guard let data = try? Data(contentsOf: existingURL),
-                      let decoded = LucidDocument.decodeText(data) else {
-                    continue
-                }
-
-                let session = DocumentSession(
-                    id: tabRecord.id,
-                    fileURL: existingURL,
-                    title: existingURL.lastPathComponent,
-                    text: decoded.text,
-                    savedBaselineText: decoded.text,
-                    encoding: decoded.encoding,
-                    cursorLine: tabRecord.cursorLine,
-                    cursorCol: tabRecord.cursorCol,
-                    selectedRange: NSRange(
-                        location: tabRecord.selectedRangeLocation,
-                        length: tabRecord.selectedRangeLength
-                    ),
-                    readingPosition: tabRecord.readingPosition,
-                    viewMode: tabRecord.viewMode,
-                    splitFraction: tabRecord.splitFraction
-                )
-                restoredSessions.append(session)
-            } else if let draft = tabRecord.draftText {
-                // Restore untitled tab with draft text
-                let session = DocumentSession(
-                    id: tabRecord.id,
-                    title: tabRecord.title,
-                    text: draft,
-                    savedBaselineText: "",
-                    cursorLine: tabRecord.cursorLine,
-                    cursorCol: tabRecord.cursorCol,
-                    selectedRange: NSRange(
-                        location: tabRecord.selectedRangeLocation,
-                        length: tabRecord.selectedRangeLength
-                    ),
-                    readingPosition: tabRecord.readingPosition,
-                    viewMode: tabRecord.viewMode,
-                    splitFraction: tabRecord.splitFraction
-                )
-                restoredSessions.append(session)
-            }
+            let existingURL = tabRecord.resolveExistingURL()
+            let disk = existingURL.flatMap { try? Data(contentsOf: $0) }.flatMap { LucidDocument.decodeText($0) }
+            guard let text = tabRecord.draftText ?? disk?.text else { continue }
+            let originalURL = tabRecord.fileURL ?? tabRecord.fallbackPath.map { URL(fileURLWithPath: $0) }
+            let recoveredURL = existingURL ?? originalURL
+            var baseline = tabRecord.draftText == nil ? (disk?.text ?? "") : (tabRecord.savedBaselineText ?? "")
+            if disk?.text == text { baseline = text }
+            let conflict = tabRecord.draftText != nil && disk != nil && disk?.text != baseline && disk?.text != text
+            let encoding = tabRecord.draftText == nil ? (disk?.encoding ?? .utf8)
+                : (tabRecord.encodingRawValue.map { String.Encoding(rawValue: $0) } ?? disk?.encoding ?? .utf8)
+            let session = DocumentSession(
+                id: tabRecord.id,
+                fileURL: recoveredURL,
+                title: tabRecord.title,
+                text: text,
+                savedBaselineText: baseline,
+                encoding: encoding,
+                cursorLine: tabRecord.cursorLine,
+                cursorCol: tabRecord.cursorCol,
+                selectedRange: NSRange(location: max(0, tabRecord.selectedRangeLocation), length: max(0, tabRecord.selectedRangeLength)),
+                readingPosition: tabRecord.readingPosition,
+                viewMode: tabRecord.viewMode,
+                splitFraction: tabRecord.splitFraction,
+                hasExternalConflict: conflict
+            )
+            session.lastExternalDiskText = conflict ? disk?.text : nil
+            restoredSessions.append(session)
         }
 
         guard !restoredSessions.isEmpty else {
-            clearSession()
             return false
         }
 
@@ -320,6 +413,7 @@ public final class SessionRestorationManager: ObservableObject {
 
     /// Clears any persisted session state.
     public func clearSession() {
+        remainingRestorationWindows = []
         userDefaults.removeObject(forKey: Self.sessionDefaultsKey)
     }
 }

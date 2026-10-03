@@ -6,6 +6,23 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Planned for 1.0.8 (build 9)
+
+This candidate is awaiting stable-release qualification and is not published.
+
+### Fixed
+- Keep editing and Undo/Redo attached to the displayed tab during rapid tab changes.
+- Recover unsaved edits in named files and distinct windows, including drafts whose original file was deleted; opening another file at launch preserves pending recovery.
+- Keep all tabs open when a close or quit review is cancelled, including after an earlier discard decision or failed save.
+- Follow same-volume file moves when saving; ask for a destination when the original file can no longer be identified.
+- Avoid false external-change alerts immediately after saving and typing again.
+- Refresh local images when switching documents, returning to changed assets, or revealing the preview.
+
+### Improved
+- Smoother outline toggles and resizing, with independent sidebar widths in open windows.
+- Preserve the outline filter, editor focus, reading position, and find matches during layout changes.
+- Consistent native popover surfaces and motion that respects accessibility preferences.
+
 ## [1.0.7] - 2026-09-29
 
 ### Added
