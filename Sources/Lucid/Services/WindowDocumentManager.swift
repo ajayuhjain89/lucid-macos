@@ -14,8 +14,12 @@ public final class WindowDocumentManager: ObservableObject {
     @Published public var activeSessionID: UUID
 
     public weak var hostWindow: NSWindow?
+    var isReviewingClose = false
+    private var fileIdentities: [UUID: DocumentFileIdentity] = [:]
+    // Tests exercise the same destination/cancellation path without a modal panel.
+    var chooseSaveDestination: ((DocumentSession, NSWindow?, @escaping (URL?) -> Void) -> Void)?
     private var fileWatchers: [UUID: FileWatcher] = [:]
-    private var cancellables = Set<AnyCancellable>()
+    private var cancellables: [UUID: AnyCancellable] = [:]
 
     public var activeSession: DocumentSession {
         if let current = sessions.first(where: { $0.id == activeSessionID }) {
@@ -47,9 +51,9 @@ public final class WindowDocumentManager: ObservableObject {
     }
 
     private func observeSession(_ session: DocumentSession) {
-        session.objectWillChange.sink { [weak self] _ in
+        cancellables[session.id] = session.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
-        }.store(in: &cancellables)
+        }
     }
 
     /// Replaces the current sessions with a new collection (used during session restoration).
@@ -59,6 +63,7 @@ public final class WindowDocumentManager: ObservableObject {
             watcher.stopWatching()
         }
         fileWatchers.removeAll()
+        fileIdentities.removeAll()
         cancellables.removeAll()
 
         for session in newSessions {
@@ -89,6 +94,7 @@ public final class WindowDocumentManager: ObservableObject {
     /// Creates a new untitled document session in the current window.
     @discardableResult
     public func newTab(title: String? = nil, text: String = "", viewMode: ViewMode = .editor) -> DocumentSession {
+        guard !isReviewingClose else { return activeSession }
         let untitledCount = sessions.filter { $0.isUntitled }.count
         let defaultTitle = untitledCount == 0 ? "Untitled" : "Untitled \(untitledCount + 1)"
         let session = DocumentSession(
@@ -108,6 +114,7 @@ public final class WindowDocumentManager: ObservableObject {
     /// If the file is already open, activates the existing tab instead of creating a duplicate.
     @discardableResult
     public func openFile(url: URL, activate: Bool = true) -> DocumentSession? {
+        guard !isReviewingClose else { return nil }
         let canonical = url.standardizedFileURL.resolvingSymlinksInPath()
 
         // Check if already open in this window
@@ -215,67 +222,20 @@ public final class WindowDocumentManager: ObservableObject {
         window: NSWindow? = nil,
         completion: @escaping (Bool) -> Void
     ) {
-        guard let index = sessions.firstIndex(where: { $0.id == id }) else {
-            completion(false)
-            return
-        }
-        let session = sessions[index]
-
-        if session.isDirty {
-            let alert = NSAlert()
-            alert.messageText = "Do you want to save changes to “\(session.displayName)”?"
-            alert.informativeText = "Your changes will be lost if you close without saving."
-            alert.alertStyle = .warning
-            alert.addButton(withTitle: "Save")
-            alert.addButton(withTitle: "Don’t Save")
-            alert.addButton(withTitle: "Cancel")
-
-            let targetWindow = window ?? self.hostWindow
-            let response: NSApplication.ModalResponse
-            if let targetWindow = targetWindow {
-                alert.beginSheetModal(for: targetWindow) { resp in
-                    self.handleClosePromptResponse(resp, session: session, index: index, window: targetWindow, completion: completion)
-                }
+        guard let session = sessions.first(where: { $0.id == id }) else { completion(false); return }
+        DocumentCloseReview.review(managers: [self], sessions: [session], window: window) { approval in
+            guard approval != nil, let index = self.sessions.firstIndex(where: { $0.id == id }) else {
+                completion(false)
                 return
-            } else {
-                response = alert.runModal()
-                handleClosePromptResponse(response, session: session, index: index, window: nil, completion: completion)
             }
-        } else {
-            removeSession(at: index)
+            self.removeSession(at: index)
             completion(true)
-        }
-    }
-
-    private func handleClosePromptResponse(
-        _ response: NSApplication.ModalResponse,
-        session: DocumentSession,
-        index: Int,
-        window: NSWindow?,
-        completion: @escaping (Bool) -> Void
-    ) {
-        switch response {
-        case .alertFirstButtonReturn: // Save
-            saveSession(session, window: window) { success in
-                if success {
-                    if let currentIndex = self.sessions.firstIndex(where: { $0.id == session.id }) {
-                        self.removeSession(at: currentIndex)
-                    }
-                    completion(true)
-                } else {
-                    completion(false)
-                }
-            }
-        case .alertSecondButtonReturn: // Don't Save
-            removeSession(at: index)
-            completion(true)
-        default: // Cancel
-            completion(false)
         }
     }
 
     private func removeSession(at index: Int) {
         let removed = sessions.remove(at: index)
+        cancellables.removeValue(forKey: removed.id)
         stopWatcher(for: removed.id)
 
         if activeSessionID == removed.id {
@@ -295,23 +255,20 @@ public final class WindowDocumentManager: ObservableObject {
         window: NSWindow? = nil,
         completion: @escaping (Bool) -> Void
     ) {
-        let targetWindow = window ?? self.hostWindow
-        guard let firstDirty = sessions.first(where: { $0.isDirty }) else {
-            for session in sessions {
-                stopWatcher(for: session.id)
-            }
-            sessions.removeAll()
+        DocumentCloseReview.review(managers: [self], window: window) { approval in
+            guard approval != nil else { completion(false); return }
+            self.removeAllSessions()
             completion(true)
-            return
         }
+    }
 
-        closeTab(id: firstDirty.id, window: targetWindow) { success in
-            if success {
-                self.closeAllTabs(window: targetWindow, completion: completion)
-            } else {
-                completion(false)
-            }
-        }
+    func removeAllSessions() {
+        for watcher in fileWatchers.values { watcher.stopWatching() }
+        fileWatchers.removeAll()
+        fileIdentities.removeAll()
+        cancellables.removeAll()
+        sessions.removeAll()
+        SessionRestorationManager.shared.saveCurrentSession()
     }
 
     // MARK: - Saving
@@ -324,11 +281,31 @@ public final class WindowDocumentManager: ObservableObject {
         completion: @escaping (Bool) -> Void
     ) {
         let targetWindow = window ?? self.hostWindow
-        if let fileURL = session.fileURL, !saveAs {
+        let resolvedURL = saveAs ? nil : fileIdentities[session.id]?.currentURL
+        if session.fileURL != nil, let fileURL = resolvedURL, !saveAs {
             do {
-                let data = session.text.data(using: session.encoding) ?? Data(session.text.utf8)
-                try data.write(to: fileURL, options: .atomic)
-                session.markSaved(at: fileURL, text: session.text)
+                let writtenText = session.text
+                let data = writtenText.data(using: session.encoding) ?? Data(writtenText.utf8)
+                var coordinationError: NSError?
+                var writeError: Error?
+                var wrote = false
+                NSFileCoordinator().coordinate(writingItemAt: fileURL, options: .forReplacing, error: &coordinationError) { destination in
+                    // Coordination can wait for another file operation. Recheck
+                    // the vnode after it grants access, before using the path.
+                    guard self.fileIdentities[session.id]?.currentURL == destination.standardizedFileURL else { return }
+                    do {
+                        try data.write(to: destination, options: .atomic)
+                        wrote = true
+                    } catch { writeError = error }
+                }
+                if let error = writeError ?? coordinationError { throw error }
+                guard wrote else {
+                    self.saveSession(session, saveAs: true, window: targetWindow, completion: completion)
+                    return
+                }
+                session.markSaved(at: fileURL)
+                session.savedBaselineText = writtenText
+                setupWatcher(for: session)
                 RecentDocumentsManager.shared.recordRecent(url: fileURL)
                 completion(true)
             } catch {
@@ -336,17 +313,10 @@ public final class WindowDocumentManager: ObservableObject {
                 completion(false)
             }
         } else {
-            let panel = NSSavePanel()
-            panel.allowedContentTypes = [.markdownDocument, .plainText]
-            panel.canCreateDirectories = true
-            panel.isExtensionHidden = false
-            panel.nameFieldStringValue = session.isUntitled ? "Untitled.md" : session.displayName
-
-            let handler: (NSApplication.ModalResponse) -> Void = { response in
-                guard response == .OK, let targetURL = panel.url else {
-                    completion(false)
-                    return
-                }
+            // Missing/deleted identity and cross-volume moves require an explicit
+            // destination. Cancellation leaves the URL, baseline and edits intact.
+            requestSaveDestination(for: session, window: targetWindow) { targetURL in
+                guard let targetURL else { completion(false); return }
                 do {
                     let data = session.text.data(using: session.encoding) ?? Data(session.text.utf8)
                     try data.write(to: targetURL, options: .atomic)
@@ -359,13 +329,26 @@ public final class WindowDocumentManager: ObservableObject {
                     completion(false)
                 }
             }
-
-            if let targetWindow = targetWindow {
-                panel.beginSheetModal(for: targetWindow, completionHandler: handler)
-            } else {
-                handler(panel.runModal())
-            }
         }
+    }
+
+    private func requestSaveDestination(for session: DocumentSession, window: NSWindow?, completion: @escaping (URL?) -> Void) {
+        if let chooseSaveDestination {
+            chooseSaveDestination(session, window, completion)
+            return
+        }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.markdownDocument, .plainText]
+        panel.canCreateDirectories = true
+        panel.isExtensionHidden = false
+        panel.nameFieldStringValue = session.isUntitled ? "Untitled.md" : session.displayName
+        panel.directoryURL = session.fileURL?.deletingLastPathComponent()
+        panel.message = session.fileURL != nil ? "Choose where to save this document." : ""
+        let handler: (NSApplication.ModalResponse) -> Void = { response in
+            completion(response == .OK ? panel.url : nil)
+        }
+        if let window { panel.beginSheetModal(for: window, completionHandler: handler) }
+        else { handler(panel.runModal()) }
     }
 
     private func presentSaveError(_ error: Error, for url: URL) {
@@ -381,11 +364,21 @@ public final class WindowDocumentManager: ObservableObject {
     private func setupWatcher(for session: DocumentSession) {
         guard let url = session.fileURL else { return }
         stopWatcher(for: session.id)
+        fileIdentities[session.id] = DocumentFileIdentity(url: url)
 
         let sessionId = session.id
         let watcher = FileWatcher(url: url) { [weak self, weak session] in
             guard let self = self, let session = session, self.sessions.contains(where: { $0.id == sessionId }) else { return }
-            self.handleExternalFileChange(for: session, at: url)
+            guard session.fileURL == url else { return }
+            if let currentURL = self.fileIdentities[sessionId]?.currentURL, currentURL != url {
+                session.fileURL = currentURL
+                session.title = currentURL.lastPathComponent
+                self.setupWatcher(for: session)
+                RecentDocumentsManager.shared.recordRecent(url: currentURL)
+                self.handleExternalFileChange(for: session, at: currentURL)
+            } else {
+                self.handleExternalFileChange(for: session, at: url)
+            }
         }
         fileWatchers[sessionId] = watcher
     }
@@ -393,6 +386,7 @@ public final class WindowDocumentManager: ObservableObject {
     private func stopWatcher(for sessionId: UUID) {
         fileWatchers[sessionId]?.stopWatching()
         fileWatchers.removeValue(forKey: sessionId)
+        fileIdentities.removeValue(forKey: sessionId)
     }
 
     private func handleExternalFileChange(for session: DocumentSession, at url: URL) {
@@ -407,9 +401,19 @@ public final class WindowDocumentManager: ObservableObject {
             return
         }
 
+        // Vnode events from our atomic save can arrive after the next keystroke.
+        // An unchanged disk baseline is not a divergent external edit.
+        if updatedText == session.savedBaselineText {
+            session.hasExternalConflict = false
+            session.lastExternalDiskText = nil
+            return
+        }
+
         if !session.isDirty {
             // Tab is clean -> safe to update directly from disk
             session.updateFromDisk(text: updatedText)
+            // A clean buffer has adopted an atomic external replacement.
+            fileIdentities[session.id] = DocumentFileIdentity(url: url)
         } else {
             // Tab has local unsaved edits and disk also diverged -> record conflict!
             session.hasExternalConflict = true
@@ -440,5 +444,6 @@ public final class WindowDocumentManager: ObservableObject {
             session.hasExternalConflict = false
             session.lastExternalDiskText = nil
         }
+        if let url = session.fileURL { fileIdentities[session.id] = DocumentFileIdentity(url: url) }
     }
 }

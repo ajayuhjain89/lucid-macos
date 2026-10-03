@@ -16,7 +16,8 @@ public struct EditorView: NSViewRepresentable {
     var onTextViewCreated: ((NSTextView) -> Void)?
     var onScrollIntensityChanged: ((Double) -> Void)?
     var documentFileURL: URL?
-    var onRequestSave: (() -> Void)?
+    var onRequestSave: ((DocumentSession?) -> Void)?
+    var documentSession: DocumentSession?
 
     init(
         text: Binding<String>,
@@ -24,7 +25,8 @@ public struct EditorView: NSViewRepresentable {
         focusMode: Bool = false,
         isActive: Bool = true,
         documentFileURL: URL? = nil,
-        onRequestSave: (() -> Void)? = nil,
+        documentSession: DocumentSession? = nil,
+        onRequestSave: ((DocumentSession?) -> Void)? = nil,
         onReadingPositionChanged: ((ReadingPosition) -> Void)? = nil,
         onCursorPositionChanged: ((Int, Int) -> Void)? = nil,
         onTextViewCreated: ((NSTextView) -> Void)? = nil,
@@ -35,6 +37,7 @@ public struct EditorView: NSViewRepresentable {
         self.focusMode = focusMode
         self.isActive = isActive
         self.documentFileURL = documentFileURL
+        self.documentSession = documentSession
         self.onRequestSave = onRequestSave
         self.onReadingPositionChanged = onReadingPositionChanged
         self.onCursorPositionChanged = onCursorPositionChanged
@@ -92,6 +95,7 @@ public struct EditorView: NSViewRepresentable {
         textView.autoresizingMask = preferences.wordWrap ? [.width] : []
         textView.isRichText = false
         textView.allowsUndo = true
+        textView.documentSession = documentSession
         textView.isAutomaticQuoteSubstitutionEnabled = false
         textView.isAutomaticDashSubstitutionEnabled = false
         textView.isAutomaticTextReplacementEnabled = false
@@ -146,6 +150,9 @@ public struct EditorView: NSViewRepresentable {
         // Keep callbacks (scroll fraction, cursor, text binding) pointing at the
         // current view values rather than the ones captured at creation.
         context.coordinator.parent = self
+        if let session = documentSession, textView.documentSession !== session {
+            textView.displaySession(session)
+        }
 
         // Update preferences reference
         textView.preferences = preferences
@@ -218,6 +225,8 @@ public struct EditorView: NSViewRepresentable {
         // costs O(n) on every SwiftUI update.
         var replacedText = false
         if text != context.coordinator.lastSyncedText && textView.string != text {
+            textView.breakUndoCoalescing()
+            textView.undoManager?.removeAllActions()
             let selectedRanges = textView.selectedRanges
             textView.string = text
             let length = (text as NSString).length
@@ -319,7 +328,13 @@ public struct EditorView: NSViewRepresentable {
             guard let textView = notification.object as? LucidTextView else { return }
             let newText = textView.string
             lastSyncedText = newText
-            parent.text = newText
+            if let session = textView.documentSession {
+                // A key event can arrive after the model selects another tab
+                // but before SwiftUI displays it. Update the displayed buffer.
+                session.text = newText
+            } else {
+                parent.text = newText
+            }
             gutterView?.needsDisplay = true
             updateCursorInfo(textView)
             textView.invalidateFocus()
@@ -328,6 +343,7 @@ public struct EditorView: NSViewRepresentable {
 
         public func textViewDidChangeSelection(_ notification: Notification) {
             guard let textView = notification.object as? LucidTextView else { return }
+            textView.documentSession?.selectedRange = textView.selectedRange()
             updateCursorInfo(textView)
             textView.updateCurrentLineHighlight()
             textView.updateFocusAndTypewriter(scroll: true)
@@ -342,6 +358,11 @@ public struct EditorView: NSViewRepresentable {
             let lineStart = string.lineRange(for: NSRange(location: location, length: 0)).location
             let col = string.substring(with: NSRange(location: lineStart, length: location - lineStart)).count + 1
             gutterView?.activeLineIndex = line
+            if let session = (textView as? LucidTextView)?.documentSession {
+                session.cursorLine = line
+                session.cursorCol = col
+                if session !== parent.documentSession { return }
+            }
             parent.onCursorPositionChanged?(line, col)
         }
 
@@ -353,8 +374,12 @@ public struct EditorView: NSViewRepresentable {
             // scroll offset (it produced negative fractions and broke split sync).
             let visible = clipView.documentVisibleRect
             let offset = visible.minY - documentView.bounds.minY
-            if let report = parent.onReadingPositionChanged, let textView = documentView as? LucidTextView {
-                report(textView.readingPosition())
+            if let textView = documentView as? LucidTextView {
+                let position = textView.readingPosition()
+                textView.documentSession?.readingPosition = position
+                if textView.documentSession === parent.documentSession {
+                    parent.onReadingPositionChanged?(position)
+                }
             }
             let intensity = min(1, max(0, Double(offset) / 28))
             parent.onScrollIntensityChanged?(intensity)
@@ -388,10 +413,42 @@ final class LucidEditorScrollView: NSScrollView {
 
 /// Custom NSTextView providing low-cost current-line highlight and context-aware auto-pairing.
 public final class LucidTextView: NSTextView {
+    weak var documentSession: DocumentSession?
+    public override var undoManager: UndoManager? {
+        documentSession?.undoManager ?? super.undoManager
+    }
+
+    // Route the responder-chain commands to the displayed tab's history. The
+    // native FileDocument undo manager does not own edits made by tab sessions.
+    @objc func undo(_ sender: Any?) { undoManager?.undo() }
+    @objc func redo(_ sender: Any?) { undoManager?.redo() }
+
+    public override func validateUserInterfaceItem(_ item: NSValidatedUserInterfaceItem) -> Bool {
+        if item.action == #selector(undo(_:)) { return undoManager?.canUndo ?? false }
+        if item.action == #selector(redo(_:)) { return undoManager?.canRedo ?? false }
+        return super.validateUserInterfaceItem(item)
+    }
+
+    /// Switch buffers without carrying range-based undo operations to another tab.
+    func displaySession(_ session: DocumentSession) {
+        guard documentSession !== session else { return }
+        documentSession?.selectedRange = selectedRange()
+        documentSession?.readingPosition = readingPosition()
+        breakUndoCoalescing()
+        documentSession = session
+        documentURL = session.fileURL
+        string = session.text
+        let length = (string as NSString).length
+        let location = min(max(0, session.selectedRange.location), length)
+        let count = min(max(0, session.selectedRange.length), length - location)
+        setSelectedRange(NSRange(location: location, length: count))
+        scrollToReadingPosition(session.readingPosition)
+    }
+
     public var preferences: LucidPreferences?
     public var strongTextStorage: NSTextStorage?
     public var documentURL: URL?
-    public var onRequestSaveForImage: (() -> Void)?
+    public var onRequestSaveForImage: ((DocumentSession?) -> Void)?
     private var previousActiveLineRect: NSRect?
     /// Whether this window's Focus Mode is on (set by EditorView).
     public var focusModeEnabled = false
@@ -903,17 +960,18 @@ public final class LucidTextView: NSTextView {
         alert.addButton(withTitle: "Save…")
         alert.addButton(withTitle: "Cancel")
 
+        // A sheet may finish after the shared editor has switched buffers.
+        let session = documentSession
+        let requestSave = onRequestSaveForImage
+        let respond: (NSApplication.ModalResponse) -> Void = { [weak self] response in
+            guard let self, self.documentSession === session,
+                  response == .alertFirstButtonReturn else { return }
+            requestSave?(session)
+        }
         if let window = self.window {
-            alert.beginSheetModal(for: window) { [weak self] response in
-                if response == .alertFirstButtonReturn {
-                    self?.onRequestSaveForImage?()
-                }
-            }
+            alert.beginSheetModal(for: window, completionHandler: respond)
         } else {
-            let response = alert.runModal()
-            if response == .alertFirstButtonReturn {
-                onRequestSaveForImage?()
-            }
+            respond(alert.runModal())
         }
     }
 }

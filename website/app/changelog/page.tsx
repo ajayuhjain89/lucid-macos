@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { changelogData } from "@/lib/changelog";
+import { pendingRelease } from "@/lib/pending-release";
 import { currentRelease } from "@/lib/release";
 import { CopyButton } from "@/components/ui/copy-button";
 import { Button } from "@/components/ui/button";
@@ -25,6 +26,14 @@ export default function ChangelogPage() {
           Detailed notes on features, refinements, and bug fixes in every Lucid release.
         </p>
       </div>
+
+      <article id="unreleased" className="mb-16 p-8 rounded-window border border-border-subtle bg-surface space-y-4">
+        <h2 className="text-2xl font-semibold text-text-primary">Unreleased — v{pendingRelease.version}</h2>
+        <p className="text-sm text-text-secondary">{pendingRelease.status}</p>
+        <ul className="list-disc pl-5 space-y-2 text-sm text-text-secondary">
+          {pendingRelease.highlights.map((highlight) => <li key={highlight}>{highlight}</li>)}
+        </ul>
+      </article>
 
       {/* Changelog Entries */}
       <div className="space-y-16">

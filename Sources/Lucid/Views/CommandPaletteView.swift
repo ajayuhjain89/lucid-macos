@@ -28,6 +28,7 @@ public struct CommandPaletteItem: Identifiable {
 }
 
 public struct CommandPaletteView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var isPresented: Bool
     @ObservedObject var preferences: LucidPreferences
     @ObservedObject var viewState: WindowViewState
@@ -309,7 +310,7 @@ public struct CommandPaletteView: View {
                                             .fill(isSelected ? LucidColors.softSelection : Color.clear)
                                     )
                                     .contentShape(Rectangle())
-                                    .animation(LucidMotion.hover, value: isSelected)
+                                    .animation(LucidMotion.respecting(reduceMotion, LucidMotion.hover), value: isSelected)
                                 }
                                 .buttonStyle(LucidPressableButtonStyle(pressedScale: 0.98))
                                 .id(index)

@@ -226,7 +226,8 @@ public enum LucidMotion {
     /// Selection / state changes.
     public static let state: Animation = .spring(response: 0.32, dampingFraction: 0.84)
     /// Panel / mode transitions (160–220ms smooth ease).
-    public static let panel: Animation = .easeInOut(duration: 0.19)
+    public static let panelDuration: TimeInterval = 0.19
+    public static let panel: Animation = .easeInOut(duration: panelDuration)
     /// Modal / palette entrances (140–180ms ease-out).
     public static let modal: Animation = .easeOut(duration: 0.16)
     /// Near-subconscious chrome depth fade tied to scroll position.
@@ -244,6 +245,7 @@ public enum LucidMotion {
 /// A universal press style: subtle spring scale + dim, applied to plain custom buttons
 /// so every clickable surface responds with the same tactile feedback.
 public struct LucidPressableButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var pressedScale: CGFloat
     var pressedOpacity: Double
 
@@ -254,9 +256,9 @@ public struct LucidPressableButtonStyle: ButtonStyle {
 
     public func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? pressedScale : 1.0)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? pressedScale : 1.0)
             .opacity(configuration.isPressed ? pressedOpacity : 1.0)
-            .animation(LucidMotion.press, value: configuration.isPressed)
+            .animation(LucidMotion.respecting(reduceMotion, LucidMotion.press), value: configuration.isPressed)
     }
 }
 
@@ -264,6 +266,7 @@ public struct LucidPressableButtonStyle: ButtonStyle {
 
 /// 1. LucidIconButton: Standardized icon button with optical centering, quiet states, and tooltips.
 public struct LucidIconButton: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let icon: String
     var size: CGFloat = 26
     var iconSize: CGFloat = 12
@@ -306,8 +309,8 @@ public struct LucidIconButton: View {
                         .fill(isActive ? LucidColors.softSelection : (isHovered ? LucidColors.hoverSurface : Color.clear))
                 )
                 .contentShape(Rectangle())
-                .animation(LucidMotion.hover, value: isHovered)
-                .animation(LucidMotion.state, value: isActive)
+                .animation(LucidMotion.respecting(reduceMotion, LucidMotion.hover), value: isHovered)
+                .animation(LucidMotion.respecting(reduceMotion, LucidMotion.state), value: isActive)
         }
         .buttonStyle(LucidPressableButtonStyle(pressedScale: 0.86))
         .onHover { isHovered = $0 }
@@ -384,6 +387,7 @@ public struct LucidSearchField: View {
 
 /// 3. LucidSidebarRow: Soft native selection, quiet level indicator, and hover highlight.
 public struct LucidSidebarRow: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let title: String
     let level: Int
     let isActive: Bool
@@ -428,8 +432,8 @@ public struct LucidSidebarRow: View {
                     .fill(isActive ? LucidColors.softSelection : (isHovered ? LucidColors.hoverSurface : Color.clear))
             )
             .contentShape(Rectangle())
-            .animation(LucidMotion.hover, value: isHovered)
-            .animation(LucidMotion.state, value: isActive)
+            .animation(LucidMotion.respecting(reduceMotion, LucidMotion.hover), value: isHovered)
+            .animation(LucidMotion.respecting(reduceMotion, LucidMotion.state), value: isActive)
         }
         .buttonStyle(LucidPressableButtonStyle(pressedScale: 0.98))
         .onHover { isHovered = $0 }
@@ -616,6 +620,7 @@ public struct LucidPopoverContainer<Content: View>: View {
 /// Replaces bare `.buttonStyle(.link)` uses so labels never crowd their hit-target and
 /// destructive actions read consistently.
 public struct LucidTextButton: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let title: String
     var systemImage: String? = nil
     var role: Role = .normal
@@ -660,7 +665,7 @@ public struct LucidTextButton: View {
                     .fill(isHovered ? baseColor.opacity(role == .normal ? 0.08 : 0.12) : Color.clear)
             )
             .contentShape(Rectangle())
-            .animation(LucidMotion.hover, value: isHovered)
+            .animation(LucidMotion.respecting(reduceMotion, LucidMotion.hover), value: isHovered)
         }
         .buttonStyle(LucidPressableButtonStyle(pressedScale: 0.95))
         .onHover { isHovered = $0 }
@@ -670,6 +675,7 @@ public struct LucidTextButton: View {
 /// 11. LucidSelectableCard: A polished, animated container for grid choices (presets, themes).
 /// Manages its own hover lift, press feedback, and selected emphasis so cards feel alive.
 public struct LucidSelectableCard<Content: View>: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var isSelected: Bool
     let accessibilityName: String
     let accessibilityHint: String?
@@ -720,8 +726,8 @@ public struct LucidSelectableCard<Content: View>: View {
                 .shadow(color: Color.black.opacity(isHovered && !isSelected ? 0.10 : 0), radius: 6, y: 2)
                 .scaleEffect(isHovered ? 1.012 : 1.0)
                 .contentShape(Rectangle())
-                .animation(LucidMotion.state, value: isHovered)
-                .animation(LucidMotion.state, value: isSelected)
+                .animation(LucidMotion.respecting(reduceMotion, LucidMotion.state), value: isHovered)
+                .animation(LucidMotion.respecting(reduceMotion, LucidMotion.state), value: isSelected)
         }
         .buttonStyle(LucidPressableButtonStyle(pressedScale: 0.985))
         .onHover { isHovered = $0 }
@@ -773,6 +779,7 @@ public struct LucidVisualEffectView: NSViewRepresentable {
 
 /// 12. LucidAccentSwatch: An accent color chip with a springy hover scale and animated selection ring.
 public struct LucidAccentSwatch: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let hex: String
     let name: String
     let isSelected: Bool
@@ -809,8 +816,8 @@ public struct LucidAccentSwatch: View {
                 )
                 .scaleEffect(isHovered ? 1.15 : 1.0)
                 .contentShape(Circle())
-                .animation(LucidMotion.state, value: isSelected)
-                .animation(LucidMotion.press, value: isHovered)
+                .animation(LucidMotion.respecting(reduceMotion, LucidMotion.state), value: isSelected)
+                .animation(LucidMotion.respecting(reduceMotion, LucidMotion.press), value: isHovered)
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }

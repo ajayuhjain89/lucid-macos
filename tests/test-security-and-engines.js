@@ -159,10 +159,10 @@ runTest('Local image paths are routed through lucid-asset:, remote and data imag
   );
   const srcs = [...dom.contentHTML.matchAll(/<img src="([^"]*)"/g)].map((m) => m[1]);
   assert.deepStrictEqual(srcs, [
-    'lucid-asset://doc/shot.png',
-    'lucid-asset://doc/dir%20with%20space%2Fmy%20image.png',
-    'lucid-asset://doc/..%2Fup%2Fx.png',
-    'lucid-asset://abs/Users%2Fme%2Fp.png',
+    'lucid-asset://doc/shot.png?generation=img-1',
+    'lucid-asset://doc/dir%20with%20space%2Fmy%20image.png?generation=img-1',
+    'lucid-asset://doc/..%2Fup%2Fx.png?generation=img-1',
+    'lucid-asset://abs/Users%2Fme%2Fp.png?generation=img-1',
     'https://example.com/r.png',
     'data:image/png;base64,AAAA'
   ], 'srcs: ' + JSON.stringify(srcs));
