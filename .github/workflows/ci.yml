@@ -12,9 +12,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
-    name: Build (macOS, Apple Silicon)
-    runs-on: macos-14
+  native:
+    name: Native qualification (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, macos-15, macos-26]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -72,3 +77,14 @@ jobs:
 
       - name: Branch-flow policy suite
         run: bash tests/test-branch-flow-policy.sh
+
+  build:
+    name: Build (macOS, Apple Silicon)
+    needs: native
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every supported macOS qualification
+        env:
+          NATIVE_RESULT: ${{ needs.native.result }}
+        run: test "$NATIVE_RESULT" = success
